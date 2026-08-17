@@ -4,7 +4,13 @@ import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { GameButton } from '@/components/ui/button';
 import { Card, Screen, SectionLabel } from '@/components/ui/screen';
-import { CLOTH_OPTIONS, clothById, Palette, Radius } from '@/constants/game-theme';
+import {
+  CLOTH_OPTIONS,
+  clothById,
+  MENU_SELECTED,
+  MenuPalette as Palette,
+  Radius,
+} from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { isLocationUnlocked, LOCATIONS } from '@/game/render/locations';
 import { clearSavedGame } from '@/store/persistence';
@@ -292,7 +298,7 @@ const styles = StyleSheet.create({
   },
   locationRowSelected: {
     borderColor: Palette.accent,
-    backgroundColor: 'rgba(61, 220, 132, 0.14)',
+    backgroundColor: MENU_SELECTED,
   },
   locationRowLocked: {
     opacity: 0.45,
@@ -338,7 +344,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillSelected: {
-    backgroundColor: 'rgba(61, 220, 132, 0.18)',
+    backgroundColor: MENU_SELECTED,
     borderColor: Palette.accent,
   },
   pillLabel: {

@@ -1,10 +1,12 @@
 /**
- * Attract screen.
+ * Title screen.
  *
  * Doubles as the splash: it hides the native splash once it has mounted, so
- * there is no flash of empty background between the two. It also holds long
- * enough to be a title card rather than a loading artefact — a cabinet spends
- * most of its life on this screen, and it should look like it wants a coin.
+ * there is no flash of empty background between the two.
+ *
+ * Almost nothing on it. A serif wordmark, one lit hairline, a faint halo behind,
+ * and a line of balls that drift by a couple of pixels. The restraint is the
+ * point — the previous version shouted and looked cheap for it.
  */
 
 import { useRouter } from 'expo-router';
@@ -21,36 +23,32 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Blink, NeonText, Scanlines, StripeBand } from '@/components/ui/arcade';
-import { Arcade } from '@/constants/game-theme';
+import { Breathe, GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
+import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { colorForBall } from '@/game/core/ball';
 
-const HOLD_MS = 2600;
-const RACK_PREVIEW = [1, 9, 3, 8, 5, 14, 7];
+const HOLD_MS = 2800;
+const RACK_PREVIEW = [1, 3, 8, 11, 14];
 
-function FloatingBall({ number, index }: { number: number; index: number }) {
-  const bob = useSharedValue(0);
+function DriftingBall({ number, index }: { number: number; index: number }) {
+  const drift = useSharedValue(0);
 
   useEffect(() => {
-    bob.value = withRepeat(
-      withTiming(1, { duration: 1200 + index * 130, easing: Easing.inOut(Easing.sin) }),
+    drift.value = withRepeat(
+      withTiming(1, { duration: 2400 + index * 260, easing: Easing.inOut(Easing.sin) }),
       -1,
       true,
     );
-  }, [bob, index]);
+  }, [drift, index]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -7 + bob.value * 14 }],
+    transform: [{ translateY: -3 + drift.value * 6 }],
   }));
 
   return (
-    <Animated.View
-      entering={FadeInDown.delay(260 + index * 70).duration(460)}
-      style={[styles.ballSlot, style]}>
-      <View style={[styles.ball, { backgroundColor: colorForBall(number) }]}>
-        <View style={styles.ballBadge} />
-      </View>
+    <Animated.View entering={FadeIn.delay(700 + index * 110).duration(700)} style={style}>
+      <View style={[styles.ball, { backgroundColor: colorForBall(number) }]} />
     </Animated.View>
   );
 }
@@ -69,41 +67,39 @@ export default function TitleScreen() {
 
   return (
     <Pressable style={styles.container} onPress={() => router.replace('/menu')}>
-      <View style={styles.top}>
-        <Animated.View entering={FadeIn.duration(500)}>
-          <Text style={styles.kicker}>1994 · SALA GIOCHI</Text>
+      <SoftHalo size={340} style={styles.halo} />
+
+      <View style={styles.centre}>
+        <Animated.View entering={FadeIn.duration(700)}>
+          <Overline color={Luxe.textFaint}>Sala da biliardo</Overline>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(620)} style={styles.titleBlock}>
-          <NeonText size={52} spacing={7}>
-            BILIARDO
-          </NeonText>
-          <View style={styles.subtitleRow}>
-            <View style={styles.rule} />
-            <NeonText size={26} spacing={12} color={Arcade.gold}>
-              3D
-            </NeonText>
-            <View style={styles.rule} />
-          </View>
+        <Animated.View entering={FadeInDown.duration(760)} style={styles.wordmark}>
+          <Heading size={54}>Biliardo</Heading>
         </Animated.View>
-      </View>
 
-      <View style={styles.ballRow}>
-        {RACK_PREVIEW.map((number, index) => (
-          <FloatingBall key={number} number={number} index={index} />
-        ))}
-      </View>
+        <Animated.View entering={FadeIn.delay(280).duration(700)} style={styles.ruleRow}>
+          <GlowRule width={110} />
+        </Animated.View>
 
-      <View style={styles.bottom}>
-        <StripeBand height={14} />
-        <Animated.View entering={FadeIn.delay(900).duration(500)} style={styles.promptWrap}>
-          <Blink>
-            <Text style={styles.prompt}>▶ TOCCA PER GIOCARE ◀</Text>
-          </Blink>
+        <Animated.View entering={FadeIn.delay(420).duration(700)}>
+          <Text style={styles.dimension}>T R E   D I M E N S I O N I</Text>
         </Animated.View>
       </View>
 
-      <Scanlines />
+      <View style={styles.foot}>
+        <View style={styles.ballRow}>
+          {RACK_PREVIEW.map((number, index) => (
+            <DriftingBall key={number} number={number} index={index} />
+          ))}
+        </View>
+
+        <Animated.View entering={FadeIn.delay(1200).duration(900)}>
+          <Breathe>
+            <Overline color={Luxe.textMuted}>Tocca per entrare</Overline>
+          </Breathe>
+        </Animated.View>
+      </View>
     </Pressable>
   );
 }
@@ -111,71 +107,46 @@ export default function TitleScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Arcade.ink,
+    backgroundColor: Luxe.ink,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.six,
+    justifyContent: 'center',
   },
-  top: {
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingTop: Spacing.five,
+  halo: {
+    top: '22%',
   },
-  kicker: {
-    color: Arcade.cyan,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 5,
-  },
-  titleBlock: {
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  subtitleRow: {
-    flexDirection: 'row',
+  centre: {
     alignItems: 'center',
     gap: Spacing.three,
   },
-  rule: {
-    width: 44,
-    height: 3,
-    backgroundColor: Arcade.magenta,
+  wordmark: {
+    marginTop: Spacing.two,
+  },
+  ruleRow: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+  },
+  dimension: {
+    color: Luxe.gold,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 2,
+  },
+  foot: {
+    position: 'absolute',
+    bottom: Spacing.six,
+    alignItems: 'center',
+    gap: Spacing.four,
   },
   ballRow: {
     flexDirection: 'row',
     gap: Spacing.three,
     alignItems: 'center',
   },
-  ballSlot: {
-    alignItems: 'center',
-  },
   ball: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ballBadge: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#f4eee0',
-  },
-  bottom: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    gap: Spacing.four,
-  },
-  promptWrap: {
-    alignItems: 'center',
-  },
-  prompt: {
-    color: Arcade.gold,
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 3,
+    opacity: 0.85,
   },
 });

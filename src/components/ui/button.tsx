@@ -1,21 +1,20 @@
 /**
  * The one button the whole app uses.
  *
- * It is now an adapter onto `ArcadeButton`, which is what gave every menu the
- * cabinet look in one change rather than screen by screen. The old four-variant
- * API is kept so nothing calling it had to be touched.
+ * An adapter onto `LuxeButton`, which is how the entire set of menus changed
+ * look in a single edit rather than screen by screen. The four-variant API is
+ * kept so nothing calling it had to be touched.
  */
 
 import { type StyleProp, type ViewStyle } from 'react-native';
 
-import { ArcadeButton, type ArcadeVariant } from '@/components/ui/arcade';
+import { LuxeButton, type LuxeVariant } from '@/components/ui/luxe';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
-const MAPPED: Record<ButtonVariant, ArcadeVariant> = {
+const MAPPED: Record<ButtonVariant, LuxeVariant> = {
   primary: 'primary',
   secondary: 'secondary',
-  // There is no such thing as a ghost button on a cabinet.
   ghost: 'secondary',
   danger: 'danger',
 };
@@ -40,7 +39,7 @@ export function GameButton({
   style,
 }: GameButtonProps) {
   return (
-    <ArcadeButton
+    <LuxeButton
       label={label}
       onPress={onPress}
       sublabel={sublabel}

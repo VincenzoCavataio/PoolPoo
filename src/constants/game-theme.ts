@@ -103,23 +103,56 @@ export function clothProfile(id: string): PhysicsProfile {
  * Menu palette.
  *
  * Separate from `Palette` on purpose. The in-game HUD sits over green baize and
- * has to stay legible there, so it keeps its quiet dark-and-accent scheme; the
- * menus have nothing to read over and every reason to look like a cabinet
- * attract screen.
+ * has to stay legible there; the menus have nothing to read over and every
+ * reason to be quiet.
+ *
+ * Almost everything is drawn with `hairline` on `ink`. The gold is the only
+ * decorative colour and it is used sparingly — one accent that appears rarely
+ * reads as expensive, the same accent everywhere reads as a theme.
  */
-export const Arcade = {
-  ink: '#0a0518',
-  panel: '#170c2c',
-  panelRaised: '#221240',
-  edge: '#412a70',
-  magenta: '#ff3ea5',
-  cyan: '#24e0ff',
-  gold: '#ffd23f',
-  violet: '#8b46ff',
-  lime: '#5cff9d',
-  text: '#f4eeff',
-  textMuted: '#a48cd6',
+export const Luxe = {
+  ink: '#08090b',
+  surface: '#0e1014',
+  surfaceRaised: '#14171d',
+  hairline: 'rgba(255, 255, 255, 0.10)',
+  hairlineStrong: 'rgba(255, 255, 255, 0.2)',
+  gold: '#c9a962',
+  /** The single soft neon, used for lit rules and haloes. */
+  glow: '#5fe6c8',
+  text: '#f3f1ea',
+  textMuted: '#8b8e97',
+  textFaint: '#5b5e67',
+  danger: '#d9756b',
 } as const;
+
+/**
+ * `Palette` re-keyed onto the menu colours.
+ *
+ * The menu screens were written against the in-game palette, which is tuned to
+ * sit on green baize and looks wrong in the quiet shell around it. Aliasing this
+ * in place of `Palette` at the import restyles a whole screen in one line —
+ * rewriting three files of stylesheets by hand would have been the same result
+ * with thirty times the chance of missing one.
+ */
+export const MenuPalette = {
+  background: Luxe.ink,
+  surface: Luxe.surface,
+  surfaceRaised: Luxe.surfaceRaised,
+  border: Luxe.hairline,
+  text: Luxe.text,
+  textMuted: Luxe.textMuted,
+  accent: Luxe.gold,
+  accentText: Luxe.ink,
+  danger: Luxe.danger,
+  gold: Luxe.gold,
+  rail: Luxe.gold,
+  railDark: Luxe.surfaceRaised,
+  railTop: Luxe.gold,
+  pocket: Luxe.ink,
+} as const;
+
+/** Selected-state wash for the menus, replacing the in-game green. */
+export const MENU_SELECTED = 'rgba(201, 169, 98, 0.12)';
 
 export const Radius = {
   small: 8,

@@ -30,6 +30,47 @@ export const TRACKS: Track[] = [
     labelColor: '#d94f7a',
     source: require('../../../assets/bgm/BGM_1.mp3') as number,
   },
+  {
+    id: 'bgm_2',
+    // ↓ da compilare
+    title: 'Traccia 2',
+    artist: 'Vince',
+    labelColor: '#d9a94f',
+    source: require('../../../assets/bgm/JRPG_1.mp3') as number,
+  },
+  {
+    id: 'bgm_3',
+    // ↓ da compilare
+    title: 'Traccia 3',
+    artist: 'Vince',
+    labelColor: '#4fd961',
+    source: require('../../../assets/bgm/JRPG_2.mp3') as number,
+  },
+  {
+    id: 'bgm_4',
+    // ↓ da compilare
+    title: 'Traccia 4',
+    artist: 'Vince',
+    labelColor: '#4f68d9',
+    source: require('../../../assets/bgm/JRPG_3.mp3') as number,
+  },
+  {
+    id: 'bgm_5',
+    // ↓ da compilare
+    title: 'Traccia 5',
+    artist: 'Vince',
+    labelColor: '#ce4fd9',
+    source: require('../../../assets/bgm/JRPG_4.mp3') as number,
+  },
+  {
+    id: 'bgm_6',
+    // ↓ da compilare
+    title: 'Traccia 6',
+    artist: 'Vince',
+    labelColor: '#4fd9d9',
+    source: require('../../../assets/bgm/JRPG_5.mp3') as number,
+  },
+  
 ];
 
 export function trackAt(index: number): Track {

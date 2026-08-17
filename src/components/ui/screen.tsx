@@ -1,17 +1,16 @@
 /**
  * The frame every menu sits in.
  *
- * Dark cabinet ink, a neon heading, a hazard stripe under it and scanlines over
- * the lot. Restyling this one component is what turned all four menus from a
- * settings app into something that looks like a game.
+ * Near-black, a serif heading, one lit hairline, and a lot of nothing. Restyling
+ * this single component is what carried the look across all four menus.
  */
 
 import { type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { NeonText, Scanlines, StripeBand } from '@/components/ui/arcade';
-import { Arcade } from '@/constants/game-theme';
+import { GlowRule, Heading, Overline } from '@/components/ui/luxe';
+import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 interface ScreenProps {
@@ -27,7 +26,7 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.two }]}>
+    <View style={[styles.root, { paddingTop: insets.top + Spacing.four }]}>
       <View style={styles.inner}>
         <View style={styles.header}>
           {onBack ? (
@@ -35,18 +34,19 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
               accessibilityLabel="Indietro"
               onPress={onBack}
               style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
-              <Text style={styles.backLabel}>◀</Text>
+              <Text style={styles.backLabel}>‹</Text>
             </Pressable>
           ) : null}
+
           <View style={styles.headerText}>
-            <NeonText size={26} spacing={3} style={styles.title}>
-              {title.toUpperCase()}
-            </NeonText>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            {subtitle ? <Overline>{subtitle}</Overline> : null}
+            <Heading size={30} style={styles.title}>
+              {title}
+            </Heading>
           </View>
         </View>
 
-        <StripeBand height={10} />
+        <GlowRule width={56} align="flex-start" />
 
         <ScrollView
           contentContainerStyle={styles.content}
@@ -56,129 +56,88 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
         </ScrollView>
 
         {footer ? (
-          <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>{footer}</View>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.four }]}>{footer}</View>
         ) : (
-          <View style={{ height: insets.bottom + Spacing.three }} />
+          <View style={{ height: insets.bottom + Spacing.four }} />
         )}
       </View>
-
-      <Scanlines />
     </View>
   );
 }
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <View style={styles.sectionRow}>
-      <View style={styles.sectionTick} />
-      <Text style={styles.sectionLabel}>{children}</Text>
+    <View style={styles.section}>
+      <Overline color={Luxe.gold}>{children}</Overline>
     </View>
   );
 }
 
 export function Card({ children }: { children: ReactNode }) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardEdge} pointerEvents="none" />
-      <View style={styles.cardBody}>{children}</View>
-    </View>
-  );
+  return <View style={styles.card}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Arcade.ink,
+    backgroundColor: Luxe.ink,
     alignItems: 'center',
   },
   inner: {
     flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.four,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: Spacing.three,
-    paddingBottom: Spacing.two,
+    paddingBottom: Spacing.three,
   },
   headerText: {
     flex: 1,
+    gap: Spacing.two,
   },
   title: {
-    alignItems: 'flex-start',
+    marginBottom: 2,
   },
   back: {
-    width: 46,
-    height: 46,
-    backgroundColor: Arcade.panelRaised,
-    borderWidth: 3,
-    borderColor: Arcade.edge,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
   },
   backPressed: {
-    transform: [{ translateX: 3 }, { translateY: 3 }],
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   backLabel: {
-    color: Arcade.cyan,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  subtitle: {
-    color: Arcade.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: 4,
+    color: Luxe.textMuted,
+    fontSize: 26,
+    lineHeight: 28,
+    fontWeight: '300',
+    marginTop: -3,
   },
   content: {
     gap: Spacing.three,
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.four,
-    paddingRight: 6,
+    paddingTop: Spacing.five,
+    paddingBottom: Spacing.five,
   },
   footer: {
     gap: Spacing.two,
     paddingTop: Spacing.three,
   },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginTop: Spacing.two,
-  },
-  sectionTick: {
-    width: 10,
-    height: 10,
-    backgroundColor: Arcade.gold,
-    transform: [{ rotate: '45deg' }],
-  },
-  sectionLabel: {
-    color: Arcade.gold,
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+  section: {
+    marginTop: Spacing.three,
+    marginBottom: -Spacing.one,
   },
   card: {
-    position: 'relative',
-  },
-  cardEdge: {
-    position: 'absolute',
-    left: 5,
-    right: -5,
-    top: 5,
-    bottom: -5,
-    backgroundColor: '#0d0620',
-  },
-  cardBody: {
-    backgroundColor: Arcade.panel,
-    borderWidth: 3,
-    borderColor: Arcade.edge,
-    padding: Spacing.three,
-    gap: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: Luxe.surface,
+    padding: Spacing.four,
+    gap: Spacing.four,
   },
 });

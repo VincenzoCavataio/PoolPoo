@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Stars } from '@/components/game/hud';
 import { Screen } from '@/components/ui/screen';
-import { Palette, Radius } from '@/constants/game-theme';
+import { MENU_SELECTED, MenuPalette as Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { LEVELS } from '@/game/rules/levels';
 import { describeGoal } from '@/game/rules/puzzle';
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   indexDone: {
-    backgroundColor: 'rgba(61, 220, 132, 0.18)',
+    backgroundColor: MENU_SELECTED,
   },
   indexLabel: {
     color: Palette.textMuted,

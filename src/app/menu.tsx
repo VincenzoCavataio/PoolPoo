@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/ui/screen';
 import { GameButton } from '@/components/ui/button';
-import { Arcade } from '@/constants/game-theme';
+import { GlowRule, LuxeFonts, Overline } from '@/components/ui/luxe';
+import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { levelById } from '@/game/rules/levels';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
@@ -52,12 +53,11 @@ export default function MenuScreen() {
   const earned = totalStars(stars);
 
   return (
-    <Screen title="Biliardo 3D" subtitle="Inserisci una moneta">
+    <Screen title="Biliardo" subtitle="Tre dimensioni">
       <GameButton
         label="Nuova partita"
         variant="primary"
-        sublabel="Libera o puzzle"
-        badge="1P–4P"
+        sublabel="Partita libera oppure puzzle"
         onPress={() => router.push('/new-game')}
       />
 
@@ -65,7 +65,6 @@ export default function MenuScreen() {
         label="Continua"
         onPress={onContinue}
         disabled={!save}
-        badge={save ? 'PRONTA' : undefined}
         sublabel={
           save ? describeSavedGame(save) : checked ? 'Nessuna partita salvata' : 'Controllo…'
         }
@@ -73,59 +72,39 @@ export default function MenuScreen() {
 
       <GameButton label="Opzioni" onPress={() => router.push('/options')} />
 
-      <View style={styles.scoreboard}>
-        <View style={styles.scoreEdge} pointerEvents="none" />
-        <View style={styles.scoreBody}>
-          <Text style={styles.scoreLabel}>Stelle</Text>
-          <Text style={styles.scoreValue}>
-            {String(earned).padStart(2, '0')}
-            <Text style={styles.scoreTotal}> / {MAX_STARS}</Text>
+      <View style={styles.ledger}>
+        <View style={styles.ledgerRow}>
+          <Overline>Stelle raccolte</Overline>
+          <Text style={styles.ledgerValue}>
+            {earned}
+            <Text style={styles.ledgerTotal}> / {MAX_STARS}</Text>
           </Text>
         </View>
+        <GlowRule width={`${Math.round((earned / MAX_STARS) * 100)}%`} align="flex-start" />
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scoreboard: {
-    marginTop: Spacing.three,
-    position: 'relative',
+  ledger: {
+    marginTop: Spacing.five,
+    gap: Spacing.three,
   },
-  scoreEdge: {
-    position: 'absolute',
-    left: 5,
-    right: -5,
-    top: 5,
-    bottom: -5,
-    backgroundColor: '#0d0620',
-  },
-  scoreBody: {
-    backgroundColor: Arcade.panel,
-    borderWidth: 3,
-    borderColor: Arcade.edge,
+  ledgerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    alignItems: 'baseline',
   },
-  scoreLabel: {
-    color: Arcade.cyan,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 3,
-    fontWeight: '900',
-  },
-  scoreValue: {
-    color: Arcade.gold,
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: 2,
+  ledgerValue: {
+    color: Luxe.gold,
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: LuxeFonts.serif,
     fontVariant: ['tabular-nums'],
   },
-  scoreTotal: {
-    color: Arcade.textMuted,
-    fontSize: 14,
+  ledgerTotal: {
+    color: Luxe.textFaint,
+    fontSize: 13,
   },
 });

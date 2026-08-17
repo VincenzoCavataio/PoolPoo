@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GameButton } from '@/components/ui/button';
 import { Card, Screen, SectionLabel } from '@/components/ui/screen';
-import { Palette, Radius } from '@/constants/game-theme';
+import { MENU_SELECTED, MenuPalette as Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { LEVELS } from '@/game/rules/levels';
 import { useSession } from '@/store/session';
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillSelected: {
-    backgroundColor: 'rgba(61, 220, 132, 0.18)',
+    backgroundColor: MENU_SELECTED,
     borderColor: Palette.accent,
   },
   pillLabel: {

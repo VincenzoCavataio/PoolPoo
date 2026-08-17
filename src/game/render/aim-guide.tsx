@@ -109,33 +109,39 @@ export function AimGuide() {
       // shortened to stop short of the eye instead of hidden: without it there
       // is nothing on screen that visibly turns when you aim, which is exactly
       // what made aiming from down here feel unresponsive.
+      const behind = distanceToEdge(world.table, cue.p, aimAngle);
       let length = CUE_LENGTH;
+      let elevation = BASE_ELEVATION;
       let visible = true;
+
       if (cameraMode === CameraMode.CUE) {
-        const room = rig.eyeBack - BALL_RADIUS - pullBack - 0.05;
-        length = Math.min(CUE_LENGTH, room);
-        // Pulled right in against the ball there is simply no room for it.
-        visible = room >= 0.1;
+        /*
+         * From behind the ball the cue has to fit between the camera and the
+         * rail, so it is *shortened* to fit and never elevated.
+         *
+         * Lifting the butt was the wrong fix here and made things worse: the eye
+         * is only twenty centimetres above the ball, so a raised butt swings
+         * straight up into the shot and fills the screen with wood. Trimming it
+         * keeps it out of both the rail and the view.
+         */
+        const toCamera = rig.eyeBack - BALL_RADIUS - pullBack - 0.05;
+        const toRail = behind - BALL_RADIUS - pullBack - 0.03;
+        length = Math.min(CUE_LENGTH, toCamera, toRail);
+        visible = length >= 0.1;
+      } else if (behind < CUE_LENGTH + BALL_RADIUS + pullBack) {
+        // From overhead there is nothing to block, so the butt lifts over the
+        // rail the way a player would lift it.
+        elevation = Math.min(
+          MAX_ELEVATION,
+          Math.atan(RAIL_CLEARANCE / Math.max(behind, 0.04)),
+        );
       }
 
+      const drawn = Math.max(0.02, length);
       cueGroup.current.visible = visible;
-      cueStick.current.scale.set(1, length / CUE_LENGTH, 1);
-      cueStick.current.position.set(0, 0, -(pullBack + length / 2 + BALL_RADIUS));
-
-      /*
-       * Raise the butt when the ball is near a rail.
-       *
-       * The cue lies at ball height and reaches most of a metre backwards, so
-       * near a cushion it ran straight through the woodwork. Rendering it in
-       * front of everything would be a lie; elevating it is what a player
-       * actually does, and it clears the rail for the same reason.
-       */
-      if (cueTilt.current) {
-        const back = distanceToEdge(world.table, cue.p, aimAngle);
-        const needed = back < length + BALL_RADIUS ? RAIL_CLEARANCE / Math.max(back, 0.04) : 0;
-        const elevation = Math.min(MAX_ELEVATION, Math.max(BASE_ELEVATION, Math.atan(needed)));
-        cueTilt.current.rotation.x = elevation;
-      }
+      cueStick.current.scale.set(1, drawn / CUE_LENGTH, 1);
+      cueStick.current.position.set(0, 0, -(pullBack + drawn / 2 + BALL_RADIUS));
+      if (cueTilt.current) cueTilt.current.rotation.x = elevation;
     }
 
     const prediction = predictAim(world, aimAngle);
