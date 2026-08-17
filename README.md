@@ -412,3 +412,4 @@ Note oneste su ciò che non c'è, in ordine di quanto si nota giocando:
   compila, ma il rendering GL non è ancora stato eseguito su un telefono: è
   l'unico pezzo che i test non possono raggiungere. Si prova con `npm start` e la
   scansione del QR da Expo Go.
+"# PoolPoo" 
