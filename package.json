@@ -1,0 +1,50 @@
+{
+  "name": "poolproject",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-three/fiber": "^9.7.0",
+    "expo": "~54.0.37",
+    "expo-asset": "~12.0.13",
+    "expo-constants": "~18.0.14",
+    "expo-file-system": "~19.0.24",
+    "expo-gl": "~16.0.10",
+    "expo-linking": "~8.0.12",
+    "expo-router": "~6.0.24",
+    "expo-splash-screen": "~31.0.13",
+    "expo-status-bar": "~3.0.9",
+    "expo-system-ui": "~6.0.9",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "^0.21.0",
+    "react-native-worklets": "0.5.1",
+    "three": "^0.185.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "@types/three": "^0.185.4",
+    "tsx": "^4.23.12",
+    "typescript": "~5.9.2"
+  },
+  "scripts": {
+    "start": "expo start",
+    "reset-project": "node ./scripts/reset-project.js",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "test:core": "tsx src/game/core/tests/run.ts",
+    "test:rules": "tsx src/game/rules/tests/run.ts",
+    "test:render": "tsx src/game/render/tests/run.ts",
+    "test": "npm run test:core && npm run test:rules && npm run test:render"
+  },
+  "private": true
+}
