@@ -50,11 +50,23 @@ export function predictAim(world: World, angle: number, maxDistance = 6): AimPre
     const my = origin.y - ball.p.y;
     const b = mx * dir.x + my * dir.y;
     const c = mx * mx + my * my - BALL_DIAMETER * BALL_DIAMETER;
+
+    /*
+     * `b >= 0` means the shot is travelling *away* from this ball, and it has to
+     * be rejected before anything else. Filtering on the root alone was the bug
+     * behind the guide going wrong with a ball frozen against the cue ball: at
+     * touching distance the quadratic has a root near zero whichever way you aim,
+     * so a ball sitting beside the cue ball was reported as the first contact
+     * even when the shot pointed the other way.
+     */
+    if (b >= 0) continue;
+
     const disc = b * b - c;
     if (disc < 0) continue;
 
-    const t = -b - Math.sqrt(disc);
-    if (t > 1e-6 && t < bestT) {
+    // A ball already touching gives a negative root: contact is immediate.
+    const t = Math.max(0, -b - Math.sqrt(disc));
+    if (t < bestT) {
       bestT = t;
       hitBall = ball.number;
       hitCushion = null;

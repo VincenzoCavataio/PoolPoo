@@ -1,9 +1,24 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+/**
+ * The one button the whole app uses.
+ *
+ * It is now an adapter onto `ArcadeButton`, which is what gave every menu the
+ * cabinet look in one change rather than screen by screen. The old four-variant
+ * API is kept so nothing calling it had to be touched.
+ */
 
-import { Palette, Radius } from '@/constants/game-theme';
-import { Spacing } from '@/constants/theme';
+import { type StyleProp, type ViewStyle } from 'react-native';
+
+import { ArcadeButton, type ArcadeVariant } from '@/components/ui/arcade';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+
+const MAPPED: Record<ButtonVariant, ArcadeVariant> = {
+  primary: 'primary',
+  secondary: 'secondary',
+  // There is no such thing as a ghost button on a cabinet.
+  ghost: 'secondary',
+  danger: 'danger',
+};
 
 interface GameButtonProps {
   label: string;
@@ -11,6 +26,7 @@ interface GameButtonProps {
   variant?: ButtonVariant;
   sublabel?: string;
   disabled?: boolean;
+  badge?: string;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -20,87 +36,18 @@ export function GameButton({
   variant = 'secondary',
   sublabel,
   disabled = false,
+  badge,
   style,
 }: GameButtonProps) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
+    <ArcadeButton
+      label={label}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        variant === 'primary' && styles.primary,
-        variant === 'secondary' && styles.secondary,
-        variant === 'ghost' && styles.ghost,
-        variant === 'danger' && styles.danger,
-        pressed && styles.pressed,
-        disabled && styles.disabled,
-        style,
-      ]}>
-      <View style={styles.labels}>
-        <Text
-          style={[
-            styles.label,
-            variant === 'primary' && styles.labelPrimary,
-            variant === 'danger' && styles.labelDanger,
-          ]}>
-          {label}
-        </Text>
-        {sublabel ? <Text style={styles.sublabel}>{sublabel}</Text> : null}
-      </View>
-    </Pressable>
+      sublabel={sublabel}
+      variant={MAPPED[variant]}
+      disabled={disabled}
+      badge={badge}
+      style={style}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    borderRadius: Radius.medium,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  primary: {
-    backgroundColor: Palette.accent,
-    borderColor: Palette.accent,
-  },
-  secondary: {
-    backgroundColor: Palette.surfaceRaised,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-  },
-  danger: {
-    backgroundColor: 'transparent',
-    borderColor: Palette.danger,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  disabled: {
-    opacity: 0.35,
-  },
-  labels: {
-    gap: 2,
-  },
-  label: {
-    color: Palette.text,
-    fontSize: 17,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  labelPrimary: {
-    color: Palette.accentText,
-  },
-  labelDanger: {
-    color: Palette.danger,
-  },
-  sublabel: {
-    color: Palette.textMuted,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-});

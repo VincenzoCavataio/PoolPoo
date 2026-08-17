@@ -10,6 +10,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber/native';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
+import { ShotAudio } from '@/game/audio/shot-audio';
 import type { Table } from '@/game/core/table';
 import { Phase } from '@/game/rules/types';
 import { useProgress } from '@/store/progress';
@@ -23,6 +24,7 @@ import { sceneX, sceneZ } from './coords';
 import { Environment } from './environment';
 import { EnvironmentReflections } from './environment-map';
 import { effectiveLocation } from './locations';
+import { MusicDeviceObject } from './music-device';
 import { TableMesh } from './table-mesh';
 
 const FOV = 48;
@@ -213,7 +215,11 @@ export function GameScene() {
         <Balls world={shown} />
       </group>
 
+      <MusicDeviceObject device={location.musicDevice} />
+
       <AimGuide />
+      {/* Before the driver, so a fresh shot's empty event log is seen first. */}
+      <ShotAudio />
       <SimulationDriver />
     </Canvas>
   );

@@ -47,7 +47,25 @@ export interface GameLocation {
   lamps: LocationLamp[];
   /** Furniture and set dressing to place. */
   props: PropGroup[];
+  /**
+   * The thing playing the music, in keeping with the room. It is the one prop
+   * that is *not* merged into the static geometry: it has to be tappable and it
+   * has to move.
+   */
+  musicDevice: MusicDevice;
   fog?: { color: string; near: number; far: number };
+}
+
+export type MusicDeviceKind = 'turntable' | 'jukebox' | 'radio';
+
+export interface MusicDevice {
+  kind: MusicDeviceKind;
+  label: string;
+  position: [number, number, number];
+  /** Rotation about the vertical axis, so it faces into the room. */
+  rotationY: number;
+  /** Where the speech bubble floats, relative to the device. */
+  bubbleHeight: number;
 }
 
 /** Cloth sits at y = 0, so the floor is a table's height below it. */
@@ -69,8 +87,8 @@ export const LOCATIONS: GameLocation[] = [
     background: '#0a0d0b',
     floorColor: '#4a3221',
     floorRoughness: 0.85,
-    walls: { color: '#182420', height: 3.0 },
-    ambient: { color: '#9fb4c4', intensity: 0.38 },
+    walls: { color: '#2e4239', height: 3.0 },
+    ambient: { color: '#9fb4c4', intensity: 0.5 },
     fill: { position: [1.4, 3.0, 1.6], color: '#cfd8e6', intensity: 0.5 },
     lamps: [
       {
@@ -88,9 +106,15 @@ export const LOCATIONS: GameLocation[] = [
         cordLength: 1.4,
       },
     ],
+    musicDevice: {
+      kind: 'turntable',
+      label: 'Giradischi',
+      position: [ROOM.width / 2 - 0.17, 1.15, 0.25],
+      rotationY: -Math.PI / 2,
+      bubbleHeight: 0.42,
+    },
     props: [
       'shelf',
-      'turntable',
       'speakers',
       'bookcase',
       'plants',
@@ -103,7 +127,7 @@ export const LOCATIONS: GameLocation[] = [
       'sideTable',
       'floorLamp',
     ],
-    fog: { color: '#0a0d0b', near: 5, far: 12 },
+    fog: { color: '#0a0d0b', near: 8, far: 20 },
   },
   {
     id: 'garage',
@@ -113,8 +137,8 @@ export const LOCATIONS: GameLocation[] = [
     background: '#14171a',
     floorColor: '#4c4f52',
     floorRoughness: 0.95,
-    walls: { color: '#33373b', height: 2.8 },
-    ambient: { color: '#dfe9ff', intensity: 0.6 },
+    walls: { color: '#4d545a', height: 2.8 },
+    ambient: { color: '#dfe9ff', intensity: 0.68 },
     fill: { position: [-1.2, 3.2, -1.0], color: '#eaf1ff', intensity: 0.9 },
     lamps: [
       {
@@ -125,6 +149,13 @@ export const LOCATIONS: GameLocation[] = [
         cordLength: 1.0,
       },
     ],
+    musicDevice: {
+      kind: 'radio',
+      label: 'Radio da lavoro',
+      position: [ROOM.width / 2 - 0.2, 0.4, -1.35],
+      rotationY: -Math.PI / 2,
+      bubbleHeight: 0.34,
+    },
     props: ['shelf', 'speakers', 'bookcase', 'cueRack', 'neon', 'sideTable', 'plants'],
   },
   {
@@ -135,8 +166,8 @@ export const LOCATIONS: GameLocation[] = [
     background: '#0a0714',
     floorColor: '#2a1f38',
     floorRoughness: 0.9,
-    walls: { color: '#161028', height: 3.0 },
-    ambient: { color: '#8f7fd8', intensity: 0.34 },
+    walls: { color: '#2b2049', height: 3.0 },
+    ambient: { color: '#8f7fd8', intensity: 0.46 },
     fill: { position: [0.8, 3.2, -1.4], color: '#c9bdff', intensity: 0.45 },
     lamps: [
       {
@@ -147,8 +178,15 @@ export const LOCATIONS: GameLocation[] = [
         cordLength: 1.35,
       },
     ],
+    musicDevice: {
+      kind: 'jukebox',
+      label: 'Jukebox',
+      position: [-ROOM.width / 2 + 0.5, FLOOR_Y, -1.4],
+      rotationY: Math.PI / 2,
+      bubbleHeight: 1.6,
+    },
     props: ['arcade', 'speakers', 'neon', 'cueRack', 'stool', 'rug', 'plants'],
-    fog: { color: '#0a0714', near: 4.6, far: 11 },
+    fog: { color: '#0a0714', near: 7.5, far: 18 },
   },
   {
     id: 'terrazza',
@@ -176,8 +214,15 @@ export const LOCATIONS: GameLocation[] = [
         cordLength: 1.2,
       },
     ],
+    musicDevice: {
+      kind: 'radio',
+      label: 'Boombox',
+      position: [-1.75, FLOOR_Y + 0.66, 2.55],
+      rotationY: 0.35,
+      bubbleHeight: 0.34,
+    },
     props: ['plants', 'stool', 'neon', 'sideTable', 'floorLamp'],
-    fog: { color: '#070b14', near: 3.6, far: 9.5 },
+    fog: { color: '#070b14', near: 6, far: 15 },
   },
   {
     id: 'studio',
@@ -191,6 +236,13 @@ export const LOCATIONS: GameLocation[] = [
     ambient: { color: '#ffffff', intensity: 1.5 },
     fill: { position: [1.6, 3.6, 2.0], color: '#ffffff', intensity: 1.4 },
     lamps: [],
+    musicDevice: {
+      kind: 'radio',
+      label: 'Monitor da studio',
+      position: [ROOM.width / 2 - 0.35, FLOOR_Y + 0.9, -1.2],
+      rotationY: -Math.PI / 2,
+      bubbleHeight: 0.34,
+    },
     props: [],
   },
 ];

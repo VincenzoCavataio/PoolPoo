@@ -38,10 +38,24 @@ function Walls({ color, height }: { color: string; height: number }) {
   return (
     <group>
       {walls.map((wall, index) => (
-        <mesh key={index} position={wall.position} rotation={wall.rotation}>
-          <planeGeometry args={wall.size} />
-          <meshStandardMaterial color={color} roughness={0.95} />
-        </mesh>
+        <group key={index} position={wall.position} rotation={wall.rotation}>
+          <mesh>
+            <planeGeometry args={wall.size} />
+            <meshStandardMaterial color={color} roughness={0.95} />
+          </mesh>
+
+          {/* Skirting and a picture rail. Flat walls of one colour read as a
+              backdrop; two horizontal lines at human heights are enough to make
+              them read as a room. */}
+          <mesh position={[0, -height / 2 + 0.06, 0.02]}>
+            <boxGeometry args={[wall.size[0], 0.12, 0.04]} />
+            <meshPhysicalMaterial color="#efe7d6" roughness={0.5} clearcoat={0.35} />
+          </mesh>
+          <mesh position={[0, -height / 2 + 1.05, 0.015]}>
+            <boxGeometry args={[wall.size[0], 0.05, 0.03]} />
+            <meshPhysicalMaterial color="#efe7d6" roughness={0.55} clearcoat={0.3} />
+          </mesh>
+        </group>
       ))}
     </group>
   );

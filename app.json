@@ -29,7 +29,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

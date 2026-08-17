@@ -227,6 +227,50 @@ metro e mezzo sul panno finivano esattamente tra il giocatore e il tavolo nella
 vista dall'alto. La luce non cambia mai — sfumano solo paralume, cavo e lampadina,
 che si guadagnano il posto solo da un'inquadratura bassa.
 
+## Audio
+
+**La musica appartiene alla stanza, non al gioco.** In ogni location c'è un
+apparecchio coerente con l'ambiente — giradischi in sala, radio in garage,
+jukebox in sala giochi, boombox in terrazza — e la musica parte entrando in
+partita e si ferma uscendo, perché è quell'oggetto che sta suonando.
+
+Inquadrandolo compare un fumetto con una nota; toccandolo si apre il cambia-disco.
+Il disco gira mentre suona ed esce dal centro del pannello quando cambi traccia,
+sullo stesso orologio del giradischi 3D: entrambi leggono `changing` dallo stesso
+store, quindi il disco sullo schermo e quello sul mobile si scambiano insieme.
+
+Due scelte che vale la pena conoscere:
+
+- **L'apparecchio è l'unico prop fuori dalla fusione statica.** Tutto il resto
+  dell'arredo è fuso per materiale perché non si muove mai; questo deve essere
+  toccabile, girare e animarsi, quindi costa qualche draw call e se le merita.
+- **Il tocco non passa da un raycaster.** Il canvas è già avvolto da un gesture
+  detector e i due si contenderebbero lo stesso tocco. L'apparecchio proietta da
+  sé la propria posizione sullo schermo a ogni frame, e il gesto misura la
+  distanza in pixel.
+
+Aggiungere una traccia costa un file in `assets/bgm/` e una riga in
+`src/game/audio/tracks.ts`. Non si può fare altrimenti: React Native risolve
+`require` a build time da un percorso letterale, quindi le tracce non si possono
+scoprire scansionando una cartella.
+
+### Gli effetti sono sintetizzati
+
+Non ci sono librerie di campioni in questo progetto e niente con cui registrare,
+quindi gli impatti sono costruiti da zero in `synth.ts`: una pallina colpita è
+una brevissima raffica di rumore più un paio di parziali che risuonano, la sponda
+è la stessa idea un'ottava sotto e molto più smorzata, la buca è un sonaglio
+seguito da un tonfo. `npm run sfx:build` li riscrive nei WAV.
+
+Sono **segnaposto onesti**: leggeranno come suoni da biliardo e pesano un
+centinaio di kilobyte in tutto, ma non sono registrazioni e si sostituiscono
+lasciando cadere dei file veri sopra quelli generati.
+
+Il volume esce dal log eventi del solver, che porta già la velocità d'impatto su
+ogni contatto: per questo una sicura sussurra e uno spacco spacca. Il rumore
+viene da un generatore con seme, non da `Math.random`, così ogni build produce
+byte identici e i test hanno senso.
+
 ## I test
 
 45 test, tutti in Node:
@@ -235,6 +279,7 @@ che si guadagnano il posto solo da un'inquadratura bassa.
 npm run test:core    23 test: attrito, effetto, urti, sponde, buche, determinismo, mira
 npm run test:rules   28 test: punteggio, obiettivi, e la risolvibilità dei livelli
 npm run test:render   9 test: l'atlante dei numeri sulle palline
+npm run test:audio    7 test: gli effetti sonori sintetizzati
 ```
 
 Il **panno è una scelta fisica**, non un colore: verde standard, blu veloce con
@@ -357,9 +402,8 @@ Note oneste su ciò che non c'è, in ordine di quanto si nota giocando:
 - **Squirt.** Colpendo di lato la bianca parte leggermente fuori dalla linea di
   mira, e questo non è modellato: la linea di mira resta onesta anche con
   l'effetto laterale al massimo.
-- **Audio.** Nessun suono, ed è il motivo per cui nelle opzioni non c'è un
-  interruttore del volume: un comando che non fa niente è peggio di un comando
-  assente.
+- **Suoni registrati.** Gli effetti sono sintesi, non campioni: decorosi, non
+  belli. Sostituibili senza toccare codice.
 - **Bianca in mano.** Dopo un fallo la bianca torna automaticamente al punto di
   battuta invece di essere riposizionabile.
 - **Regole 8-ball / 9-ball.** La modalità libera è a punteggio, scelta perché

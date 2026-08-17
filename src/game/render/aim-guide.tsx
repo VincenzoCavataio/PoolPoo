@@ -14,6 +14,8 @@ import type * as THREE from 'three';
 
 import { BALL_RADIUS } from '@/game/core/constants';
 import { predictAim } from '@/game/core/predict';
+import type { Table } from '@/game/core/table';
+import type { Vec2 } from '@/game/core/vec';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -24,6 +26,29 @@ import { BALL_HEIGHT, sceneHeading, sceneX, sceneZ } from './coords';
 const GUIDE_Y = BALL_RADIUS * 0.9;
 const TARGET_LINE_LENGTH = 0.32;
 const CUE_LENGTH = 0.9;
+
+/** Height the butt has to reach to clear a rail, above the ball's centre. */
+const RAIL_CLEARANCE = 0.048;
+/** A cue is never quite level, even in the middle of the table. */
+const BASE_ELEVATION = 0.06;
+const MAX_ELEVATION = 0.95;
+
+/**
+ * How far the cue can travel backwards before it reaches the edge of the
+ * playing area — which is where the rail begins.
+ */
+function distanceToEdge(table: Table, position: Vec2, aimAngle: number): number {
+  const backX = -Math.cos(aimAngle);
+  const backY = -Math.sin(aimAngle);
+  let distance = Infinity;
+
+  if (backX > 1e-6) distance = Math.min(distance, (table.halfLength - position.x) / backX);
+  if (backX < -1e-6) distance = Math.min(distance, (-table.halfLength - position.x) / backX);
+  if (backY > 1e-6) distance = Math.min(distance, (table.halfWidth - position.y) / backY);
+  if (backY < -1e-6) distance = Math.min(distance, (-table.halfWidth - position.y) / backY);
+
+  return Number.isFinite(distance) ? Math.max(0, distance) : Infinity;
+}
 
 /** Points a unit-length box (its long axis on local z) between two points. */
 function layoutSegment(
@@ -46,6 +71,7 @@ function layoutSegment(
 
 export function AimGuide() {
   const cueGroup = useRef<THREE.Group>(null);
+  const cueTilt = useRef<THREE.Group>(null);
   const cueStick = useRef<THREE.Mesh>(null);
   const guideLine = useRef<THREE.Mesh>(null);
   const ghostBall = useRef<THREE.Mesh>(null);
@@ -95,6 +121,21 @@ export function AimGuide() {
       cueGroup.current.visible = visible;
       cueStick.current.scale.set(1, length / CUE_LENGTH, 1);
       cueStick.current.position.set(0, 0, -(pullBack + length / 2 + BALL_RADIUS));
+
+      /*
+       * Raise the butt when the ball is near a rail.
+       *
+       * The cue lies at ball height and reaches most of a metre backwards, so
+       * near a cushion it ran straight through the woodwork. Rendering it in
+       * front of everything would be a lie; elevating it is what a player
+       * actually does, and it clears the rail for the same reason.
+       */
+      if (cueTilt.current) {
+        const back = distanceToEdge(world.table, cue.p, aimAngle);
+        const needed = back < length + BALL_RADIUS ? RAIL_CLEARANCE / Math.max(back, 0.04) : 0;
+        const elevation = Math.min(MAX_ELEVATION, Math.max(BASE_ELEVATION, Math.atan(needed)));
+        cueTilt.current.rotation.x = elevation;
+      }
     }
 
     const prediction = predictAim(world, aimAngle);
@@ -137,10 +178,13 @@ export function AimGuide() {
   return (
     <group>
       <group ref={cueGroup}>
-        <mesh ref={cueStick} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.006, 0.011, CUE_LENGTH, 12]} />
-          <meshStandardMaterial color="#c98f4b" roughness={0.5} />
-        </mesh>
+        {/* Nested so the elevation pivots about the ball, inside the heading. */}
+        <group ref={cueTilt}>
+          <mesh ref={cueStick} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.006, 0.011, CUE_LENGTH, 12]} />
+            <meshPhysicalMaterial color="#c98f4b" roughness={0.35} clearcoat={0.6} />
+          </mesh>
+        </group>
       </group>
 
       <mesh ref={guideLine}>

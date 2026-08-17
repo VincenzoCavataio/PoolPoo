@@ -411,6 +411,27 @@ suite('aim prediction', () => {
     assertClose(prediction.distance, world.table.halfWidth - 0.028575, 1e-6, 'distance to the rail');
   });
 
+  test('a ball frozen against the cue ball is only predicted when aimed at', () => {
+    // At touching distance the ray-sphere quadratic has a root near zero whatever
+    // direction you aim, so filtering on the root alone reported a ball sitting
+    // beside the cue ball as the first contact even when the shot pointed away.
+    const world = World.fromLayout([
+      { number: 0, x: 0, y: 0 },
+      { number: 5, x: 0, y: BALL_DIAMETER },
+    ]);
+
+    const away = predictAim(world, 0);
+    assertEqual(away.targetBall, null, 'aiming along x must not see the ball beside it');
+    assert(away.cushion !== null, 'aiming along x should reach a rail');
+
+    const behind = predictAim(world, -Math.PI / 2);
+    assertEqual(behind.targetBall, null, 'aiming away from it must not see it either');
+
+    const into = predictAim(world, Math.PI / 2);
+    assertEqual(into.targetBall, 5, 'aiming at it must see it');
+    assertClose(into.distance, 0, 1e-6, 'contact with a frozen ball is immediate');
+  });
+
   test('prediction agrees with the solver across a fan of angles', () => {
     // A wide fan on purpose: near the middle the cue ball reaches the rack,
     // further out it meets a rail first, so both branches get exercised.

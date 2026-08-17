@@ -557,11 +557,10 @@ export class World {
 
         ball.pocketed = true;
         ball.pocketedIn = pocket.id;
-        ball.v.x = 0;
-        ball.v.y = 0;
-        ball.w.x = 0;
-        ball.w.y = 0;
-        ball.w.z = 0;
+        // Velocity is deliberately left alone. Every loop in the solver skips a
+        // pocketed ball, so it changes nothing here — but the renderer needs it
+        // to carry the ball over the lip and down, instead of stopping it dead
+        // at the moment of capture.
         this.events.push({
           kind: 'pocketed',
           t: this.time,

@@ -7,14 +7,14 @@
  * that needs the finest touch.
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { SpinControl } from '@/components/game/spin-control';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { useAimScrubGesture, usePowerGesture } from '@/game/input/gestures';
+import { usePowerGesture } from '@/game/input/gestures';
 import { CameraMode } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
@@ -22,6 +22,12 @@ import { useSession } from '@/store/session';
 /** One tap of the fine-aim buttons, in radians — a touch over half a degree. */
 const FINE_AIM_STEP = 0.01;
 const TICKS = 21;
+/** Radians per pixel dragged across the strip. */
+const SCRUB_PER_PX = 0.0022;
+/** Fraction of the strip at each end that keeps turning while held. */
+const EDGE_ZONE = 0.2;
+/** Radians per second at the very end of the strip. */
+const EDGE_RATE = 1.15;
 
 function powerColor(power: number): string {
   if (power > 0.8) return Palette.danger;
@@ -29,13 +35,96 @@ function powerColor(power: number): string {
   return Palette.accent;
 }
 
-/** A ruler to push against, so the drag has something that looks draggable. */
+/**
+ * A ruler to push against, with the edges live.
+ *
+ * Dragging scrubs the aim as far as the finger travels, which runs out of strip
+ * exactly when a long rotation is wanted. So the outer fifth at each end keeps
+ * turning for as long as the finger stays there, faster the further in it is —
+ * the strip behaves like a rocker switch once you reach the end of it.
+ */
 function AimStrip() {
-  const scrub = useAimScrubGesture();
+  const [width, setWidth] = useState(0);
+  const [edge, setEdge] = useState(0);
+
+  const hold = useRef({ running: false, direction: 0, depth: 0 });
+  const frame = useRef<number | null>(null);
+  const last = useRef(0);
+
+  const stop = useCallback(() => {
+    hold.current.running = false;
+    hold.current.direction = 0;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    setEdge(0);
+  }, []);
+
+  const tick = useCallback(() => {
+    const now = Date.now();
+    const delta = Math.min(0.05, (now - last.current) / 1000);
+    last.current = now;
+
+    const { direction, depth } = hold.current;
+    if (direction !== 0 && useSession.getState().phase === Phase.AIMING) {
+      useSession.getState().nudgeAim(direction * EDGE_RATE * depth * delta);
+    }
+
+    frame.current = hold.current.running ? requestAnimationFrame(tick) : null;
+  }, []);
+
+  const track = useCallback(
+    (x: number) => {
+      if (width <= 0) return;
+      const position = Math.min(1, Math.max(0, x / width));
+
+      let direction = 0;
+      let depth = 0;
+      if (position < EDGE_ZONE) {
+        direction = -1;
+        depth = (EDGE_ZONE - position) / EDGE_ZONE;
+      } else if (position > 1 - EDGE_ZONE) {
+        direction = 1;
+        depth = (position - (1 - EDGE_ZONE)) / EDGE_ZONE;
+      }
+
+      hold.current.direction = direction;
+      hold.current.depth = Math.max(0.25, depth);
+      setEdge(direction);
+    },
+    [width],
+  );
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .minDistance(0)
+        .onBegin((event) => {
+          last.current = Date.now();
+          hold.current.running = true;
+          track(event.x);
+          if (frame.current === null) frame.current = requestAnimationFrame(tick);
+        })
+        .onChange((event) => {
+          const session = useSession.getState();
+          if (session.phase === Phase.AIMING) session.nudgeAim(event.changeX * SCRUB_PER_PX);
+          track(event.x);
+        })
+        .onFinalize(stop),
+    [track, tick, stop],
+  );
+
+  useEffect(() => stop, [stop]);
 
   return (
-    <GestureDetector gesture={scrub}>
-      <View style={styles.strip} accessibilityLabel="Trascina per ruotare la stecca">
+    <GestureDetector gesture={gesture}>
+      <View
+        style={styles.strip}
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        accessibilityLabel="Trascina per ruotare la stecca, tieni ai bordi per continuare">
+        <View style={[styles.edgeZone, styles.edgeLeft, edge === -1 && styles.edgeActive]} pointerEvents="none" />
+        <View style={[styles.edgeZone, styles.edgeRight, edge === 1 && styles.edgeActive]} pointerEvents="none" />
+
         <View style={styles.ticks} pointerEvents="none">
           {Array.from({ length: TICKS }, (_, i) => (
             <View
@@ -161,6 +250,26 @@ const styles = StyleSheet.create({
     borderColor: Palette.border,
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  edgeZone: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: `${EDGE_ZONE * 100}%`,
+    backgroundColor: 'transparent',
+  },
+  edgeLeft: {
+    left: 0,
+    borderTopLeftRadius: Radius.small,
+    borderBottomLeftRadius: Radius.small,
+  },
+  edgeRight: {
+    right: 0,
+    borderTopRightRadius: Radius.small,
+    borderBottomRightRadius: Radius.small,
+  },
+  edgeActive: {
+    backgroundColor: 'rgba(61, 220, 132, 0.22)',
   },
   ticks: {
     position: 'absolute',

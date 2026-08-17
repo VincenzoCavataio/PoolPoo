@@ -18,12 +18,16 @@ import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
 import { GameHud, GameOverOverlay } from '@/components/game/hud';
+import { MusicHud } from '@/components/game/music-hud';
 import { Palette } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
+import { releaseMusic, useMusic } from '@/game/audio/music';
+import { initSfx, releaseSfx, setSfxVolume } from '@/game/audio/sfx';
 import { useTableGestures } from '@/game/input/gestures';
 import { setUiInset } from '@/game/render/camera';
 import { GameScene } from '@/game/render/scene';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 export default function GameScreen() {
   const router = useRouter();
@@ -43,6 +47,30 @@ export default function GameScreen() {
     },
     [],
   );
+
+  /**
+   * Audio belongs to the room, so it lives and dies with this screen. Settings
+   * are pushed into the players here rather than read by them: the settings
+   * store must not import the audio modules, or the two end up importing each
+   * other.
+   */
+  useEffect(() => {
+    const settings = useSettings.getState();
+    setSfxVolume(settings.sfxVolume);
+    useMusic.getState().setVolume(settings.musicVolume);
+
+    let cancelled = false;
+    void initSfx().then(() => {
+      if (!cancelled) useMusic.getState().start();
+    });
+
+    return () => {
+      cancelled = true;
+      useMusic.getState().stop();
+      releaseMusic();
+      releaseSfx();
+    };
+  }, []);
 
   if (!world) return null;
 
@@ -75,6 +103,7 @@ export default function GameScreen() {
       </View>
 
       <Celebration />
+      <MusicHud />
       <GameOverOverlay />
     </View>
   );

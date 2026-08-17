@@ -7,9 +7,11 @@
     "@react-three/fiber": "^9.7.0",
     "expo": "~54.0.37",
     "expo-asset": "~12.0.13",
+    "expo-audio": "~1.1.1",
     "expo-constants": "~18.0.14",
     "expo-file-system": "~19.0.24",
     "expo-gl": "~16.0.10",
+    "expo-haptics": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
     "expo-splash-screen": "~31.0.13",
@@ -30,6 +32,8 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "@types/three": "^0.185.4",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "tsx": "^4.23.12",
     "typescript": "~5.9.2"
   },
@@ -44,7 +48,9 @@
     "test:core": "tsx src/game/core/tests/run.ts",
     "test:rules": "tsx src/game/rules/tests/run.ts",
     "test:render": "tsx src/game/render/tests/run.ts",
-    "test": "npm run test:core && npm run test:rules && npm run test:render"
+    "test:audio": "tsx src/game/audio/tests/run.ts",
+    "sfx:build": "tsx scripts/generate-sfx.ts",
+    "test": "npm run test:core && npm run test:rules && npm run test:render && npm run test:audio"
   },
   "private": true
 }

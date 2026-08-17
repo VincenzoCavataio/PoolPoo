@@ -52,6 +52,10 @@ export default function OptionsScreen() {
     showAimGuide,
     showGhostBall,
     aimSensitivity,
+    haptics,
+    collisionHaptics,
+    setHaptics,
+    setCollisionHaptics,
     setCloth,
     setLocation,
     setShowAimGuide,
@@ -207,6 +211,26 @@ export default function OptionsScreen() {
             })}
           </View>
         </View>
+      </Card>
+
+      <SectionLabel>Audio</SectionLabel>
+      <Card>
+        <ToggleRow
+          label="Vibrazione"
+          description="Un colpetto quando tiri, uno diverso quando imbuchi."
+          value={haptics}
+          onChange={setHaptics}
+        />
+        <ToggleRow
+          label="Vibrazione sulle collisioni"
+          description="Un tocco leggero a ogni contatto fra palline. Su uno spacco se ne sentono parecchi."
+          value={collisionHaptics}
+          onChange={setCollisionHaptics}
+        />
+        <Text style={styles.rowDescription}>
+          I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, tocca il
+          giradischi (o la radio, o il jukebox) per aprirlo.
+        </Text>
       </Card>
 
       <SectionLabel>Dati</SectionLabel>

@@ -167,6 +167,15 @@ export function Balls({ world }: { world: World }) {
     return resting;
   }, [world]);
 
+  /** How far a ball's centre can stray inside each pocket before it hits wall. */
+  const pocketLimit = useMemo(() => {
+    const limits = new Map<string, number>();
+    for (const pocket of world.table.pockets) {
+      limits.set(pocket.id, Math.max(0.004, pocket.radius - BALL_RADIUS));
+    }
+    return limits;
+  }, [world]);
+
   const scratch = useMemo(
     () => ({
       object: new THREE.Object3D(),
@@ -179,6 +188,32 @@ export function Balls({ world }: { world: World }) {
   const orientations = useMemo(
     () => Array.from({ length: count }, () => new THREE.Quaternion()),
     [count],
+  );
+
+  /**
+   * The drop into the pocket, integrated here rather than in the solver.
+   *
+   * The solver's job ends the instant a ball is captured — it has left the
+   * table and no rule cares where it is afterwards. But cutting the motion dead
+   * at that moment looks broken, so the ball keeps the velocity it arrived with,
+   * gains gravity, is funnelled towards the middle of the pocket by the liner
+   * and lands on the bed.
+   */
+  const falls = useMemo(
+    () =>
+      Array.from({ length: count }, () => ({
+        started: false,
+        done: false,
+        x: 0,
+        y: 0,
+        z: 0,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        axis: new THREE.Vector3(),
+        rate: 0,
+      })),
+    [world, count],
   );
 
   useLayoutEffect(() => {
@@ -209,15 +244,88 @@ export function Balls({ world }: { world: World }) {
       const ball = world.balls[index];
 
       if (ball.pocketed) {
-        // Now that the pockets are real holes, a potted ball settles on the
-        // cavity floor and stays visible through the mouth.
         const resting = ball.pocketedIn ? pocketRest.get(ball.pocketedIn) : undefined;
+        const fall = falls[index];
+
+        if (!fall.started && resting) {
+          fall.started = true;
+          fall.done = false;
+          fall.x = sceneX(ball.p);
+          fall.z = sceneZ(ball.p);
+          fall.y = BALL_HEIGHT;
+          // Sim velocity (x, y) maps to the scene as (y, −x).
+          fall.vx = ball.v.y;
+          fall.vz = -ball.v.x;
+          fall.vy = 0;
+          const [ax, ay, az] = rollAxis(ball.v);
+          fall.axis.set(ax, ay, az);
+          fall.rate = rollRate(ball.v);
+        }
+
+        const floor = -POCKET_DEPTH + BALL_RADIUS;
+
+        if (fall.started && !fall.done && resting) {
+          fall.vy -= 9.81 * delta;
+          fall.vx *= Math.max(0, 1 - 1.4 * delta);
+          fall.vz *= Math.max(0, 1 - 1.4 * delta);
+
+          fall.x += fall.vx * delta;
+          fall.y += fall.vy * delta;
+          fall.z += fall.vz * delta;
+
+          /*
+           * The ball is inside a hole, so the hole has to hold it.
+           *
+           * Capture happens while it is still travelling — often at several
+           * metres a second — and without walls it simply carried that speed
+           * across the room. Bouncing it off the liner is both what stops that
+           * and what makes it rattle down the throat instead of dropping on a
+           * rail.
+           */
+          const limit = pocketLimit.get(ball.pocketedIn ?? '') ?? 0.03;
+          const offsetX = fall.x - resting[0];
+          const offsetZ = fall.z - resting[1];
+          const offset = Math.hypot(offsetX, offsetZ);
+
+          if (offset > limit) {
+            const nx = offsetX / offset;
+            const nz = offsetZ / offset;
+            fall.x = resting[0] + nx * limit;
+            fall.z = resting[1] + nz * limit;
+
+            const into = fall.vx * nx + fall.vz * nz;
+            if (into > 0) {
+              // Reflect the component going into the wall, keep the rest.
+              fall.vx -= nx * into * 1.55;
+              fall.vz -= nz * into * 1.55;
+            }
+          }
+
+          if (fall.y <= floor) {
+            fall.y = floor;
+            if (Math.abs(fall.vy) > 0.45) {
+              fall.vy = -fall.vy * 0.25;
+            } else {
+              fall.vy = 0;
+              fall.vx *= 0.4;
+              fall.vz *= 0.4;
+              if (Math.hypot(fall.vx, fall.vz) < 0.03) fall.done = true;
+            }
+          }
+
+          if (fall.rate > 0) {
+            spin.setFromAxisAngle(fall.axis, fall.rate * delta);
+            orientations[index].premultiply(spin);
+            fall.rate *= Math.max(0, 1 - 1.6 * delta);
+          }
+        }
+
         object.scale.setScalar(resting ? 1 : 0);
         object.quaternion.copy(orientations[index]);
         object.position.set(
-          resting ? resting[0] : 0,
-          -POCKET_DEPTH + BALL_RADIUS,
-          resting ? resting[1] : 0,
+          fall.started ? fall.x : (resting?.[0] ?? 0),
+          fall.started ? fall.y : floor,
+          fall.started ? fall.z : (resting?.[1] ?? 0),
         );
         object.updateMatrix();
         mesh.setMatrixAt(index, object.matrix);
@@ -226,6 +334,12 @@ export function Balls({ world }: { world: World }) {
         object.updateMatrix();
         shadows.setMatrixAt(index, object.matrix);
         continue;
+      }
+
+      // Back on the table — a respot, or a new rack.
+      if (falls[index].started) {
+        falls[index].started = false;
+        falls[index].done = false;
       }
 
       const speed = Math.hypot(ball.v.x, ball.v.y);

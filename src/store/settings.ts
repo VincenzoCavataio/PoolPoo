@@ -29,12 +29,32 @@ export interface SettingsState {
   showGhostBall: boolean;
   /** Radians of aim change per pixel dragged. */
   aimSensitivity: number;
+  /**
+   * Volumes and haptics live here so they survive a restart, but the live audio
+   * objects do not read them directly — settings must not import the players, or
+   * the two modules end up importing each other. Whoever starts the audio pushes
+   * these values in.
+   */
+  musicVolume: number;
+  sfxVolume: number;
+  /** Vibration on your own shot and on a pot. */
+  haptics: boolean;
+  /**
+   * A light tap on every ball contact. Separate from `haptics` because it fires
+   * dozens of times on a break, and that is either the best part of the shot or
+   * the reason the phone goes in a drawer.
+   */
+  collisionHaptics: boolean;
 
   setCloth: (id: string) => void;
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
   setShowGhostBall: (value: boolean) => void;
   setAimSensitivity: (value: number) => void;
+  setMusicVolume: (value: number) => void;
+  setSfxVolume: (value: number) => void;
+  setHaptics: (value: boolean) => void;
+  setCollisionHaptics: (value: boolean) => void;
   resetSettings: () => void;
 }
 
@@ -44,6 +64,10 @@ const DEFAULTS = {
   showAimGuide: true,
   showGhostBall: true,
   aimSensitivity: AIM_SENSITIVITY.default,
+  musicVolume: 0.55,
+  sfxVolume: 0.8,
+  haptics: true,
+  collisionHaptics: false,
 };
 
 export const useSettings = create<SettingsState>()(
@@ -59,6 +83,10 @@ export const useSettings = create<SettingsState>()(
         set({
           aimSensitivity: Math.min(AIM_SENSITIVITY.max, Math.max(AIM_SENSITIVITY.min, value)),
         }),
+      setMusicVolume: (value) => set({ musicVolume: Math.min(1, Math.max(0, value)) }),
+      setSfxVolume: (value) => set({ sfxVolume: Math.min(1, Math.max(0, value)) }),
+      setHaptics: (haptics) => set({ haptics }),
+      setCollisionHaptics: (collisionHaptics) => set({ collisionHaptics }),
       resetSettings: () => set({ ...DEFAULTS }),
     }),
     {

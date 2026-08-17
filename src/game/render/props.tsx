@@ -20,7 +20,6 @@ import { FLOOR_Y, ROOM } from './locations';
 
 export type PropGroup =
   | 'shelf'
-  | 'turntable'
   | 'speakers'
   | 'bookcase'
   | 'plants'
@@ -181,8 +180,14 @@ const BOARD_YS = [-0.765, -0.385, -0.005, 0.375, 0.755, 1.135];
 function shelfParts(): Part[] {
   const parts: Part[] = [];
 
+  // Boards stop at the inner faces of the sides and the back rather than
+  // running through them. Overlapping solids leave coplanar faces exactly where
+  // two pieces of furniture meet, and those flicker.
+  const shelfSpan = 2.2 - 2 * 0.04;
+  const boardDepth = SHELF_DEPTH - 0.02;
+
   for (const y of BOARD_YS) {
-    parts.push(box('wood', [SHELF_DEPTH, 0.03, 2.2], [SHELF_X, y, 0]));
+    parts.push(box('wood', [boardDepth, 0.03, shelfSpan], [SHELF_X - 0.01, y, 0]));
   }
   for (const z of [-1.08, 1.08]) {
     parts.push(box('woodDark', [SHELF_DEPTH, 1.93, 0.04], [SHELF_X, 0.185, z]));
@@ -234,27 +239,6 @@ function shelfParts(): Part[] {
   return parts;
 }
 
-/** Belt-drive deck on the top of the shelf, lid up. */
-function turntableParts(): Part[] {
-  const y = BOARD_YS[BOARD_YS.length - 1] + 0.015;
-  const z = 0.25;
-
-  return [
-    box('plastic', [0.34, 0.085, 0.44], [SHELF_X, y + 0.043, z]),
-    cyl('metal', 0.135, 0.014, [SHELF_X, y + 0.093, z]),
-    cyl('vinyl', 0.128, 0.005, [SHELF_X, y + 0.102, z]),
-    cyl('accent', 0.045, 0.006, [SHELF_X, y + 0.105, z]),
-    cyl('metal', 0.006, 0.03, [SHELF_X, y + 0.11, z]),
-    // Tonearm, swung in over the record.
-    box('metal', [0.016, 0.012, 0.24], [SHELF_X + 0.06, y + 0.105, z + 0.06], [0, -0.5, 0]),
-    cyl('plastic', 0.028, 0.02, [SHELF_X + 0.13, y + 0.1, z - 0.15]),
-    // Two knobs and the raised lid at the back.
-    cyl('metal', 0.018, 0.014, [SHELF_FRONT + 0.04, y + 0.093, z - 0.19]),
-    cyl('metal', 0.018, 0.014, [SHELF_FRONT + 0.04, y + 0.093, z + 0.19]),
-    box('glass', [0.02, 0.3, 0.42], [SHELF_X + 0.16, y + 0.2, z], [0.22, 0, 0]),
-  ];
-}
-
 function speakerParts(): Part[] {
   const parts: Part[] = [];
   for (const z of [-1.55, 1.55]) {
@@ -274,8 +258,12 @@ function bookcaseParts(): Part[] {
   const boards = [-0.765, -0.4, -0.035, 0.33, 0.695, 1.06];
   const parts: Part[] = [];
 
+  // As with the shelving: the boards fit between the sides, they do not pass
+  // through them.
+  const span = width - 2 * 0.04;
+
   for (const y of boards) {
-    parts.push(box('wood', [0.3, 0.03, width], [x, y, centreZ]));
+    parts.push(box('wood', [0.28, 0.03, span], [x + 0.01, y, centreZ]));
   }
   for (const z of [centreZ - width / 2, centreZ + width / 2]) {
     parts.push(box('woodDark', [0.3, 1.86, 0.04], [x, 0.148, z]));
@@ -473,7 +461,6 @@ function arcadeParts(): Part[] {
 
 const BUILDERS: Record<PropGroup, () => Part[]> = {
   shelf: shelfParts,
-  turntable: turntableParts,
   speakers: speakerParts,
   bookcase: bookcaseParts,
   plants: plantParts,

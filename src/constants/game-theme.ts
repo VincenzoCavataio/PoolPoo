@@ -99,6 +99,28 @@ export function clothProfile(id: string): PhysicsProfile {
   return { ...DEFAULT_PROFILE, ...clothById(id).physics };
 }
 
+/**
+ * Menu palette.
+ *
+ * Separate from `Palette` on purpose. The in-game HUD sits over green baize and
+ * has to stay legible there, so it keeps its quiet dark-and-accent scheme; the
+ * menus have nothing to read over and every reason to look like a cabinet
+ * attract screen.
+ */
+export const Arcade = {
+  ink: '#0a0518',
+  panel: '#170c2c',
+  panelRaised: '#221240',
+  edge: '#412a70',
+  magenta: '#ff3ea5',
+  cyan: '#24e0ff',
+  gold: '#ffd23f',
+  violet: '#8b46ff',
+  lime: '#5cff9d',
+  text: '#f4eeff',
+  textMuted: '#a48cd6',
+} as const;
+
 export const Radius = {
   small: 8,
   medium: 14,

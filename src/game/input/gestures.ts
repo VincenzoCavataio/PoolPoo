@@ -19,7 +19,9 @@
 import { useMemo } from 'react';
 import { Gesture, type ComposedGesture } from 'react-native-gesture-handler';
 
+import { useMusic } from '@/game/audio/music';
 import { adjustEye, CameraMode, orbitRig, zoomRig } from '@/game/render/camera';
+import { musicDeviceScreen } from '@/game/render/music-device';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -28,6 +30,8 @@ const ORBIT_AZIMUTH_PER_PX = 0.007;
 const ORBIT_ELEVATION_PER_PX = 0.005;
 const EYE_HEIGHT_PER_PX = 0.0011;
 const EYE_BACK_PER_SCALE = 0.6;
+/** How near a tap must land to the music player, in points. */
+const DEVICE_TAP_RADIUS = 58;
 
 /** True when the player is lining a shot up from behind the cue ball. */
 function inCueView(): boolean {
@@ -78,36 +82,28 @@ export function useTableGestures(): ComposedGesture {
         }
       });
 
-    // Exclusive, not simultaneous: a pinch must not also be read as a drag.
-    return Gesture.Exclusive(pinch, drag);
+    /**
+     * Tapping the music player.
+     *
+     * The device projects its own screen position every frame, so this is a
+     * distance check in pixels rather than a raycast — which would have to fight
+     * the pan gesture for the same touch.
+     */
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .maxDistance(14)
+      .onEnd((event, success) => {
+        if (!success || !musicDeviceScreen.onScreen) return;
+        const dx = event.x - musicDeviceScreen.x;
+        const dy = event.y - musicDeviceScreen.y;
+        if (Math.hypot(dx, dy) > DEVICE_TAP_RADIUS) return;
+        useMusic.getState().openHud();
+      });
+
+    // Exclusive, not simultaneous: a pinch must not also be read as a drag, and
+    // a stationary tap must not be read as either.
+    return Gesture.Exclusive(pinch, drag, tap);
   }, []);
-}
-
-/** Radians per pixel on the aim strip — finer than dragging the table itself. */
-const SCRUB_PER_PX = 0.0022;
-
-/**
- * The aim strip in the shooting panel.
- *
- * Dragging the table works, but in the cue view the camera is locked to the shot
- * line, so turning the aim swings the whole world and there is nothing on screen
- * that visibly *moves under your finger*. A dedicated strip gives a fixed thing
- * to push against, and at a third of the sensitivity it is the control to reach
- * for when a shot needs half a degree rather than ten.
- */
-export function useAimScrubGesture() {
-  return useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .minDistance(0)
-        .onChange((event) => {
-          const session = useSession.getState();
-          if (session.phase !== Phase.AIMING) return;
-          session.nudgeAim(event.changeX * SCRUB_PER_PX);
-        }),
-    [],
-  );
 }
 
 /**

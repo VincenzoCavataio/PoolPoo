@@ -283,17 +283,60 @@ export function TableMesh({ table }: { table: Table }) {
         </mesh>
       ))}
 
+      {/* Inlay strip down the middle of each rail: one line of lighter wood is
+          what stops a rail from reading as a plain brown bar. */}
+      {([-1, 1] as const).map((side) => (
+        <mesh key={`inlay-x-${side}`} position={[side * railOffsetX, RAIL_TOP + 0.001, 0]}>
+          <boxGeometry args={[RAIL_WIDTH * 0.42, 0.004, railSpanZ * 0.94]} />
+          <meshPhysicalMaterial
+            color="#c8a06a"
+            roughness={0.3}
+            clearcoat={0.7}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
+        </mesh>
+      ))}
+      {([-1, 1] as const).map((side) => (
+        <mesh key={`inlay-z-${side}`} position={[0, RAIL_TOP + 0.001, side * railOffsetZ]}>
+          <boxGeometry args={[(bedWidth + 2 * CUSHION_WIDTH) * 0.9, 0.004, RAIL_WIDTH * 0.42]} />
+          <meshPhysicalMaterial
+            color="#c8a06a"
+            roughness={0.3}
+            clearcoat={0.7}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
+        </mesh>
+      ))}
+
+      {/* Nothing rings the pocket mouths. A ball has to be able to reach the
+          hole from any angle along the rail, and anything sitting proud of the
+          cloth there would be in its way. */}
+
       <RailDiamonds table={table} />
 
       {/* Legs, so the table stands on the floor instead of hovering over it. */}
       {([-1, 1] as const).map((sx) =>
         ([-1, 1] as const).map((sz) => (
-          <mesh
-            key={`leg-${sx}-${sz}`}
-            position={[sx * legInsetX, BODY_BOTTOM - legHeight / 2, sz * legInsetZ]}>
-            <boxGeometry args={[LEG_SIZE, legHeight, LEG_SIZE]} />
-            <meshPhysicalMaterial color={Palette.railDark} roughness={0.6} clearcoat={0.2} />
-          </mesh>
+          <group key={`leg-${sx}-${sz}`} position={[sx * legInsetX, 0, sz * legInsetZ]}>
+            <mesh position={[0, BODY_BOTTOM - legHeight / 2, 0]}>
+              <boxGeometry args={[LEG_SIZE, legHeight, LEG_SIZE]} />
+              <meshPhysicalMaterial color={Palette.railDark} roughness={0.6} clearcoat={0.2} />
+            </mesh>
+            {/* A collar at the top and a foot at the bottom, so the leg has a
+                shape instead of being a post. */}
+            <mesh position={[0, BODY_BOTTOM - 0.045, 0]}>
+              <boxGeometry args={[LEG_SIZE * 1.28, 0.06, LEG_SIZE * 1.28]} />
+              <meshPhysicalMaterial color={Palette.rail} roughness={0.45} clearcoat={0.4} />
+            </mesh>
+            <mesh position={[0, FLOOR_Y + 0.028, 0]}>
+              <boxGeometry args={[LEG_SIZE * 1.35, 0.056, LEG_SIZE * 1.35]} />
+              <meshPhysicalMaterial color="#a8863f" roughness={0.35} metalness={0.7} />
+            </mesh>
+          </group>
         )),
       )}
 
