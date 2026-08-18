@@ -31,6 +31,10 @@ export type PropGroup =
   | 'rug'
   | 'sideTable'
   | 'floorLamp'
+  | 'parquet'
+  | 'gallery'
+  | 'armchair'
+  | 'trophyCase'
   | 'arcade';
 
 type MaterialKey =
@@ -53,6 +57,17 @@ type MaterialKey =
   | 'leaf'
   | 'leafDark'
   | 'rug'
+  | 'rugPattern'
+  | 'rugFringe'
+  | 'parquetA'
+  | 'parquetB'
+  | 'brass'
+  | 'canvas'
+  | 'oil'
+  | 'oilDark'
+  | 'oilWarm'
+  | 'velvet'
+  | 'paper'
   | 'glass';
 
 /**
@@ -108,6 +123,23 @@ const MATERIALS: Record<MaterialKey, MaterialSpec> = {
   leaf: { color: '#3f7a43', roughness: 0.65, sheen: 0.5, sheenColor: '#9fd08a' },
   leafDark: { color: '#2c5a33', roughness: 0.7, sheen: 0.4, sheenColor: '#7fb673' },
   rug: { color: '#6d2c3a', roughness: 1, sheen: 0.85, sheenColor: '#c58a95' },
+  // A second and third rug tone, so the carpet has a pattern rather than being
+  // one flat rectangle. Sheen is what stops wool reading as painted plastic.
+  rugPattern: { color: '#1f4038', roughness: 0.95, sheen: 0.55, sheenColor: '#5e9b86' },
+  rugFringe: { color: '#c8b48a', roughness: 1, sheen: 0.7, sheenColor: '#e8dcc0' },
+  // Two board tones laid alternately: a parquet floor is mostly the joint
+  // between planks, and one flat colour is what makes a room look unfinished.
+  parquetA: { color: '#6a4526', roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.3 },
+  parquetB: { color: '#7d5530', roughness: 0.55, clearcoat: 0.4, clearcoatRoughness: 0.35 },
+  // Picture frames and fittings. Warmer and softer than chrome.
+  brass: { color: '#b08d4a', roughness: 0.3, metalness: 0.85, envMapIntensity: 1.2 },
+  canvas: { color: '#e8dfc8', roughness: 0.9 },
+  // Paint. Kept matte and slightly varnished, the way an oil painting sits.
+  oil: { color: '#3c5a6e', roughness: 0.65, clearcoat: 0.3, clearcoatRoughness: 0.5 },
+  oilDark: { color: '#22303c', roughness: 0.7, clearcoat: 0.25, clearcoatRoughness: 0.5 },
+  oilWarm: { color: '#a8663a', roughness: 0.65, clearcoat: 0.3, clearcoatRoughness: 0.5 },
+  velvet: { color: '#3d1f3a', roughness: 1, sheen: 0.9, sheenColor: '#8a5a86' },
+  paper: { color: '#d8cdb4', roughness: 0.95 },
   glass: {
     color: '#9fc4cf',
     roughness: 0.04,
@@ -294,6 +326,205 @@ function bookcaseParts(): Part[] {
   return parts;
 }
 
+/**
+ * A parquet floor, laid as real boards.
+ *
+ * The room used to stand on a single flat-coloured plane, and that one detail
+ * did more than anything else to make it read as a rendering rather than a
+ * place. Boards are laid in alternating tones with a hair of gap between them,
+ * so the light from the table lamps breaks up across the joints.
+ *
+ * Only the band around the table is laid — the middle is under the table and the
+ * rug, and would be several hundred boxes nobody ever sees.
+ */
+function parquetParts(): Part[] {
+  const parts: Part[] = [];
+  const boardLength = 0.62;
+  const boardWidth = 0.11;
+  const gap = 0.006;
+  const y = FLOOR_Y + 0.004;
+
+  const acrossCount = Math.ceil(ROOM.width / (boardWidth + gap));
+  const alongCount = Math.ceil(ROOM.depth / (boardLength + gap));
+
+  for (let row = 0; row < alongCount; row++) {
+    const z = -ROOM.depth / 2 + row * (boardLength + gap) + boardLength / 2;
+    // Every other row is offset by half a board, the way parquet is actually
+    // laid; a grid with aligned ends reads as tiles, not boards.
+    const stagger = row % 2 === 0 ? 0 : (boardWidth + gap) / 2;
+
+    for (let col = 0; col < acrossCount; col++) {
+      const x = -ROOM.width / 2 + col * (boardWidth + gap) + boardWidth / 2 + stagger;
+      if (Math.abs(x) > ROOM.width / 2) continue;
+      // Skip what the table and rug cover: invisible, and hundreds of boxes.
+      if (Math.abs(x) < 1.9 && Math.abs(z) < 2.6) continue;
+
+      const tone = (row + col) % 2 === 0 ? 'parquetA' : 'parquetB';
+      parts.push(box(tone, [boardWidth, 0.014, boardLength], [x, y, z]));
+    }
+  }
+
+  return parts;
+}
+
+/**
+ * A wall of framed pictures, properly built.
+ *
+ * What was here before was five flat rectangles of colour. A painting reads as a
+ * painting because of the frame around it: a raised outer moulding, a recessed
+ * mount, then the canvas sitting behind both. Each of these gets all three, plus
+ * a brass picture light over the largest one.
+ */
+function galleryParts(): Part[] {
+  const parts: Part[] = [];
+  const z = WALL_Z - 0.03;
+
+  /** One framed picture: moulding, mount, canvas, and the paint on it. */
+  function framed(
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
+    frame: MaterialKey,
+    strokes: [MaterialKey, number, number, number, number][],
+  ) {
+    const lip = 0.045;
+    const mount = 0.028;
+    // Moulding, built as four bars so the frame has a hollow rather than being
+    // a solid slab with a picture painted on the front.
+    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy + h / 2 + lip / 2, z]));
+    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy - h / 2 - lip / 2, z]));
+    parts.push(box(frame, [lip, h, 0.05], [cx - w / 2 - lip / 2, cy, z]));
+    parts.push(box(frame, [lip, h, 0.05], [cx + w / 2 + lip / 2, cy, z]));
+    // Mount board, set back, then the canvas behind it.
+    parts.push(box('paper', [w, h, 0.012], [cx, cy, z - 0.012]));
+    parts.push(box('canvas', [w - mount * 2, h - mount * 2, 0.01], [cx, cy, z - 0.02]));
+    for (const [material, ox, oy, sw, sh] of strokes) {
+      parts.push(box(material, [sw, sh, 0.006], [cx + ox, cy + oy, z - 0.026]));
+    }
+  }
+
+  // A landscape: bands of colour, largest picture, centre of the wall.
+  framed(-0.78, 0.92, 0.86, 0.6, 'brass', [
+    ['oilDark', 0, 0.18, 0.78, 0.2],
+    ['oil', 0, 0.0, 0.78, 0.16],
+    ['oilWarm', 0, -0.16, 0.78, 0.16],
+    ['oilDark', -0.22, -0.06, 0.1, 0.24],
+  ]);
+
+  // A portrait in a dark frame, taller than it is wide.
+  framed(0.28, 0.98, 0.34, 0.48, 'woodDark', [
+    ['oilDark', 0, 0.08, 0.24, 0.26],
+    ['oilWarm', 0, -0.1, 0.16, 0.14],
+  ]);
+
+  // A small still life, hung lower and offset, so the group is not a row.
+  framed(0.82, 0.72, 0.3, 0.26, 'brass', [
+    ['oilWarm', -0.05, 0, 0.12, 0.14],
+    ['oil', 0.06, -0.02, 0.09, 0.1],
+  ]);
+
+  // Brass picture light over the landscape: a stem and a half-cylinder shade.
+  parts.push(box('brass', [0.03, 0.14, 0.03], [-0.78, 1.3, z + 0.02]));
+  parts.push(
+    cyl('brass', 0.045, 0.34, [-0.78, 1.4, z + 0.09], [0, 0, Math.PI / 2]),
+  );
+
+  return parts;
+}
+
+/**
+ * A pair of leather armchairs, for people waiting their turn.
+ *
+ * A billiard room without anywhere to sit reads as a showroom. These are built
+ * as a seat, a back, two arms and four feet — enough that they are unmistakably
+ * chairs from the table, without modelling upholstery seams nobody will see.
+ */
+function armchairParts(): Part[] {
+  const parts: Part[] = [];
+
+  function chair(cx: number, cz: number, facing: number) {
+    const sin = Math.sin(facing);
+    const cos = Math.cos(facing);
+    /** Places a part in the chair's own axes, then rotates it into the room. */
+    const at = (lx: number, ly: number, lz: number): [number, number, number] => [
+      cx + lx * cos - lz * sin,
+      FLOOR_Y + ly,
+      cz + lx * sin + lz * cos,
+    ];
+    const turn: [number, number, number] = [0, facing, 0];
+
+    // Seat cushion, back, arms.
+    parts.push({ ...box('velvet', [0.62, 0.16, 0.58], at(0, 0.42, 0)), rotation: turn });
+    parts.push({ ...box('velvet', [0.62, 0.5, 0.14], at(0, 0.68, -0.24)), rotation: turn });
+    parts.push({ ...box('velvet', [0.12, 0.2, 0.58], at(-0.28, 0.56, 0)), rotation: turn });
+    parts.push({ ...box('velvet', [0.12, 0.2, 0.58], at(0.28, 0.56, 0)), rotation: turn });
+    // A darker base under the cushion, so it does not float.
+    parts.push({ ...box('woodDark', [0.6, 0.14, 0.56], at(0, 0.27, 0)), rotation: turn });
+    // Feet.
+    for (const [fx, fz] of [
+      [-0.24, -0.22],
+      [0.24, -0.22],
+      [-0.24, 0.22],
+      [0.24, 0.22],
+    ]) {
+      parts.push({ ...box('brass', [0.05, 0.2, 0.05], at(fx, 0.1, fz)), rotation: turn });
+    }
+  }
+
+  // Against the far end wall, angled in towards the table. Deliberately not on
+  // the -x wall: the bookcase is there, and two pieces of furniture sharing a
+  // footprint would leave a ball wedged between them.
+  chair(-0.95, WALL_Z - 0.55, Math.PI - 0.3);
+  chair(0.35, WALL_Z - 0.55, Math.PI + 0.25);
+
+  return parts;
+}
+
+/**
+ * A glass trophy cabinet: silverware, a row of cues behind glass, brass fittings.
+ *
+ * The room's one piece of pure decoration. It stands against the near wall where
+ * a ball knocked off the table can actually reach it, which is why it is also
+ * one of the collision obstacles.
+ */
+function trophyCaseParts(): Part[] {
+  const parts: Part[] = [];
+  const x = -WALL_X + 0.24;
+  const z = -1.4;
+
+  // Carcass and plinth.
+  parts.push(box('woodDark', [0.42, 1.6, 1.1], [x, FLOOR_Y + 0.8, z]));
+  parts.push(box('wood', [0.48, 0.12, 1.16], [x, FLOOR_Y + 0.06, z]));
+  parts.push(box('wood', [0.48, 0.08, 1.16], [x, FLOOR_Y + 1.62, z]));
+
+  // Glazed front, in two panes with a brass mullion.
+  parts.push(box('glass', [0.02, 1.24, 0.5], [x + 0.21, FLOOR_Y + 0.86, z - 0.28]));
+  parts.push(box('glass', [0.02, 1.24, 0.5], [x + 0.21, FLOOR_Y + 0.86, z + 0.28]));
+  parts.push(box('brass', [0.03, 1.3, 0.03], [x + 0.21, FLOOR_Y + 0.86, z]));
+
+  // Two shelves inside.
+  for (const sy of [0.62, 1.06]) {
+    parts.push(box('wood', [0.38, 0.02, 1.02], [x, FLOOR_Y + sy, z]));
+  }
+
+  // Silverware: cups on brass plinths, one taller in the middle.
+  const cups: [number, number, number][] = [
+    [-0.34, 0.62, 0.09],
+    [0, 0.62, 0.13],
+    [0.34, 0.62, 0.09],
+    [-0.2, 1.06, 0.08],
+    [0.2, 1.06, 0.1],
+  ];
+  for (const [oz, sy, height] of cups) {
+    parts.push(cyl('brass', 0.05, 0.02, [x, FLOOR_Y + sy + 0.02, z + oz]));
+    parts.push(cyl('metal', 0.018, height * 0.5, [x, FLOOR_Y + sy + height * 0.35, z + oz]));
+    parts.push(sph('metal', height * 0.34, [x, FLOOR_Y + sy + height * 0.72, z + oz]));
+  }
+
+  return parts;
+}
+
 /** Three potted plants, foliage built from clustered spheres. */
 function plantParts(): Part[] {
   const spots: [number, number, number][] = [
@@ -399,12 +630,49 @@ function clockParts(): Part[] {
 }
 
 /** A rug under the table, to stop it floating on a bare floor. */
+/**
+ * A patterned rug rather than three stacked rectangles.
+ *
+ * Real rugs have a border, a field, and a repeating motif inside it — and a
+ * fringe at the short ends, which is the detail that most says "rug" rather than
+ * "coloured mat". Layered a few millimetres apart so the pile catches the lamps
+ * at slightly different angles.
+ */
 function rugParts(): Part[] {
-  return [
-    box('rug', [3.3, 0.012, 4.6], [0, FLOOR_Y + 0.007, 0]),
-    box('woodDark', [3.0, 0.014, 4.3], [0, FLOOR_Y + 0.009, 0]),
-    box('rug', [2.6, 0.016, 3.9], [0, FLOOR_Y + 0.011, 0]),
-  ];
+  const parts: Part[] = [];
+  const y = FLOOR_Y + 0.007;
+
+  // Border, then an inner guard stripe, then the field.
+  parts.push(box('rug', [3.34, 0.012, 4.64], [0, y, 0]));
+  parts.push(box('rugFringe', [3.16, 0.013, 4.46], [0, y + 0.002, 0]));
+  parts.push(box('rugPattern', [3.02, 0.014, 4.32], [0, y + 0.004, 0]));
+  parts.push(box('rug', [2.78, 0.015, 4.08], [0, y + 0.006, 0]));
+
+  // A repeating diamond motif down the field, mirrored across the centre line.
+  for (let i = -3; i <= 3; i++) {
+    const z = i * 0.58;
+    for (const x of [-0.92, 0, 0.92]) {
+      parts.push({
+        ...box('rugPattern', [0.2, 0.016, 0.2], [x, y + 0.008, z]),
+        rotation: [0, Math.PI / 4, 0],
+      });
+      parts.push({
+        ...box('rugFringe', [0.09, 0.017, 0.09], [x, y + 0.01, z]),
+        rotation: [0, Math.PI / 4, 0],
+      });
+    }
+  }
+
+  // Fringe at both short ends.
+  for (const end of [-1, 1]) {
+    for (let i = -14; i <= 14; i++) {
+      parts.push(
+        box('rugFringe', [0.03, 0.008, 0.1], [i * 0.11, y, end * (4.64 / 2 + 0.05)]),
+      );
+    }
+  }
+
+  return parts;
 }
 
 function sideTableParts(): Part[] {
@@ -472,6 +740,10 @@ const BUILDERS: Record<PropGroup, () => Part[]> = {
   rug: rugParts,
   sideTable: sideTableParts,
   floorLamp: floorLampParts,
+  parquet: parquetParts,
+  gallery: galleryParts,
+  armchair: armchairParts,
+  trophyCase: trophyCaseParts,
   arcade: arcadeParts,
 };
 

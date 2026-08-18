@@ -29,6 +29,27 @@ export type PocketId =
   | 'side-n'
   | 'side-s';
 
+/**
+ * Something standing on the floor that a ball knocked off the table can hit.
+ *
+ * Axis-aligned boxes in the sim plane, with a height. That is a crude shape for
+ * a bookcase, but a ball only ever meets these from the side while rolling
+ * along the carpet, so the footprint is the part that matters and a box gets it
+ * right for every piece of furniture in the room.
+ */
+export interface Obstacle {
+  /** Centre on the floor, in sim coordinates. */
+  x: number;
+  y: number;
+  /** Half-extents of the footprint. */
+  halfX: number;
+  halfY: number;
+  /** How far up from the floor it blocks, so a ball can drop onto low things. */
+  height: number;
+  /** How lively it is when struck. Glass and metal ring; upholstery does not. */
+  restitution: number;
+}
+
 export interface Table {
   /** Half the playing length, along `x`. */
   halfLength: number;
@@ -36,6 +57,12 @@ export interface Table {
   halfWidth: number;
   cushions: Segment[];
   pockets: Pocket[];
+  /**
+   * Furniture on the floor around the table. Empty for a bare table; the render
+   * layer fills it in from whichever room is being played in, because the room
+   * is what decides where the furniture stands.
+   */
+  obstacles: Obstacle[];
 }
 
 /** 9-foot table: 2.54 m × 1.27 m of slate, a 2:1 rectangle. */
@@ -74,7 +101,7 @@ export function createTable(): Table {
     { id: 'side-n', center: { x: 0, y: hy }, radius: SIDE_POCKET_RADIUS },
   ];
 
-  return { halfLength: hx, halfWidth: hy, cushions, pockets };
+  return { halfLength: hx, halfWidth: hy, cushions, pockets, obstacles: [] };
 }
 
 /** Where the cue ball is placed at the start and after being pocketed. */

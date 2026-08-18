@@ -18,6 +18,7 @@ import type { Ball } from '../ball';
 import { firstBallHitByCue, pocketedNumbers, type ShotEvent } from '../events';
 import { predictAim } from '../predict';
 import { createTable, headSpot } from '../table';
+import { obstaclesFor } from '../../render/locations';
 import { add, angleOf, normalize, scale, sub } from '../vec';
 import { NO_SPIN, World } from '../world';
 import { createFreeState, resolveFreeShot } from '../../rules/free';
@@ -1263,6 +1264,106 @@ suite('english off a rail', () => {
         sideways <= stored + 1e-9,
         `at ${v} m/s the rail gave ${sideways.toFixed(2)} m/s from ${stored.toFixed(2)} of spin`,
       );
+    }
+  });
+});
+
+suite('furniture on the floor', () => {
+  /** The sala, with the sideboard, cabinet, chairs and plants it really has. */
+  function furnished() {
+    return { ...createTable(), obstacles: obstaclesFor('sala') };
+  }
+
+  /** Rolls a ball across the carpet from the middle of the room. */
+  function slide(angle: number, speed: number) {
+    const table = furnished();
+    const world = World.fromLayout([{ number: 0, x: 0, y: 0 }], table);
+    const ball = world.cueBall()!;
+    ball.offTable = true;
+    ball.z = -0.78;
+    ball.v.x = Math.cos(angle) * speed;
+    ball.v.y = Math.sin(angle) * speed;
+    runShot(world);
+    return { table, ball };
+  }
+
+  test('the room has furniture the solver knows about', () => {
+    assert(furnished().obstacles.length > 0, 'the sala has no obstacles at all');
+  });
+
+  /**
+   * The whole point of giving furniture a footprint: a ball must never come to
+   * rest inside the bookcase.
+   */
+  test('a ball never ends up inside a piece of furniture', () => {
+    for (let i = 0; i < 72; i++) {
+      const { table, ball } = slide((i / 72) * Math.PI * 2, 5);
+      for (const o of table.obstacles) {
+        const insideX = Math.abs(ball.p.x - o.x) < o.halfX + BALL_RADIUS - 1e-6;
+        const insideY = Math.abs(ball.p.y - o.y) < o.halfY + BALL_RADIUS - 1e-6;
+        assert(
+          !(insideX && insideY),
+          `a ball came to rest inside the piece at (${o.x.toFixed(2)}, ${o.y.toFixed(2)})`,
+        );
+      }
+    }
+  });
+
+  /**
+   * A ball has to be able to *reach* the furniture, or the collisions are
+   * decoration. The carpet drag was originally set so tight that a ball stopped
+   * two metres short of everything in the room.
+   */
+  test('a ball knocked hard off the table reaches the far side of the room', () => {
+    let furthest = 0;
+    for (let i = 0; i < 36; i++) {
+      const { ball } = slide((i / 36) * Math.PI * 2, 5);
+      furthest = Math.max(furthest, Math.hypot(ball.p.x, ball.p.y));
+    }
+    assert(furthest > 2.4, `nothing got further than ${furthest.toFixed(2)}m from the table`);
+  });
+
+  test('furniture actually turns a ball back', () => {
+    // Straight at the trophy cabinet.
+    const table = furnished();
+    const cabinet = table.obstacles.reduce((best, o) =>
+      Math.abs(o.restitution - 0.5) < Math.abs(best.restitution - 0.5) ? o : best,
+    );
+    const world = World.fromLayout([{ number: 0, x: 0, y: 0 }], table);
+    const ball = world.cueBall()!;
+    ball.offTable = true;
+    ball.z = -0.78;
+    const d = Math.hypot(cabinet.x, cabinet.y);
+    ball.v.x = (cabinet.x / d) * 5;
+    ball.v.y = (cabinet.y / d) * 5;
+
+    let turned = false;
+    for (let t = 0; t < MAX_TICKS && !world.atRest; t++) {
+      const before = { vx: ball.v.x, vy: ball.v.y };
+      world.step(PHYSICS.fixedDt);
+      if (ball.v.x * before.vx < 0 || ball.v.y * before.vy < 0) turned = true;
+    }
+    assert(turned, 'a ball fired at the cabinet was never turned back');
+  });
+
+  test('furniture never adds energy', () => {
+    for (let i = 0; i < 36; i++) {
+      const table = furnished();
+      const world = World.fromLayout([{ number: 0, x: 0, y: 0 }], table);
+      const ball = world.cueBall()!;
+      ball.offTable = true;
+      ball.z = -0.78;
+      const angle = (i / 36) * Math.PI * 2;
+      ball.v.x = Math.cos(angle) * 5;
+      ball.v.y = Math.sin(angle) * 5;
+
+      let fastest = Math.hypot(ball.v.x, ball.v.y);
+      for (let t = 0; t < MAX_TICKS && !world.atRest; t++) {
+        world.step(PHYSICS.fixedDt);
+        const speed = Math.hypot(ball.v.x, ball.v.y);
+        assert(speed <= fastest + 1e-9, `a bounce sped the ball up to ${speed.toFixed(3)} m/s`);
+        fastest = Math.max(fastest, speed);
+      }
     }
   });
 });

@@ -10,10 +10,10 @@
 
 import { assert, assertClose, assertEqual, report, suite, test } from '../../core/tests/harness';
 import { createTable } from '../../core/table';
-import { BALL_RADIUS } from '../../core/constants';
+import { BALL_RADIUS, PHYSICS } from '../../core/constants';
 import { spinAxis, spinRate } from '../coords';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
-import { LOCATIONS, ROOM, type MusicDevice } from '../locations';
+import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
 
 const CELL = 64;
 const SIZE = CELL * NUMBER_ATLAS_GRID;
@@ -335,6 +335,64 @@ suite('how balls are drawn turning', () => {
     assertEqual(spinRate({ x: 0, y: 0, z: 0 }), 0, 'a parked ball must not spin');
     const [x, y, z] = spinAxis({ x: 0, y: 0, z: 0 });
     assertEqual(x + y + z, 0, 'a parked ball has no axis');
+  });
+});
+
+suite('furniture layout', () => {
+  const table = createTable();
+
+  test('no piece of furniture stands on the table', () => {
+    for (const id of LOCATIONS.map((l) => l.id)) {
+      for (const o of obstaclesFor(id)) {
+        const overX = Math.abs(o.x) - o.halfX < table.halfLength;
+        const overY = Math.abs(o.y) - o.halfY < table.halfWidth;
+        assert(!(overX && overY), `${id}: a piece at (${o.x}, ${o.y}) is on the table`);
+      }
+    }
+  });
+
+  /**
+   * Two boxes sharing a footprint leave a gap a ball can be wedged into, where
+   * each piece keeps pushing it back towards the other.
+   */
+  test('no two pieces share the same floor space', () => {
+    for (const id of LOCATIONS.map((l) => l.id)) {
+      const pieces = obstaclesFor(id);
+      for (let i = 0; i < pieces.length; i++) {
+        for (let j = i + 1; j < pieces.length; j++) {
+          const a = pieces[i];
+          const b = pieces[j];
+          const clash =
+            Math.abs(a.x - b.x) < a.halfX + b.halfX &&
+            Math.abs(a.y - b.y) < a.halfY + b.halfY;
+          assert(!clash, `${id}: two pieces overlap near (${a.x.toFixed(2)}, ${a.y.toFixed(2)})`);
+        }
+      }
+    }
+  });
+
+  test('every piece stands inside the room', () => {
+    for (const id of LOCATIONS.map((l) => l.id)) {
+      for (const o of obstaclesFor(id)) {
+        assert(
+          Math.abs(o.x) + o.halfX <= PHYSICS.roomHalfX + BALL_RADIUS + 0.01 &&
+            Math.abs(o.y) + o.halfY <= PHYSICS.roomHalfY + BALL_RADIUS + 0.01,
+          `${id}: a piece at (${o.x.toFixed(2)}, ${o.y.toFixed(2)}) pokes through a wall`,
+        );
+      }
+    }
+  });
+
+  test('every piece is solid enough to bounce a ball and no more', () => {
+    for (const id of LOCATIONS.map((l) => l.id)) {
+      for (const o of obstaclesFor(id)) {
+        assert(
+          o.restitution >= 0 && o.restitution < 1,
+          `${id}: a piece has restitution ${o.restitution}, which would add energy`,
+        );
+        assert(o.halfX > 0 && o.halfY > 0 && o.height > 0, `${id}: a piece has no size`);
+      }
+    }
   });
 });
 

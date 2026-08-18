@@ -22,6 +22,7 @@ import { create } from 'zustand';
 import { clothProfile } from '@/constants/game-theme';
 import { PHYSICS } from '@/game/core/constants';
 import { createTable, type PocketId } from '@/game/core/table';
+import { effectiveLocation, obstaclesFor } from '@/game/render/locations';
 import { angleOf, dist2, sub } from '@/game/core/vec';
 import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core/world';
 import type { Message } from '@/i18n';
@@ -214,6 +215,21 @@ export const useSession = create<SessionState>((set, get) => {
    * Re-runs the settled shot on a throwaway world and hands back the slice worth
    * watching. Returns null when there is nothing to show.
    */
+  /**
+   * A table that knows about the room it is standing in.
+   *
+   * The furniture is only ever met by a ball that has been knocked onto the
+   * floor, but it has to be on the table object because that is what the solver
+   * carries around — including into the replay world, which has to bounce off
+   * the same sideboard the live one did or the replay would not match.
+   */
+  const furnishedTable = () => {
+    const table = createTable();
+    const stars = useProgress.getState().stars;
+    const location = effectiveLocation(useSettings.getState().locationId, stars);
+    return { ...table, obstacles: obstaclesFor(location.id) };
+  };
+
   const buildReplay = (moments: ReplayMoment[]): ReplayState | null => {
     const live = get().world;
     if (!pending || !live || moments.length === 0) return null;
@@ -355,7 +371,7 @@ export const useSession = create<SessionState>((set, get) => {
       pending = null;
       // The cloth is a physics choice, not only a colour, so the table is built
       // with the profile the player picked.
-      const world = World.rack(createTable(), clothProfile(useSettings.getState().clothId));
+      const world = World.rack(furnishedTable(), clothProfile(useSettings.getState().clothId));
       set({
         mode: 'free',
         world,
@@ -385,7 +401,7 @@ export const useSession = create<SessionState>((set, get) => {
       pending = null;
       const world = World.fromLayout(
         level.layout,
-        createTable(),
+        furnishedTable(),
         clothProfile(useSettings.getState().clothId),
       );
       set({
@@ -421,7 +437,7 @@ export const useSession = create<SessionState>((set, get) => {
         mode: save.mode,
         world: World.deserialize(
           save.world,
-          createTable(),
+          furnishedTable(),
           clothProfile(useSettings.getState().clothId),
         ),
         phase: Phase.AIMING,

@@ -13,6 +13,7 @@
  * the fill lights sit below 1: a lamp 1.45 m above the cloth divides by ~2.1.
  */
 
+import type { Obstacle } from '@/game/core/table';
 import type { MessageKey } from '@/i18n';
 
 import type { PropGroup } from './props';
@@ -90,6 +91,69 @@ export const FLOOR_Y = -0.78;
  */
 export const ROOM = { width: 5.2, depth: 7.0 } as const;
 
+/**
+ * Furniture a ball knocked off the table can actually hit, per room.
+ *
+ * Declared here, in **scene** coordinates, because this is the file that decides
+ * where the furniture stands — keeping the numbers next to the layout is the
+ * only way they stay in step with it. `obstaclesFor` converts them into the
+ * solver's axes, which are rotated.
+ *
+ * Only pieces standing on the floor within reach of the table are listed. The
+ * wall art, the ceiling lamps and anything up on a shelf can never be reached by
+ * a ball rolling across the carpet, so giving them collision would cost work and
+ * change nothing.
+ */
+interface SceneObstacle {
+  /** Centre and half-extents on the floor, in scene axes. */
+  x: number;
+  z: number;
+  halfX: number;
+  halfZ: number;
+  height: number;
+  /** How lively the piece is when struck: glass rings, upholstery does not. */
+  restitution: number;
+}
+
+const FURNITURE: Record<string, SceneObstacle[]> = {
+  sala: [
+    // Shelving unit and hi-fi stack, along the +x wall.
+    { x: 2.43, z: 0, halfX: 0.17, halfZ: 1.1, height: 1.9, restitution: 0.4 },
+    // Bookcase on the -x wall.
+    { x: -2.43, z: -1.8, halfX: 0.17, halfZ: 0.8, height: 1.9, restitution: 0.35 },
+    // Trophy cabinet: glass and hardwood, the liveliest thing down there.
+    { x: -2.36, z: 1.4, halfX: 0.24, halfZ: 0.58, height: 1.6, restitution: 0.5 },
+    // Two armchairs against the far wall. Velvet over a frame, so they swallow a
+    // ball rather than returning it.
+    { x: -0.95, z: 2.95, halfX: 0.34, halfZ: 0.32, height: 0.78, restitution: 0.12 },
+    { x: 0.35, z: 2.95, halfX: 0.34, halfZ: 0.32, height: 0.78, restitution: 0.12 },
+    // Side table and floor lamp base.
+    { x: -1.75, z: 2.55, halfX: 0.22, halfZ: 0.22, height: 0.55, restitution: 0.35 },
+    { x: 2.1, z: -2.5, halfX: 0.16, halfZ: 0.16, height: 1.6, restitution: 0.3 },
+    // Potted plants: soil in terracotta, almost dead.
+    { x: -0.5, z: -3.2, halfX: 0.2, halfZ: 0.2, height: 0.5, restitution: 0.15 },
+    { x: 1.6, z: 3.1, halfX: 0.2, halfZ: 0.2, height: 0.5, restitution: 0.15 },
+  ],
+};
+
+/**
+ * The room's furniture in the solver's axes.
+ *
+ * Scene `x` is sim `y`, and scene `z` is sim `-x` (see `coords.ts`), so a
+ * footprint's half-extents swap over as well as its centre.
+ */
+export function obstaclesFor(locationId: string): Obstacle[] {
+  const pieces = FURNITURE[locationId] ?? [];
+  return pieces.map((o) => ({
+    x: -o.z,
+    y: o.x,
+    halfX: o.halfZ,
+    halfY: o.halfX,
+    height: o.height,
+    restitution: o.restitution,
+  }));
+}
+
 export const LOCATIONS: GameLocation[] = [
   {
     id: 'sala',
@@ -126,16 +190,19 @@ export const LOCATIONS: GameLocation[] = [
       signHeight: 0.44,
     },
     props: [
+      'parquet',
+      'rug',
       'shelf',
       'speakers',
       'bookcase',
       'plants',
       'neon',
       'cueRack',
-      'art',
+      'gallery',
+      'armchair',
+      'trophyCase',
       'stool',
       'clock',
-      'rug',
       'sideTable',
       'floorLamp',
     ],

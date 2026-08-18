@@ -47,8 +47,16 @@ const FLOOR_DROP = -0.78;
 /** How much of its downward speed a ball keeps off a carpeted floor. Not much. */
 const FLOOR_RESTITUTION = 0.28;
 
-/** How quickly a ball on the floor stops rolling and spinning. */
-const FLOOR_DRAG = 2.2;
+/**
+ * How quickly a ball on the floor stops rolling and spinning.
+ *
+ * Set by how far it needs to travel, not by feel: at 2.2 a ball leaving the
+ * table at five metres a second stopped after 2.2 m, and the furniture it is
+ * supposed to rattle into stands between 2.4 and 3.2 m away — so it never
+ * reached any of it. At 1.2 it runs about four metres, which crosses the room
+ * without turning into a ball that rolls for ten seconds.
+ */
+const FLOOR_DRAG = 1.2;
 
 export interface BallLayout {
   number: number;
@@ -591,6 +599,8 @@ export class World {
           b.v.y = -b.v.y * FLOOR_RESTITUTION;
         }
 
+        this.bounceOffFurniture(b);
+
         if (b.vz < 0) {
           const bounce = -b.vz * FLOOR_RESTITUTION;
           b.vz = bounce < PHYSICS.restVerticalSpeed ? 0 : bounce;
@@ -998,6 +1008,42 @@ export class World {
       // a millimetre up is one that has stopped feeling friction while still
       // looking planted on the cloth.
       ball.vz = rebound <= PHYSICS.restVerticalSpeed ? 0 : rebound;
+    }
+  }
+
+  /**
+   * A ball rolling across the carpet meeting something standing on it.
+   *
+   * Resolved on the axis it is least far through, which is the standard way to
+   * get a believable bounce out of an axis-aligned box: whichever side the ball
+   * is nearest to escaping by is the side it must have come in through.
+   */
+  private bounceOffFurniture(b: Ball): void {
+    const obstacles = this.table.obstacles;
+    if (obstacles.length === 0) return;
+
+    for (let i = 0; i < obstacles.length; i++) {
+      const o = obstacles[i];
+      // Low things can be dropped onto rather than hit; the ball is on the floor
+      // here, so anything shorter than the ball is stepped over.
+      if (o.height < BALL_RADIUS) continue;
+
+      const reachX = o.halfX + BALL_RADIUS;
+      const reachY = o.halfY + BALL_RADIUS;
+      const dx = b.p.x - o.x;
+      const dy = b.p.y - o.y;
+      if (Math.abs(dx) >= reachX || Math.abs(dy) >= reachY) continue;
+
+      const escapeX = reachX - Math.abs(dx);
+      const escapeY = reachY - Math.abs(dy);
+
+      if (escapeX < escapeY) {
+        b.p.x = o.x + Math.sign(dx || 1) * reachX;
+        if (b.v.x * Math.sign(dx || 1) < 0) b.v.x = -b.v.x * o.restitution;
+      } else {
+        b.p.y = o.y + Math.sign(dy || 1) * reachY;
+        if (b.v.y * Math.sign(dy || 1) < 0) b.v.y = -b.v.y * o.restitution;
+      }
     }
   }
 
