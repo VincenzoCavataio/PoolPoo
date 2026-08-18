@@ -181,6 +181,18 @@ export const useSession = create<SessionState>((set, get) => {
   };
 
   const finishTurn = () => {
+    /**
+     * Balls that were driven off the table come back here rather than the moment
+     * the shot settles.
+     *
+     * The rules have already read the event log and charged the foul, so this is
+     * only putting the pieces back on the board. Waiting until the turn actually
+     * changes hands is what lets the replay show the ball sailing off in the
+     * first place — return it any earlier and it teleports back to the spot
+     * before anyone has seen it go.
+     */
+    get().world?.returnBallsToTable();
+
     // Spin goes back to centre ball: carrying heavy draw silently into the next
     // shot is a way to lose a frame without ever knowing why.
     set({ phase: Phase.AIMING, cameraMode: CameraMode.CUE, replay: null, spin: NO_SPIN });

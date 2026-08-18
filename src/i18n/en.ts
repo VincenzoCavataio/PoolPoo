@@ -151,6 +151,9 @@ export const en: Record<keyof typeof it, Entry> = {
   'rules.player': 'Player {number}',
   'rules.foulScratch': 'Cue ball potted',
   'rules.foulNoContact': 'No ball hit',
+  'rules.foulNoRail': 'No ball potted and no ball reached a rail',
+  'rules.foulOffTable': 'Ball off the table',
+  'rules.foulOffTableMany': '{count} balls off the table',
   'rules.gained': {
     one: '{name}: +{count} point',
     other: '{name}: +{count} points',

@@ -18,11 +18,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { BallKind, colorForBall } from '@/game/core/ball';
-import { BALL_RADIUS } from '@/game/core/constants';
+import { BALL_RADIUS, PHYSICS } from '@/game/core/constants';
 import type { World } from '@/game/core/world';
 
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from './ball-numbers';
-import { BALL_HEIGHT, POCKET_DEPTH, rollAxis, rollRate, sceneX, sceneZ } from './coords';
+import { BALL_HEIGHT, POCKET_DEPTH, sceneX, sceneZ, spinAxis, spinRate } from './coords';
+
+/**
+ * Reference height for how far a ball's shadow pulls away from it. Not a limit —
+ * balls can and do go higher than this — just the height at which the shadow has
+ * drifted as far as it is going to.
+ */
+const SHADOW_SPREAD_AT = BALL_RADIUS;
 
 /** Style codes handed to the shader per instance. */
 const STYLE_PLAIN = 0;
@@ -257,9 +264,9 @@ export function Balls({ world }: { world: World }) {
           fall.vx = ball.v.y;
           fall.vz = -ball.v.x;
           fall.vy = 0;
-          const [ax, ay, az] = rollAxis(ball.v);
+          const [ax, ay, az] = spinAxis(ball.w);
           fall.axis.set(ax, ay, az);
-          fall.rate = rollRate(ball.v);
+          fall.rate = spinRate(ball.w);
         }
 
         const floor = -POCKET_DEPTH + BALL_RADIUS;
@@ -342,23 +349,45 @@ export function Balls({ world }: { world: World }) {
         falls[index].done = false;
       }
 
-      const speed = Math.hypot(ball.v.x, ball.v.y);
-      if (speed > 0) {
-        const [ax, ay, az] = rollAxis(ball.v);
+      // Turned by its own angular velocity, not inferred from how fast it is
+      // travelling: a ball with draw on it slides one way while spinning the
+      // other, and inferring the spin drew that as a ball rolling forwards.
+      const rate = spinRate(ball.w);
+      if (rate > 0) {
+        const [ax, ay, az] = spinAxis(ball.w);
         axis.set(ax, ay, az);
-        spin.setFromAxisAngle(axis, rollRate(ball.v) * delta);
+        spin.setFromAxisAngle(axis, rate * delta);
         orientations[index].premultiply(spin);
       }
 
       object.scale.setScalar(1);
-      object.position.set(sceneX(ball.p), BALL_HEIGHT, sceneZ(ball.p));
+      object.position.set(sceneX(ball.p), BALL_HEIGHT + ball.z, sceneZ(ball.p));
       object.quaternion.copy(orientations[index]);
       object.updateMatrix();
       mesh.setMatrixAt(index, object.matrix);
 
-      // Shadow sits on the cloth, offset a little to imply the light direction.
+      /**
+       * The shadow stays on the cloth, and that is what sells a hop.
+       *
+       * A ball a few millimetres up is barely displaced on screen — far too
+       * little to read on its own. What the eye actually notices is the ball
+       * separating from its shadow, so the shadow slides further out as the
+       * ball rises (the lamps are high but not directly overhead) and tightens
+       * a little. Without this the hop is invisible; with it, a 4 mm skip is
+       * obvious.
+       */
       object.quaternion.identity();
-      object.position.set(sceneX(ball.p) + 0.008, 0.0025, sceneZ(ball.p) + 0.008);
+      // A ball on the floor is not casting anything onto the cloth.
+      if (ball.offTable) {
+        object.scale.setScalar(0);
+        object.position.set(0, -1, 0);
+        object.updateMatrix();
+        shadows.setMatrixAt(index, object.matrix);
+        continue;
+      }
+      const drift = 0.008 + ball.z * 0.35;
+      object.scale.setScalar(1 - Math.min(0.4, (ball.z / SHADOW_SPREAD_AT) * 0.4));
+      object.position.set(sceneX(ball.p) + drift, 0.0025, sceneZ(ball.p) + drift);
       object.updateMatrix();
       shadows.setMatrixAt(index, object.matrix);
     }

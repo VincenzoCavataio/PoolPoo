@@ -9,7 +9,9 @@
 
 import {
   cueBallPocketed,
+  cushionReachedAfterContact,
   firstBallHitByCue,
+  offTableNumbers,
   pocketedObjectBalls,
   type ShotEvent,
 } from '../core/events';
@@ -90,17 +92,35 @@ export function resolveFreeShot(
   const potted = pocketedObjectBalls(events);
   const scratched = cueBallPocketed(events);
   const contacted = firstBallHitByCue(events);
+  const flewOff = offTableNumbers(events);
 
   outcome.pocketed = potted;
+  outcome.ballsLeftTable = flewOff;
 
   // A miss with no contact at all is a foul, same as potting the cue ball.
   // Without this, a player could safely roll the cue ball nowhere forever.
+  //
+  // Driving a ball off the table is a foul too, and it outranks a plain miss
+  // when reporting the reason: it is the more spectacular thing to have done,
+  // and it is the one the player needs told.
   if (scratched) {
     outcome.foul = true;
     outcome.foulReason = msg('rules.foulScratch');
+  } else if (flewOff.length > 0) {
+    outcome.foul = true;
+    outcome.foulReason =
+      flewOff.length === 1
+        ? msg('rules.foulOffTable')
+        : msg('rules.foulOffTableMany', { count: flewOff.length });
   } else if (contacted === null) {
     outcome.foul = true;
     outcome.foulReason = msg('rules.foulNoContact');
+  } else if (potted.length === 0 && !cushionReachedAfterContact(events)) {
+    // WPA 8.6: after the cue ball touches an object ball, either a ball drops or
+    // some ball has to reach a rail. This is what stops a player from tapping
+    // the cue ball into the pack forever and never taking a risk.
+    outcome.foul = true;
+    outcome.foulReason = msg('rules.foulNoRail');
   }
 
   const players = state.players.map((p) => ({ ...p }));
@@ -128,7 +148,7 @@ export function resolveFreeShot(
         count: FREE_RULES.foulPenalty,
       }),
     );
-    outcome.cueBallNeedsRespot = scratched;
+    outcome.cueBallNeedsRespot = scratched || flewOff.includes(0);
   }
 
   // Potting earns another shot; a foul always ends the turn, even if the shot

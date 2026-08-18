@@ -34,7 +34,16 @@ export interface PocketedEvent {
   pocket: PocketId;
 }
 
-export type ShotEvent = BallHitEvent | CushionHitEvent | PocketedEvent;
+/** A ball that went over a cushion and left the table. */
+export interface OffTableEvent {
+  kind: 'off-table';
+  t: number;
+  ball: number;
+  /** How fast it was travelling as it left, for the sound and the camera. */
+  speed: number;
+}
+
+export type ShotEvent = BallHitEvent | CushionHitEvent | PocketedEvent | OffTableEvent;
 
 /** The first object ball the cue ball touched, or null if it hit nothing. */
 export function firstBallHitByCue(events: ShotEvent[]): number | null {
@@ -57,6 +66,33 @@ export function pocketedObjectBalls(events: ShotEvent[]): number[] {
 
 export function cueBallPocketed(events: ShotEvent[]): boolean {
   return pocketedNumbers(events).includes(0);
+}
+
+/**
+ * Did any ball reach a cushion after the cue ball made contact?
+ *
+ * This is the test behind the push-out foul (WPA 8.6): once the cue ball has
+ * touched an object ball, either something has to drop or some ball has to
+ * reach a rail. Without it a player can nudge the cue ball into the pack over
+ * and over, never potting and never risking anything, and simply run the
+ * opponent out of turns.
+ */
+export function cushionReachedAfterContact(events: ShotEvent[]): boolean {
+  let contacted = false;
+  for (const e of events) {
+    if (e.kind === 'ball-hit') contacted = true;
+    else if (e.kind === 'cushion-hit' && contacted) return true;
+  }
+  return false;
+}
+
+/** Balls that left the table, in the order they went. */
+export function offTableNumbers(events: ShotEvent[]): number[] {
+  return events.filter((e): e is OffTableEvent => e.kind === 'off-table').map((e) => e.ball);
+}
+
+export function cueBallLeftTable(events: ShotEvent[]): boolean {
+  return offTableNumbers(events).includes(0);
 }
 
 /** How many cushions `ball` struck before it dropped (or in total). */

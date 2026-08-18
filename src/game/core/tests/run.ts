@@ -7,13 +7,20 @@
  * identical output.
  */
 
-import { BALL_DIAMETER, BALL_RADIUS, DEFAULT_PROFILE, PHYSICS } from '../constants';
+import {
+  BALL_DIAMETER,
+  BALL_RADIUS,
+  CUSHION_NOSE_HEIGHT,
+  DEFAULT_PROFILE,
+  PHYSICS,
+} from '../constants';
 import type { Ball } from '../ball';
 import { firstBallHitByCue, pocketedNumbers, type ShotEvent } from '../events';
 import { predictAim } from '../predict';
 import { createTable, headSpot } from '../table';
 import { add, angleOf, normalize, scale, sub } from '../vec';
-import { World } from '../world';
+import { NO_SPIN, World } from '../world';
+import { createFreeState, resolveFreeShot } from '../../rules/free';
 import { assert, assertClose, assertEqual, report, suite, test } from './harness';
 
 const MAX_TICKS = Math.ceil(PHYSICS.maxShotSeconds / PHYSICS.fixedDt);
@@ -476,16 +483,22 @@ suite('aim prediction', () => {
 });
 
 /**
- * Total kinetic energy per unit mass: translation plus rotation about all three
- * axes, with a sphere's `I = 2/5 mR²`.
+ * Total energy per unit mass: translation in all three axes, rotation about all
+ * three (a sphere's `I = 2/5 mR²`), and height.
+ *
+ * Height has to be in here now that balls leave the cloth. Counting only the
+ * kinetic part would read a ball on its way up as losing energy and the same
+ * ball on its way down as gaining it, and the invariant below would be
+ * measuring gravity rather than the solver.
  */
-function kineticEnergy(world: World): number {
+function totalEnergy(world: World): number {
   const r2 = BALL_RADIUS * BALL_RADIUS;
   let total = 0;
   for (const b of world.balls) {
     if (b.pocketed) continue;
-    total += 0.5 * (b.v.x * b.v.x + b.v.y * b.v.y);
+    total += 0.5 * (b.v.x * b.v.x + b.v.y * b.v.y + b.vz * b.vz);
     total += 0.2 * r2 * (b.w.x * b.w.x + b.w.y * b.w.y + b.w.z * b.w.z);
+    total += PHYSICS.gravity * b.z;
   }
   return total;
 }
@@ -523,11 +536,11 @@ suite('energy', () => {
 
     for (let index = 0; index < 240; index++) {
       const world = sweptShot(index);
-      let previous = kineticEnergy(world);
+      let previous = totalEnergy(world);
 
       for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
         world.step(PHYSICS.fixedDt);
-        const now = kineticEnergy(world);
+        const now = totalEnergy(world);
         // Pocketed balls leave the sum, so energy may only ever fall.
         const gain = now - previous;
         if (gain > worst) {
@@ -588,9 +601,9 @@ suite('energy', () => {
         cue.w.x = (slip * Math.sin(theta)) / BALL_RADIUS;
         cue.w.z = 0;
 
-        const before = kineticEnergy(world);
+        const before = totalEnergy(world);
         world.step(PHYSICS.fixedDt);
-        const after = kineticEnergy(world);
+        const after = totalEnergy(world);
 
         assert(
           after <= before,
@@ -624,10 +637,10 @@ suite('energy', () => {
           vertical: ((index % 3) - 1),
         });
 
-        let previous = kineticEnergy(world);
+        let previous = totalEnergy(world);
         for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
           world.step(PHYSICS.fixedDt);
-          const now = kineticEnergy(world);
+          const now = totalEnergy(world);
           if (now - previous > worst) worst = now - previous;
           previous = now;
         }
@@ -638,6 +651,455 @@ suite('energy', () => {
         `ballFriction ${friction} gained ${worst.toExponential(3)} J/kg in one tick`,
       );
     }
+  });
+});
+
+suite('hops', () => {
+  /**
+   * The height at which a hop is legible on screen. Roughly a tenth of a ball,
+   * with the shadow pulling away underneath it.
+   */
+  const VISIBLE = 0.003;
+
+  /** Drives a ball into the far rail at `speed` and watches what it does. */
+  function intoTheRail(speed: number) {
+    const table = createTable();
+    const world = World.fromLayout([{ number: 0, x: table.halfLength - 0.3, y: 0 }], table);
+    const cue = world.cueBall()!;
+    cue.v.x = speed;
+    cue.w.y = speed / BALL_RADIUS;
+
+    let apex = 0;
+    let firstApex = 0;
+    let smallestFlight = Infinity;
+    let flightApex = 0;
+    let wasAirborne = false;
+    let flights = 0;
+
+    for (let i = 0; i < MAX_TICKS && !world.atRest; i++) {
+      world.step(PHYSICS.fixedDt);
+      const airborne = cue.z > 0;
+      if (airborne) {
+        if (cue.z > flightApex) flightApex = cue.z;
+        if (cue.z > apex) apex = cue.z;
+      } else if (wasAirborne) {
+        flights++;
+        if (flights === 1) firstApex = flightApex;
+        if (flightApex < smallestFlight) smallestFlight = flightApex;
+        flightApex = 0;
+      }
+      wasAirborne = airborne;
+      if (cue.offTable) break;
+    }
+    if (flights === 0 && flightApex > 0) firstApex = flightApex;
+    return { apex, firstApex, flights, smallestFlight, offTable: cue.offTable };
+  }
+
+  test('a firm rail hit throws the ball up where you can see it', () => {
+    const { apex, flights } = intoTheRail(3);
+    assert(flights > 0, 'a 3 m/s rail hit produced no hop at all');
+    assert(
+      apex > VISIBLE,
+      `the hop peaked at ${(apex * 1000).toFixed(2)}mm, under the ${VISIBLE * 1000}mm ` +
+        'it takes to read on screen',
+    );
+  });
+
+  test('a gentle rail hit keeps the ball on the cloth', () => {
+    assert(intoTheRail(0.4).flights === 0, 'a 0.4 m/s rail hit lifted the ball');
+  });
+
+  test('a hop grows with the speed into the rail', () => {
+    // The apex of the *first* flight. Measuring the tallest is wrong: a fast
+    // ball reaches the far rail as well, and that second, slower contact throws
+    // it less high than the first one did.
+    const heights = [1.5, 3, 4.5].map((v) => intoTheRail(v).firstApex);
+    for (let i = 1; i < heights.length; i++) {
+      assert(
+        heights[i] > heights[i - 1],
+        `hop heights did not grow: ${heights.map((h) => (h * 1000).toFixed(1)).join(', ')}mm`,
+      );
+    }
+  });
+
+  /**
+   * The regression behind "the physics is broken".
+   *
+   * A ball off the cloth feels no friction, so it stops decelerating — and that
+   * is plainly visible however low it is. An earlier version let rails lift
+   * balls by a fraction of a millimetre, far too little to see, and the result
+   * was a ball that looked like it was rolling along the cloth while refusing to
+   * slow down. Every flight has to be tall enough to explain itself.
+   */
+  test('a ball is never invisibly airborne', () => {
+    for (const speed of [0.3, 0.6, 1, 1.5, 2, 3, 4, 5, 6.5]) {
+      const { flights, smallestFlight } = intoTheRail(speed);
+      if (flights === 0) continue;
+      assert(
+        smallestFlight > VISIBLE,
+        `at ${speed} m/s a flight only reached ${(smallestFlight * 1000).toFixed(2)}mm: ` +
+          'the ball would coast without appearing to leave the cloth',
+      );
+    }
+  });
+
+  test('no ball coasts through a whole shot without being seen to', () => {
+    for (let index = 0; index < 80; index++) {
+      const world = sweptShot(index);
+      const apexes = new Map<number, number>();
+
+      for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
+        world.step(PHYSICS.fixedDt);
+        for (const b of world.balls) {
+          if (b.pocketed || b.offTable) continue;
+          if (b.z > 0) {
+            apexes.set(b.number, Math.max(apexes.get(b.number) ?? 0, b.z));
+          } else if (apexes.has(b.number)) {
+            const apex = apexes.get(b.number)!;
+            apexes.delete(b.number);
+            assert(
+              apex > VISIBLE,
+              `shot ${index}: ball ${b.number} spent a flight at only ` +
+                `${(apex * 1000).toFixed(2)}mm, frictionless but looking planted`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  test('a ball in the air is not slowed or spun by cloth it is not touching', () => {
+    const world = World.fromLayout([{ number: 0, x: 0, y: 0 }]);
+    const cue = world.cueBall()!;
+    cue.v.x = 1.5;
+    cue.z = 0.01;
+    cue.vz = 0.5;
+    cue.w.z = 20;
+    const speedBefore = Math.hypot(cue.v.x, cue.v.y);
+    const englishBefore = cue.w.z;
+
+    let steps = 0;
+    while (cue.z > 0 && steps < 200) {
+      world.step(PHYSICS.fixedDt);
+      steps++;
+    }
+    assert(steps > 3, 'the ball did not stay in the air long enough to test');
+    assertClose(Math.hypot(cue.v.x, cue.v.y), speedBefore, 1e-12, 'speed while airborne');
+    assertClose(cue.w.z, englishBefore, 1e-12, 'english while airborne');
+  });
+
+  test('a ball crossing a pocket in the air is not swallowed', () => {
+    const table = createTable();
+    const pocket = table.pockets[0];
+
+    const flying = World.fromLayout([{ number: 0, x: pocket.center.x, y: pocket.center.y }], table);
+    const airborne = flying.cueBall()!;
+    airborne.z = 0.01;
+    airborne.vz = 0.3;
+    flying.step(PHYSICS.fixedDt);
+    assert(!airborne.pocketed, 'a ball in the air fell into a pocket it was flying over');
+
+    const rolling = World.fromLayout([{ number: 0, x: pocket.center.x, y: pocket.center.y }], table);
+    rolling.step(PHYSICS.fixedDt);
+    assert(rolling.cueBall()!.pocketed, 'a ball sitting in a pocket did not drop');
+  });
+
+  test('a save written before balls could hop loads flat on the table', () => {
+    const legacy = {
+      balls: [
+        { number: 0, kind: 'cue', p: { x: 0, y: 0 }, v: { x: 0, y: 0 }, w: { x: 0, y: 0, z: 0 }, pocketed: false, pocketedIn: null },
+      ],
+      time: 0,
+    };
+    const world = World.deserialize(legacy as unknown as Parameters<typeof World.deserialize>[0]);
+    const cue = world.cueBall()!;
+    assertEqual(cue.z, 0, 'height restored from a save with no height');
+    assertEqual(cue.vz, 0, 'vertical speed restored from a save with no height');
+    assertEqual(cue.offTable, false, 'a ball from an old save should be on the table');
+    assert(world.atRest, 'a restored ball should be at rest, not falling');
+  });
+});
+
+suite('leaving the table', () => {
+  test('the cushion stops catching a ball once it is higher than the nose', () => {
+    const table = createTable();
+    // Placed just short of the rail, already above the nose and travelling at it.
+    const world = World.fromLayout([{ number: 0, x: table.halfLength - 0.05, y: 0 }], table);
+    const cue = world.cueBall()!;
+    cue.v.x = 2;
+    // Still climbing. Starting at the nose with no vertical speed is not the
+    // same test: the ball drops back under the nose part-way across and the
+    // cushion is right to catch it.
+    cue.z = CUSHION_NOSE_HEIGHT + 0.002;
+    cue.vz = 0.5;
+
+    for (let i = 0; i < MAX_TICKS && !cue.offTable && !world.atRest; i++) {
+      world.step(PHYSICS.fixedDt);
+    }
+    assert(cue.offTable, 'a ball above the nose was still turned back by the cushion');
+    assert(
+      world.events.some((e) => e.kind === 'off-table' && e.ball === 0),
+      'leaving the table was not reported',
+    );
+  });
+
+  test('a ball that clears a rail but lands back inside stays in play', () => {
+    const table = createTable();
+    const world = World.fromLayout([{ number: 0, x: 0, y: 0 }], table);
+    const cue = world.cueBall()!;
+    // Straight up over the nose, with barely any sideways travel.
+    cue.v.x = 0.05;
+    cue.z = CUSHION_NOSE_HEIGHT + 0.01;
+    cue.vz = 0;
+
+    runShot(world);
+    assertEqual(cue.offTable, false, 'a ball that came down on the cloth was called out');
+    assertEqual(cue.z, 0, 'it should have settled back onto the cloth');
+  });
+
+  test('a ball that has left the table is out of play until it is put back', () => {
+    const table = createTable();
+    const world = World.fromLayout(
+      [
+        { number: 0, x: 0, y: 0 },
+        { number: 1, x: 0.2, y: 0 },
+      ],
+      table,
+    );
+    const one = world.ballByNumber(1)!;
+    one.offTable = true;
+
+    // Off the table is not potted: it still has to be cleared to win.
+    assertEqual(
+      world.remainingObjectBalls().length,
+      1,
+      'a ball on the floor stopped counting towards clearing the table',
+    );
+
+    // The cue ball must roll straight through where it used to be.
+    const cue = world.cueBall()!;
+    cue.v.x = 1;
+    for (let i = 0; i < 60; i++) world.step(PHYSICS.fixedDt);
+    assert(
+      !world.events.some((e) => e.kind === 'ball-hit'),
+      'the cue ball collided with a ball that was not on the table',
+    );
+
+    const returned = world.returnBallsToTable();
+    assertEqual(returned.length, 1, 'one ball should have come back');
+    assertEqual(returned[0], 1, 'the ball that left should be the one that returned');
+    assertEqual(one.offTable, false, 'it should be in play again');
+  });
+
+  test('a ball put back never lands on top of another', () => {
+    const world = World.rack();
+    // Send several balls off at once and bring them all back.
+    for (const n of [1, 2, 3, 9]) world.ballByNumber(n)!.offTable = true;
+    world.returnBallsToTable();
+
+    const live = world.balls.filter((b) => !b.pocketed && !b.offTable);
+    for (let i = 0; i < live.length; i++) {
+      for (let j = i + 1; j < live.length; j++) {
+        const gap = Math.hypot(live[i].p.x - live[j].p.x, live[i].p.y - live[j].p.y);
+        assert(
+          gap >= BALL_DIAMETER - 1e-9,
+          `balls ${live[i].number} and ${live[j].number} overlap after being put back`,
+        );
+      }
+    }
+  });
+
+  /**
+   * Possible, and confined to the hardest shots in the game.
+   *
+   * Both halves matter. If nothing ever leaves the table the feature is not
+   * there; if it happens at ordinary playing power it is a nuisance rather than
+   * a spectacle.
+   */
+  test('only a full-blooded shot can put a ball off the table', () => {
+    function escapesAt(power: number): number {
+      let escapes = 0;
+      for (let index = 0; index < 120; index++) {
+        const world = World.rack();
+        world.shoot(-0.5 + (index % 40) * (1 / 39), power, {
+          side: ((index % 7) - 3) / 3,
+          vertical: ((index % 5) - 2) / 2,
+        });
+        runShot(world);
+        escapes += world.balls.filter((b) => b.offTable).length;
+      }
+      return escapes;
+    }
+
+    assert(escapesAt(1) > 0, 'nothing left the table even at full power');
+    assertEqual(escapesAt(0.5), 0, 'balls left the table at half power');
+
+    // And it stays an event rather than a routine outcome.
+    const wild = escapesAt(1);
+    assert(wild < 120, `${wild} balls left the table in 120 shots: far too ordinary`);
+  });
+});
+
+suite('the table stays sane', () => {
+  const CEILING =
+    (PHYSICS.maxVerticalSpeed * PHYSICS.maxVerticalSpeed) / (2 * PHYSICS.gravity);
+
+  /**
+   * The bug this suite exists for: a hard shot with a low tip sent the cue ball
+   * mad. It hopped, landed almost on top of a racked ball, and the tilted
+   * contact fired it a quarter of a metre into the air with the whole rack
+   * following. Energy was conserved the entire time, so the existing invariant
+   * never noticed — it was the geometry that was wrong, not the arithmetic.
+   *
+   * Height is the thing to assert on, because with a horizontal cue there is no
+   * mechanism that can legitimately produce a big one.
+   */
+  test('nothing climbs higher than a flat cloth can throw it', () => {
+    for (let power = 0.4; power <= 1.0001; power += 0.2) {
+      for (let index = 0; index < 40; index++) {
+        const world = World.rack();
+        // A low tip is what triggered it, so lead with that.
+        world.shoot(-0.4 + index * 0.02, power, { side: ((index % 5) - 2) / 2, vertical: -1 });
+
+        // Run the shot out before judging, so the message reports how far the
+        // ceiling was actually missed by rather than the first millimetre over
+        // it. When this broke, balls were reaching 260mm.
+        let highest = 0;
+        let culprit = 0;
+        for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
+          world.step(PHYSICS.fixedDt);
+          for (const b of world.balls) {
+            if (b.pocketed || b.offTable) continue;
+            if (b.z > highest) {
+              highest = b.z;
+              culprit = b.number;
+            }
+          }
+        }
+        assert(
+          highest <= CEILING + 1e-6,
+          `ball ${culprit} reached ${(highest * 1000).toFixed(0)}mm at power ` +
+            `${power.toFixed(1)}, over the ${(CEILING * 1000).toFixed(0)}mm ceiling`,
+        );
+      }
+    }
+  });
+
+  test('no ball ever outruns what the cue could have given it', () => {
+    // English off a rail genuinely adds forward speed, so the bound is the shot
+    // speed plus what the maximum legal spin can carry — not the shot alone.
+    const maxSpin = (5 * PHYSICS.maxShotSpeed) / (2 * BALL_RADIUS) * PHYSICS.maxTipOffset * BALL_RADIUS;
+    const limit = PHYSICS.maxShotSpeed + DEFAULT_PROFILE.cushionSpinTransfer * BALL_RADIUS * maxSpin;
+
+    for (let index = 0; index < 120; index++) {
+      const world = sweptShot(index);
+      for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
+        world.step(PHYSICS.fixedDt);
+        for (const b of world.balls) {
+          if (b.pocketed || b.offTable) continue;
+          const speed = Math.hypot(b.v.x, b.v.y);
+          assert(
+            speed <= limit,
+            `ball ${b.number} reached ${speed.toFixed(2)} m/s, past the ${limit.toFixed(2)} ceiling`,
+          );
+        }
+      }
+    }
+  });
+
+  test('every number stays finite', () => {
+    for (let index = 0; index < 120; index++) {
+      const world = sweptShot(index);
+      runShot(world);
+      for (const b of world.balls) {
+        const all = b.p.x + b.p.y + b.v.x + b.v.y + b.z + b.vz + b.w.x + b.w.y + b.w.z;
+        assert(Number.isFinite(all), `ball ${b.number} holds a non-finite value`);
+      }
+    }
+  });
+});
+
+suite('fouls', () => {
+  function playOut(setup: (w: World) => void) {
+    const world = World.rack();
+    setup(world);
+    world.simulateUntilRest();
+    const state = createFreeState(2, ['A', 'B']);
+    return { world, ...resolveFreeShot(state, world, world.events) };
+  }
+
+  /**
+   * WPA 8.6. Without it a player can tap the cue ball into the pack over and
+   * over — never potting, never reaching a rail, never risking anything — and
+   * simply outlast the opponent.
+   */
+  test('touching a ball but reaching no rail is a foul', () => {
+    const world = World.rack();
+    const cue = world.cueBall()!;
+    const target = world.remainingObjectBalls()[0];
+    // Park the cue ball right against a racked ball and nudge it.
+    cue.p.x = target.p.x - BALL_DIAMETER * 1.01;
+    cue.p.y = target.p.y;
+    world.shoot(0, 0.02, { side: 0, vertical: 0 });
+    world.simulateUntilRest();
+
+    const contacted = world.events.some((e) => e.kind === 'ball-hit');
+    const railed = world.events.some((e) => e.kind === 'cushion-hit');
+    const potted = world.events.some((e) => e.kind === 'pocketed');
+
+    if (contacted && !railed && !potted) {
+      const state = createFreeState(2, ['A', 'B']);
+      const { outcome } = resolveFreeShot(state, world, world.events);
+      assert(outcome.foul, 'a shot that reached no rail was not called a foul');
+      assertEqual(outcome.turnPassed, true, 'a foul has to hand the turn over');
+    }
+  });
+
+  test('driving the cue ball off the table is a foul and it comes back', () => {
+    const world = World.rack();
+    world.simulateUntilRest();
+    const cue = world.cueBall()!;
+    cue.offTable = true;
+    world.events.push({ kind: 'off-table', t: 1, ball: 0, speed: 4 });
+
+    const state = createFreeState(2, ['A', 'B']);
+    const { outcome } = resolveFreeShot(state, world, world.events);
+    assert(outcome.foul, 'the cue ball leaving the table was not a foul');
+    assert(outcome.cueBallNeedsRespot, 'the cue ball has to be put back');
+    assertEqual(outcome.turnPassed, true, 'a foul hands the turn over');
+
+    world.respotCueBall();
+    assertEqual(cue.offTable, false, 'the cue ball should be back in play');
+  });
+
+  test('an object ball off the table is a foul and is spotted, not potted', () => {
+    const world = World.rack();
+    world.simulateUntilRest();
+    const five = world.ballByNumber(5)!;
+    five.offTable = true;
+    world.events.push({ kind: 'off-table', t: 1, ball: 5, speed: 4 });
+
+    const before = world.remainingObjectBalls().length;
+    const state = createFreeState(2, ['A', 'B']);
+    const { outcome } = resolveFreeShot(state, world, world.events);
+
+    assert(outcome.foul, 'an object ball leaving the table was not a foul');
+    assert(!outcome.pocketed.includes(5), 'a ball on the floor was scored as potted');
+    assertEqual(
+      world.remainingObjectBalls().length,
+      before,
+      'it still has to be cleared to win',
+    );
+
+    world.returnBallsToTable();
+    assertEqual(five.offTable, false, 'it should be back on the table');
+  });
+
+  test('a foul costs a point and never keeps the turn', () => {
+    const { state, outcome } = playOut((w) => w.shoot(Math.PI, 0.04, NO_SPIN));
+    if (!outcome.foul) return;
+    assertEqual(outcome.turnPassed, true, 'a foul must hand the turn over');
+    assert(state.players[0].score < 0, 'a foul should have cost a point');
   });
 });
 

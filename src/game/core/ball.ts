@@ -24,6 +24,18 @@ export interface Ball {
   p: Vec2;
   v: Vec2;
   /**
+   * Height of the centre above where it rests, in metres. Zero means the ball is
+   * on the cloth, which is where it is almost all of the time.
+   *
+   * There is no third position axis: this is one vertical degree of freedom, and
+   * it is very nearly decoupled from the rest. Gravity acts on it, the cloth
+   * bounces it, and the one coupling that matters is that a ball in the air
+   * feels no cloth friction — so it neither slows down nor spins up while it is
+   * off the surface.
+   */
+  z: number;
+  vz: number;
+  /**
    * Angular velocity, rad/s. `x` and `y` are the rolling axes; `z` is english.
    *
    * Rolling without slipping means `v.x = radius * w.y` and `v.y = -radius * w.x`
@@ -33,6 +45,12 @@ export interface Ball {
   pocketed: boolean;
   /** Which pocket swallowed it, for rules that care about placement. */
   pocketedIn: PocketId | null;
+  /**
+   * Cleared a cushion and left the playing area. Out of play like a pocketed
+   * ball, but a different thing for the rules: it is a foul, and the ball comes
+   * back to the table rather than staying down.
+   */
+  offTable: boolean;
 }
 
 export function ballKindFor(n: number): BallKind {
@@ -47,9 +65,12 @@ export function createBall(n: number, p: Vec2): Ball {
     kind: ballKindFor(n),
     p: { x: p.x, y: p.y },
     v: { x: 0, y: 0 },
+    z: 0,
+    vz: 0,
     w: { x: 0, y: 0, z: 0 },
     pocketed: false,
     pocketedIn: null,
+    offTable: false,
   };
 }
 
@@ -59,11 +80,16 @@ export function cloneBall(b: Ball): Ball {
     kind: b.kind,
     p: { x: b.p.x, y: b.p.y },
     v: { x: b.v.x, y: b.v.y },
+    // Saves written before balls could leave the cloth have no height, and a
+    // missing number has to read as "on the table" rather than as NaN.
+    z: b.z ?? 0,
+    vz: b.vz ?? 0,
     // Older saves predate spin, so a missing value has to mean "no spin"
     // rather than a crash.
     w: b.w ? { x: b.w.x, y: b.w.y, z: b.w.z } : { x: 0, y: 0, z: 0 },
     pocketed: b.pocketed,
     pocketedIn: b.pocketedIn,
+    offTable: b.offTable ?? false,
   };
 }
 

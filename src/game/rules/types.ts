@@ -33,6 +33,11 @@ export interface ShotOutcome {
   foulReason: Message | null;
   turnPassed: boolean;
   cueBallNeedsRespot: boolean;
+  /**
+   * Balls that were driven off the table. They do not stay gone: the caller
+   * puts them back before the next shot, which is what real rules do too.
+   */
+  ballsLeftTable: number[];
   gameOver: boolean;
   /** Lines for the HUD ticker, still untranslated. */
   messages: Message[];
@@ -45,6 +50,7 @@ export function emptyOutcome(): ShotOutcome {
     foulReason: null,
     turnPassed: false,
     cueBallNeedsRespot: false,
+    ballsLeftTable: [],
     gameOver: false,
     messages: [],
   };

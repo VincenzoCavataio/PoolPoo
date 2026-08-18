@@ -153,6 +153,9 @@ export const it = {
   'rules.player': 'Giocatore {number}',
   'rules.foulScratch': 'Bianca in buca',
   'rules.foulNoContact': 'Nessuna pallina colpita',
+  'rules.foulNoRail': 'Nessuna pallina in buca né a sponda',
+  'rules.foulOffTable': 'Pallina fuori dal tavolo',
+  'rules.foulOffTableMany': '{count} palline fuori dal tavolo',
   'rules.gained': {
     one: '{name}: +{count} punto',
     other: '{name}: +{count} punti',

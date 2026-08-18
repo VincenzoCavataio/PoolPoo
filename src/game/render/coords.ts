@@ -14,7 +14,7 @@
  */
 
 import { BALL_RADIUS } from '../core/constants';
-import type { Vec2 } from '../core/vec';
+import type { Vec2, Vec3 } from '../core/vec';
 
 /** Height of a ball centre above the cloth. */
 export const BALL_HEIGHT = BALL_RADIUS;
@@ -52,19 +52,37 @@ export function sceneHeading(angle: number): number {
 }
 
 /**
- * Angular velocity for a ball rolling without slipping.
+ * How a ball is actually turning, taken from its own angular velocity.
  *
- * From `v = ω × r`, with `r` the vector from the contact point up to the
- * centre, the axis works out to `(-vx, 0, -vy)` in sim components and the rate
- * to `|v| / radius`. Returned as an axis plus a scalar so the caller can build
- * a quaternion without allocating.
+ * These used to be derived from the ball's *velocity*, on the assumption that it
+ * rolls without slipping. That assumption stopped being true the moment spin was
+ * added to the solver, and the result was the single most confusing thing on
+ * screen: a ball struck with heavy draw would slide backwards across the cloth
+ * while being drawn rolling forwards, and a ball spinning at 237 rad/s was drawn
+ * turning at ten. The motion looked like it sped up and slowed down for no
+ * reason, because what you could see and what the ball was doing had come apart.
+ *
+ * The solver already tracks the truth in `w`, so the renderer reads that instead
+ * of guessing. Sim `w` is `(wx, wy, wz)` about the sim axes; the scene swaps
+ * them to `(wy, wz, -wx)` — the same mapping the positions use.
+ *
+ * The axis mapping is pinned to the version this replaced, which was correct for
+ * a rolling ball: it produced `(-vx, 0, -vy)`, and natural roll means
+ * `vx = R·w.y` and `vy = -R·w.x`, so the axis is `(-w.y, 0, w.x)`. Extending it
+ * to english — spin about the vertical axis — adds `w.z` as the scene's up.
+ *
+ * Returned as an axis plus a scalar so the caller can build a quaternion without
+ * allocating one per ball per frame.
  */
-export function rollAxis(v: Vec2): [number, number, number] {
-  const speed = Math.hypot(v.x, v.y);
-  if (speed === 0) return [0, 0, 0];
-  return [-v.x / speed, 0, -v.y / speed];
+export function spinAxis(w: Vec3): [number, number, number] {
+  const x = -w.y;
+  const y = w.z;
+  const z = w.x;
+  const rate = Math.hypot(x, y, z);
+  if (rate === 0) return [0, 0, 0];
+  return [x / rate, y / rate, z / rate];
 }
 
-export function rollRate(v: Vec2): number {
-  return Math.hypot(v.x, v.y) / BALL_RADIUS;
+export function spinRate(w: Vec3): number {
+  return Math.hypot(w.x, w.y, w.z);
 }

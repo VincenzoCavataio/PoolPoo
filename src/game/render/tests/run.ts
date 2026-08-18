@@ -8,8 +8,10 @@
  * here rather than by squinting at a phone.
  */
 
-import { assert, assertEqual, report, suite, test } from '../../core/tests/harness';
+import { assert, assertClose, assertEqual, report, suite, test } from '../../core/tests/harness';
 import { createTable } from '../../core/table';
+import { BALL_RADIUS } from '../../core/constants';
+import { spinAxis, spinRate } from '../coords';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, ROOM, type MusicDevice } from '../locations';
 
@@ -284,6 +286,55 @@ suite('music device placement', () => {
       assert(device.signHeight > 0.3, `${location.id}: the sign sits on the board`);
       assert(floorToSign > 0.6 && floorToSign < 2.4, `${location.id}: the sign is out of eyeline`);
     }
+  });
+});
+
+suite('how balls are drawn turning', () => {
+  const roll = (v: number) => ({ x: 0, y: v / BALL_RADIUS, z: 0 });
+
+  /**
+   * The renderer used to infer rotation from a ball's velocity, which silently
+   * assumed it rolls without slipping. Once the solver gained real spin that
+   * became wrong in the most visible way possible: a ball struck with heavy draw
+   * slides backwards while being drawn rolling forwards, and one spinning at 237
+   * rad/s was drawn turning at ten. It read as the ball speeding up and slowing
+   * down for no reason.
+   */
+  test('a ball rolling forward turns the way it travels', () => {
+    const [x, y, z] = spinAxis(roll(1));
+    // Sim +x maps to scene -z, so a forward roll turns about scene -x.
+    assert(x < -0.99, `forward roll should turn about -x, got x=${x.toFixed(3)}`);
+    assertClose(y, 0, 1e-9, 'forward roll should not tilt');
+    assertClose(z, 0, 1e-9, 'forward roll should not yaw');
+  });
+
+  test('backspin turns the opposite way to forward roll', () => {
+    const [forward] = spinAxis(roll(1));
+    const [backward] = spinAxis(roll(-1));
+    assert(
+      forward * backward < 0,
+      'draw and follow have to spin the ball in opposite directions',
+    );
+  });
+
+  test('the drawn rate is the real one, not one guessed from the speed', () => {
+    // A ball barely moving but spinning hard: this is exactly the state a draw
+    // shot passes through, and the old code drew it almost stationary.
+    const heavy = { x: 0, y: -237, z: 0 };
+    assertClose(spinRate(heavy), 237, 1e-9, 'rate should come from w');
+  });
+
+  test('english shows as spin about the upright axis', () => {
+    const [x, y, z] = spinAxis({ x: 0, y: 0, z: 5 });
+    assert(y > 0.99, `english should turn about scene up, got y=${y.toFixed(3)}`);
+    assertClose(x, 0, 1e-9, 'english should not roll the ball forward');
+    assertClose(z, 0, 1e-9, 'english should not roll the ball sideways');
+  });
+
+  test('a still ball is not turning at all', () => {
+    assertEqual(spinRate({ x: 0, y: 0, z: 0 }), 0, 'a parked ball must not spin');
+    const [x, y, z] = spinAxis({ x: 0, y: 0, z: 0 });
+    assertEqual(x + y + z, 0, 'a parked ball has no axis');
   });
 });
 

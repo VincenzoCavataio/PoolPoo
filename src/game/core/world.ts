@@ -24,6 +24,8 @@ import { cloneBall, createBall, type Ball } from './ball';
 import {
   BALL_DIAMETER,
   BALL_RADIUS,
+  CUSHION_COMPLIANCE,
+  CUSHION_NOSE_HEIGHT,
   DEFAULT_PROFILE,
   MAX_TRAVEL_PER_SUBSTEP,
   PHYSICS,
@@ -33,6 +35,14 @@ import {
 import type { ShotEvent } from './events';
 import { clampToPlayable, createTable, footSpot, headSpot, type Table } from './table';
 import type { Vec2 } from './vec';
+
+/**
+ * How far below the cloth a ball that has left the table keeps falling: roughly
+ * the floor of the room. It stays there, in view, until the rules put it back —
+ * a ball lying on the carpet is the clearest possible feedback about what just
+ * happened.
+ */
+const OFF_TABLE_DEPTH = -0.78;
 
 export interface BallLayout {
   number: number;
@@ -54,6 +64,73 @@ export interface ShotSpin {
 }
 
 export const NO_SPIN: ShotSpin = { side: 0, vertical: 0 };
+
+/**
+ * Balls the solver still has to think about.
+ *
+ * A ball can leave play two ways now — down a pocket or over a cushion — and
+ * every loop in here has to skip both. One predicate rather than the same pair
+ * of conditions repeated a dozen times, so a third way out later is one edit.
+ */
+function inPlay(b: Ball): boolean {
+  return !b.pocketed && !b.offTable;
+}
+
+/**
+ * Turns a ball's velocity `lift` upwards without changing how fast it is going.
+ *
+ * Rotating the vector rather than adding to it is the whole point: the ball
+ * leaves with exactly the speed it arrived with, so climbing out of the dimple
+ * is paid for out of its own forward motion. Adding the vertical on top would
+ * invent energy, which is the one thing the solver may never do.
+ */
+/**
+ * The vertical half of a contact impulse, with the table underneath taken into
+ * account: a ball sitting on the slate has nowhere to go downwards.
+ */
+function applyVertical(b: Ball, dvz: number): void {
+  if (b.z <= 0 && dvz < 0) return;
+  b.vz = clampRise(b.vz + dvz, b.z);
+}
+
+/**
+ * Holds how high a ball can still get to what a flat cloth and a horizontal cue
+ * can produce. See `PHYSICS.maxVerticalSpeed` for why that bound is so low.
+ *
+ * The limit is on the ball's remaining *climb*, not on its speed, and the
+ * difference matters. Capping speed alone lets heights stack: a ball already
+ * 50 mm up takes another full-strength kick, and the two add to 120 mm — which
+ * is how balls were still reaching nearly twice the ceiling. Measuring from
+ * where the ball actually is closes that, because the ceiling is an altitude.
+ *
+ * Deliberately one-sided: downward speed is untouched. A rail drives a ball into
+ * the bed harder the faster it arrives, and that dive is what a hop is made of;
+ * clamping it as well — which is what I did first — flattened the effect so a
+ * rail hit at 6 m/s bounced no higher than one at 3.
+ */
+function clampRise(vz: number, z: number): number {
+  if (vz <= 0) return vz;
+  const ceiling = (PHYSICS.maxVerticalSpeed * PHYSICS.maxVerticalSpeed) / (2 * PHYSICS.gravity);
+  const climbLeft = ceiling - Math.max(0, z);
+  if (climbLeft <= 0) return 0;
+  const fastest = Math.sqrt(2 * PHYSICS.gravity * climbLeft);
+  return vz > fastest ? fastest : vz;
+}
+
+function tiltUpwards(b: Ball, lift: number): void {
+  if (b.z > 0) return; // already off the cloth: there is no dimple to climb
+  const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.vz * b.vz);
+  if (speed <= 0) return;
+
+  const vz = b.vz + lift;
+  const tilted = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + vz * vz);
+  if (tilted <= 0) return;
+
+  const scale = speed / tilted;
+  b.v.x *= scale;
+  b.v.y *= scale;
+  b.vz = clampRise(vz * scale, b.z);
+}
 
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(-1, value));
@@ -128,7 +205,14 @@ export class World {
     return this.balls.find((b) => b.number === n);
   }
 
-  /** Object balls still on the table. */
+  /**
+   * Object balls still to be potted.
+   *
+   * Deliberately *not* `inPlay`: a ball that has been driven off the table has
+   * not been potted, it is coming straight back, and it still has to be cleared
+   * before anyone has won. Counting it as gone would end a game — or solve a
+   * puzzle — because someone knocked a ball on the floor.
+   */
   remainingObjectBalls(): Ball[] {
     return this.balls.filter((b) => b.number !== 0 && !b.pocketed);
   }
@@ -142,7 +226,9 @@ export class World {
   get atRest(): boolean {
     const threshold = PHYSICS.sleepSpeed * PHYSICS.sleepSpeed;
     for (const b of this.balls) {
-      if (b.pocketed) continue;
+      if (!inPlay(b)) continue;
+      // A ball in the air is not at rest however slowly it is drifting.
+      if (b.z > 0 || b.vz !== 0) return false;
       if (b.v.x * b.v.x + b.v.y * b.v.y > threshold) return false;
 
       const slipX = b.v.x - BALL_RADIUS * b.w.y;
@@ -175,6 +261,9 @@ export class World {
     for (const ball of this.balls) {
       ball.v.x = 0;
       ball.v.y = 0;
+      ball.z = 0;
+      ball.vz = 0;
+      ball.offTable = false;
       ball.w.x = 0;
       ball.w.y = 0;
       ball.w.z = 0;
@@ -196,15 +285,60 @@ export class World {
     cue.w.y = gain * vertical * sideAxisY;
     cue.w.z = -gain * side;
 
+    /**
+     * The small skip a hard shot gives the cue ball.
+     *
+     * A level cue cannot launch a ball on its own — a horizontal blow through
+     * the centre has no vertical component. What does lift it is the dimple it
+     * is sitting in: the cloth is compressed under the ball, so the surface it
+     * pushes off is not quite flat and a hard hit rides it up and out. Hitting
+     * low deepens that, which is why a heavy draw shot visibly hops.
+     */
+    const lowTip = Math.max(0, -clampUnit(spin.vertical));
+    const lift = speed * PHYSICS.cueDimpleLift * (1 + lowTip * PHYSICS.cueDimpleDrawLift);
+    // Under the threshold there is nothing to see — a tenth of a millimetre for
+    // a few frames — and it is not worth taking the ball off the cloth for, so a
+    // soft shot leaves it flat and rolling.
+    cue.vz = lift > PHYSICS.restVerticalSpeed ? clampRise(lift, cue.z) : 0;
+
     this.time = 0;
     this.events = [];
   }
 
   /** Parks every ball. Called once a shot has come to rest. */
+  /**
+   * Puts every ball that left the table back on it, and reports which they were.
+   *
+   * The rules layer calls this once a shot is over: leaving the table is a foul,
+   * but the ball does not stay gone. `findFreeSpot` walks outwards from the foot
+   * spot, so several balls returning at once do not land on top of each other.
+   */
+  returnBallsToTable(): number[] {
+    const returned: number[] = [];
+    for (const b of this.balls) {
+      if (!b.offTable) continue;
+      const spot = this.findFreeSpot(footSpot(this.table), b.number);
+      b.p.x = spot.x;
+      b.p.y = spot.y;
+      b.z = 0;
+      b.vz = 0;
+      b.v.x = 0;
+      b.v.y = 0;
+      b.w.x = 0;
+      b.w.y = 0;
+      b.w.z = 0;
+      b.offTable = false;
+      returned.push(b.number);
+    }
+    return returned;
+  }
+
   settle(): void {
     for (const b of this.balls) {
       b.v.x = 0;
       b.v.y = 0;
+      b.z = 0;
+      b.vz = 0;
       b.w.x = 0;
       b.w.y = 0;
       b.w.z = 0;
@@ -219,11 +353,14 @@ export class World {
     cue.p.y = spot.y;
     cue.v.x = 0;
     cue.v.y = 0;
+    cue.z = 0;
+    cue.vz = 0;
     cue.w.x = 0;
     cue.w.y = 0;
     cue.w.z = 0;
     cue.pocketed = false;
     cue.pocketedIn = null;
+    cue.offTable = false;
   }
 
   /** Returns the cue ball to the head spot after being pocketed. */
@@ -257,7 +394,7 @@ export class World {
 
   private isSpotFree(p: Vec2, ignoreNumber: number): boolean {
     for (const b of this.balls) {
-      if (b.pocketed || b.number === ignoreNumber) continue;
+      if (!inPlay(b) || b.number === ignoreNumber) continue;
       const dx = b.p.x - p.x;
       const dy = b.p.y - p.y;
       if (dx * dx + dy * dy < BALL_DIAMETER * BALL_DIAMETER) return false;
@@ -280,7 +417,7 @@ export class World {
   step(dt: number): void {
     let fastest = 0;
     for (const b of this.balls) {
-      if (b.pocketed) continue;
+      if (!inPlay(b)) continue;
       const s2 = b.v.x * b.v.x + b.v.y * b.v.y;
       if (s2 > fastest) fastest = s2;
     }
@@ -317,7 +454,13 @@ export class World {
 
     for (let i = 0; i < balls.length; i++) {
       const b = balls[i];
-      if (b.pocketed) continue;
+      if (!inPlay(b)) continue;
+
+      // A ball in the air touches nothing, so nothing slows it and nothing
+      // spins it up. This is the only real coupling the vertical axis has, and
+      // it is the whole reason a hop matters: the ball keeps every bit of the
+      // speed and spin it left the cloth with.
+      if (b.z > 0) continue;
 
       // Velocity of the point touching the cloth: v + w × (-R ẑ).
       const slipX = b.v.x - BALL_RADIUS * b.w.y;
@@ -387,16 +530,35 @@ export class World {
 
     for (let i = 0; i < balls.length; i++) {
       const b = balls[i];
+      // A ball that has left the table is still falling, and is still drawn
+      // while it does. It just no longer touches anything: no cloth, no
+      // cushions, no other balls. It stops being integrated once it is well out
+      // of sight, so a shot cannot be held open by something on the floor.
       if (b.pocketed) continue;
+      if (b.offTable && b.z < OFF_TABLE_DEPTH) continue;
       b.p.x += b.v.x * h;
       b.p.y += b.v.y * h;
+
+      if (b.z > 0 || b.vz !== 0 || b.offTable) {
+        // Closed form for constant acceleration, not a Euler step. The naive
+        // version gains or loses exactly `g²h²/2` of energy every substep
+        // depending on which of the two lines you write first, and over the
+        // hundred milliseconds a hop lasts that is a quarter of its height.
+        // This expression conserves it to the last bit.
+        b.z += b.vz * h - 0.5 * g * h * h;
+        b.vz -= g * h;
+      }
     }
 
     this.time += h;
 
     this.resolveBallContacts();
     this.resolveCushionContacts();
+    // After the rail, so a ball the cushion has just driven downwards bounces
+    // in the same substep instead of sinking below the cloth for one frame.
+    this.resolveClothContacts();
     this.resolvePockets();
+    this.resolveOffTable();
   }
 
   private resolveBallContacts(): void {
@@ -407,54 +569,98 @@ export class World {
 
     for (let i = 0; i < balls.length; i++) {
       const a = balls[i];
-      if (a.pocketed) continue;
+      if (!inPlay(a)) continue;
 
       for (let j = i + 1; j < balls.length; j++) {
         const b = balls[j];
-        if (b.pocketed) continue;
+        if (!inPlay(b)) continue;
 
         const dx = b.p.x - a.p.x;
         const dy = b.p.y - a.p.y;
-        const d2 = dx * dx + dy * dy;
+        const dz = b.z - a.z;
+        const flat2 = dx * dx + dy * dy;
+        const d2 = flat2 + dz * dz;
         if (d2 >= minD2) continue;
 
         let nx: number;
         let ny: number;
+        let nz: number;
         let d: number;
         if (d2 === 0) {
           // Coincident centres leave the normal undefined; pick one.
           nx = 1;
           ny = 0;
+          nz = 0;
           d = 0;
         } else {
           d = Math.sqrt(d2);
           nx = dx / d;
           ny = dy / d;
+          nz = dz / d;
         }
 
-        // Positional correction first, so resting balls stay exactly touching
-        // instead of sinking into each other and jittering.
-        const half = (BALL_DIAMETER - d) * 0.5;
-        a.p.x -= nx * half;
-        a.p.y -= ny * half;
-        b.p.x += nx * half;
-        b.p.y += ny * half;
+        /**
+         * Separation stays horizontal even though the normal does not.
+         *
+         * Moving a ball vertically to resolve an overlap would hand it potential
+         * energy that nothing paid for, and unlike the horizontal plane, height
+         * has an energy attached to it. So the pair is pushed apart on the cloth
+         * only, out to the horizontal distance at which balls this far apart in
+         * height stop touching.
+         */
+        const flat = Math.sqrt(flat2);
+        const reach2 = minD2 - dz * dz;
+        if (reach2 > 0) {
+          const half = (Math.sqrt(reach2) - flat) * 0.5;
+          if (half > 0) {
+            const hx = flat > 0 ? dx / flat : 1;
+            const hy = flat > 0 ? dy / flat : 0;
+            a.p.x -= hx * half;
+            a.p.y -= hy * half;
+            b.p.x += hx * half;
+            b.p.y += hy * half;
+          }
+        }
 
-        const vn = (b.v.x - a.v.x) * nx + (b.v.y - a.v.y) * ny;
+        // Closing speed along the real, three-dimensional normal: a ball landing
+        // on top of another one pushes it down and bounces off it.
+        const vn =
+          (b.v.x - a.v.x) * nx + (b.v.y - a.v.y) * ny + (b.vz - a.vz) * nz;
         if (vn >= 0) continue; // already separating
 
         // Equal masses: half the closing impulse to each, along the normal.
-        const impulse = (-(1 + restitution) * vn) * 0.5;
+        const impulse = -(1 + restitution) * vn * 0.5;
         a.v.x -= nx * impulse;
         a.v.y -= ny * impulse;
         b.v.x += nx * impulse;
         b.v.y += ny * impulse;
 
+        /**
+         * The slate takes the downward half of a tilted contact.
+         *
+         * Treating the pair as two free spheres is what made a hard low shot go
+         * mad. A cue ball hopping 20 mm meets a ball head-on, the normal tilts
+         * by 20 degrees, and a fifth of 6.5 m/s becomes vertical: the flier is
+         * thrown up 220 mm and the ball it struck is driven *into the bed*,
+         * where the cloth hands it back upwards and the whole rack takes off.
+         * Energy was conserved the whole way, which is exactly why the invariant
+         * never caught it — the geometry was wrong, not the bookkeeping.
+         *
+         * A ball resting on the slate cannot be pushed downwards. The slate is
+         * right underneath it and absorbs that, so a grounded ball only ever
+         * takes an upward push; a ball already in the air is free to take
+         * either.
+         */
+        applyVertical(a, -nz * impulse);
+        applyVertical(b, nz * impulse);
+
         // Throw: the two surfaces slide across each other at the contact, and
-        // friction there nudges the object ball off the pure geometric line —
-        // which is why english changes where a cut shot goes.
-        const tx = -ny;
-        const ty = nx;
+        // friction there nudges the object ball off the pure geometric line,
+        // which is why english changes where a cut shot goes. The direction is
+        // the horizontal tangent, which stays perpendicular to the normal above
+        // however the pair is stacked.
+        const tx = flat > 0 ? -dy / flat : 0;
+        const ty = flat > 0 ? dx / flat : 1;
         const surfaceSlip =
           (b.v.x - a.v.x) * tx +
           (b.v.y - a.v.y) * ty -
@@ -466,7 +672,10 @@ export class World {
           // balls take the impulse, so the slip between them closes twice as
           // fast as it would against a fixed surface. A looser cap reverses the
           // slip and hands the pair back more spin than it arrived with.
-          const magnitude = Math.min(friction * impulse, Math.abs(surfaceSlip) / (2 * SLIP_DECAY));
+          const magnitude = Math.min(
+            friction * impulse,
+            Math.abs(surfaceSlip) / (2 * SLIP_DECAY),
+          );
           const tangential = -Math.sign(surfaceSlip) * magnitude;
 
           a.v.x -= tx * tangential;
@@ -481,6 +690,14 @@ export class World {
           b.w.z -= twist;
         }
 
+        // Both balls sit in a dimple in the cloth, and a hard blow makes them
+        // climb out of it — which is how balls come flying up out of a rack.
+        const lift = -vn * PHYSICS.ballDimpleLift;
+        if (lift > PHYSICS.restVerticalSpeed) {
+          tiltUpwards(a, lift);
+          tiltUpwards(b, lift);
+        }
+
         this.events.push({
           kind: 'ball-hit',
           t: this.time,
@@ -492,14 +709,60 @@ export class World {
     }
   }
 
+  /**
+   * The rails, which are where hops come from.
+   *
+   * Everything vertical here falls out of one comparison: where the cushion nose
+   * is, against where the ball's centre happens to be. See CUSHION_NOSE_HEIGHT.
+   * On the cloth the rail catches a ball from above and drives it down; a ball
+   * already in the air is caught from below and thrown up; and a ball higher
+   * than the nose is not caught at all, so it carries on over and leaves the
+   * table.
+   */
   private resolveCushionContacts(): void {
     const cushions = this.table.cushions;
     const profile = this.profile;
-    const r2 = BALL_RADIUS * BALL_RADIUS;
 
     for (let i = 0; i < this.balls.length; i++) {
       const ball = this.balls[i];
-      if (ball.pocketed) continue;
+      if (!inPlay(ball)) continue;
+
+      const above = CUSHION_NOSE_HEIGHT - BALL_RADIUS - ball.z;
+      // Higher than the nose: there is nothing left to bounce off.
+      if (above <= -BALL_RADIUS) continue;
+
+      /**
+       * Only ever downwards.
+       *
+       * The geometry says that once a ball is higher than 7.7 mm the nose catches
+       * it from *below* and should throw it upwards, and taken literally that is
+       * a ramp: a ball arriving at 6 m/s came off the rail half a metre up, and a
+       * third of hard shots ended with balls on the floor. Real cushion rubber
+       * does not do that — it gives way and the ball rides over it. The blow
+       * downwards into the cloth is a real, measured effect; the launch upwards
+       * is an artefact of pretending the nose is rigid. So a raised ball simply
+       * meets the rail square, and only a ball still low enough to be caught
+       * from above gets a vertical kick at all.
+       */
+      const sin = Math.max(0, above / BALL_RADIUS) * CUSHION_COMPLIANCE;
+      const cos = Math.sqrt(Math.max(0, 1 - sin * sin));
+      // Meeting the nose off centre, a ball has to come horizontally closer
+      // before the two actually touch.
+      const reach = BALL_RADIUS * cos;
+      const reach2 = reach * reach;
+
+      /**
+       * Restitution along the tilted normal, raised so that the *horizontal*
+       * rebound still comes out at the value the profile is tuned for.
+       *
+       * Without the `1/cos²` the horizontal lands short, and that is a mistake
+       * rather than a detail: a real cushion's measured restitution already has
+       * the cost of the hop inside it, so charging for the hop a second time
+       * would make every rail in the game play dead. Capped at 1, because past
+       * there it would be inventing energy rather than redirecting it, and the
+       * reflection below is only guaranteed to dissipate at or under 1.
+       */
+      const elastic = Math.min(1, (1 + profile.cushionRestitution) / (cos * cos) - 1);
 
       for (let c = 0; c < cushions.length; c++) {
         const seg = cushions[c];
@@ -517,7 +780,7 @@ export class World {
         const dx = ball.p.x - cx;
         const dy = ball.p.y - cy;
         const d2 = dx * dx + dy * dy;
-        if (d2 >= r2) continue;
+        if (d2 >= reach2) continue;
 
         let nx: number;
         let ny: number;
@@ -536,26 +799,36 @@ export class World {
           ny = dy / d;
         }
 
-        ball.p.x = cx + nx * BALL_RADIUS;
-        ball.p.y = cy + ny * BALL_RADIUS;
+        ball.p.x = cx + nx * reach;
+        ball.p.y = cy + ny * reach;
 
-        const vn = ball.v.x * nx + ball.v.y * ny;
+        // The contact normal in three dimensions, from the nose to the centre.
+        const n3x = nx * cos;
+        const n3y = ny * cos;
+        const n3z = -sin;
+
+        const vn = ball.v.x * n3x + ball.v.y * n3y + ball.vz * n3z;
         if (vn >= 0) continue;
 
+        // Reflecting along a unit normal leaves the ball with exactly
+        // `vn²(1 - e²)` less energy than it arrived with, so this cannot add any.
+        const j = -(1 + elastic) * vn;
+        ball.v.x += n3x * j;
+        ball.v.y += n3y * j;
+        ball.vz = clampRise(ball.vz + n3z * j, ball.z);
+
+        // Scrub the tangential component and let english push the ball along the
+        // rail. Running english widens the angle off the cushion, reverse
+        // english tightens it. This direction is perpendicular to the normal
+        // above, so the two do not interfere.
         const tx = -ny;
         const ty = nx;
         const vt = ball.v.x * tx + ball.v.y * ty;
-
-        // Reflect the normal component; scrub the tangential one and let english
-        // push the ball along the rail. Running english widens the angle off the
-        // cushion, reverse english tightens it.
-        const outVn = -vn * profile.cushionRestitution;
         const outVt =
           vt * (1 - profile.cushionFriction) +
           profile.cushionSpinTransfer * BALL_RADIUS * ball.w.z;
-
-        ball.v.x = tx * outVt + nx * outVn;
-        ball.v.y = ty * outVt + ny * outVn;
+        ball.v.x += (outVt - vt) * tx;
+        ball.v.y += (outVt - vt) * ty;
         ball.w.z *= 1 - profile.cushionSpinLoss;
 
         this.events.push({
@@ -571,7 +844,10 @@ export class World {
 
   private resolvePockets(): void {
     for (const ball of this.balls) {
-      if (ball.pocketed) continue;
+      if (!inPlay(ball)) continue;
+      // A ball crossing a pocket in the air flies over it and lands beyond,
+      // exactly as it does on a real table.
+      if (ball.z > 0) continue;
 
       for (const pocket of this.table.pockets) {
         const dx = ball.p.x - pocket.center.x;
@@ -595,6 +871,67 @@ export class World {
     }
   }
 
+  /**
+   * The bounce, and the ceiling on it.
+   *
+   * The arrival speed is recovered from the ball's energy rather than from the
+   * speed it happens to hold at the end of the substep: it crossed the cloth
+   * part-way through, so it was travelling slower then than it is now, and
+   * bouncing it at the later speed would pay it for the overshoot.
+   */
+  private resolveClothContacts(): void {
+    for (const ball of this.balls) {
+      if (!inPlay(ball) || ball.z > 0) continue;
+
+      const sunk = -ball.z;
+      ball.z = 0;
+      if (ball.vz >= 0) continue;
+
+      const arrival = Math.sqrt(
+        Math.max(0, ball.vz * ball.vz - 2 * PHYSICS.gravity * sunk),
+      );
+      // Softening with speed: a gentle skip is returned, a ball driven into the
+      // bed by another one is swallowed. Without this the same coefficient has
+      // to serve both, and whichever way it is set one of the two is wrong.
+      const restitution =
+        this.profile.clothRestitution / (1 + arrival / this.profile.clothSoftening);
+      const rebound = clampRise(arrival * restitution, ball.z);
+      // There is no ceiling: how high a ball goes is the rail geometry's
+      // business, and a hard enough shot is meant to put one over the cushion.
+      // There is a floor, though — without it a hop would ring down through ever
+      // smaller bounces and hold the shot open, and worse, a ball a fraction of
+      // a millimetre up is one that has stopped feeling friction while still
+      // looking planted on the cloth.
+      ball.vz = rebound <= PHYSICS.restVerticalSpeed ? 0 : rebound;
+    }
+  }
+
+  /**
+   * Balls that cleared a cushion and are no longer over the slate.
+   *
+   * Checked by position rather than by "did it get over the nose": a ball can go
+   * up over a rail and still come down inside, and that is a legal, spectacular
+   * shot. Only one that ends up beyond the cloth has actually left.
+   */
+  private resolveOffTable(): void {
+    const margin = PHYSICS.offTableMargin;
+    const limitX = this.table.halfLength + margin;
+    const limitY = this.table.halfWidth + margin;
+
+    for (const ball of this.balls) {
+      if (!inPlay(ball)) continue;
+      if (Math.abs(ball.p.x) <= limitX && Math.abs(ball.p.y) <= limitY) continue;
+
+      ball.offTable = true;
+      this.events.push({
+        kind: 'off-table',
+        t: this.time,
+        ball: ball.number,
+        speed: Math.hypot(ball.v.x, ball.v.y),
+      });
+    }
+  }
+
   // ------------------------------------------------------------ persistence
 
   clone(): World {
@@ -615,6 +952,10 @@ export class World {
   ): World {
     const world = new World(table, state.balls.map(cloneBall), profile);
     world.time = state.time;
+    // A saved game must never come back with a ball lying on the floor. If one
+    // was in the air when the game was written, it is put back where the rules
+    // would have put it.
+    world.returnBallsToTable();
     return world;
   }
 
