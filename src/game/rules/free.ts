@@ -142,6 +142,7 @@ export function resolveFreeShot(
 
   if (outcome.foul) {
     player.score -= FREE_RULES.foulPenalty;
+    outcome.penalty = FREE_RULES.foulPenalty;
     outcome.messages.push(
       msg('rules.foulPenalty', {
         reason: outcome.foulReason ?? msg('rules.foulNoContact'),

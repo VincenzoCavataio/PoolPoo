@@ -37,12 +37,18 @@ import { clampToPlayable, createTable, footSpot, headSpot, type Table } from './
 import type { Vec2 } from './vec';
 
 /**
- * How far below the cloth a ball that has left the table keeps falling: roughly
- * the floor of the room. It stays there, in view, until the rules put it back —
- * a ball lying on the carpet is the clearest possible feedback about what just
- * happened.
+ * Where the floor of the room is, relative to the cloth. A ball driven off the
+ * table falls this far and then lands on it, in view, and stays there until the
+ * rules put it back — a ball lying on the carpet is the clearest possible
+ * feedback about what just happened.
  */
-const OFF_TABLE_DEPTH = -0.78;
+const FLOOR_DROP = -0.78;
+
+/** How much of its downward speed a ball keeps off a carpeted floor. Not much. */
+const FLOOR_RESTITUTION = 0.28;
+
+/** How quickly a ball on the floor stops rolling and spinning. */
+const FLOOR_DRAG = 2.2;
 
 export interface BallLayout {
   number: number;
@@ -226,7 +232,21 @@ export class World {
   get atRest(): boolean {
     const threshold = PHYSICS.sleepSpeed * PHYSICS.sleepSpeed;
     for (const b of this.balls) {
-      if (!inPlay(b)) continue;
+      if (b.pocketed) continue;
+
+      /**
+       * A ball on its way to the floor still counts as motion.
+       *
+       * It is out of play, but the shot is not over while it is in the air —
+       * and it is the thing the replay is about to show. Skipping it here ended
+       * the shot mid-fall, which froze the ball in mid-air still spinning.
+       */
+      if (b.offTable) {
+        if (b.vz !== 0) return false;
+        if (b.v.x * b.v.x + b.v.y * b.v.y > threshold) return false;
+        continue;
+      }
+
       // A ball in the air is not at rest however slowly it is drifting.
       if (b.z > 0 || b.vz !== 0) return false;
       if (b.v.x * b.v.x + b.v.y * b.v.y > threshold) return false;
@@ -535,7 +555,6 @@ export class World {
       // cushions, no other balls. It stops being integrated once it is well out
       // of sight, so a shot cannot be held open by something on the floor.
       if (b.pocketed) continue;
-      if (b.offTable && b.z < OFF_TABLE_DEPTH) continue;
       b.p.x += b.v.x * h;
       b.p.y += b.v.y * h;
 
@@ -547,6 +566,63 @@ export class World {
         // This expression conserves it to the last bit.
         b.z += b.vz * h - 0.5 * g * h * h;
         b.vz -= g * h;
+      }
+
+      /**
+       * A ball that left the table lands on the floor rather than stopping in
+       * mid-air.
+       *
+       * It also has to lose its spin down there. The cloth-friction pass above
+       * skips anything out of play, so without this a ball kept whatever spin it
+       * flew off with — 57 turns a second, for ever, hanging in space. That is
+       * the pirouette: it was never touching anything that could slow it down.
+       */
+      if (b.offTable && b.z <= FLOOR_DROP) {
+        b.z = FLOOR_DROP;
+
+        // The room has walls, and a ball on the carpet has to stop at them
+        // rather than rolling out of the building.
+        if (Math.abs(b.p.x) > PHYSICS.roomHalfX) {
+          b.p.x = Math.sign(b.p.x) * PHYSICS.roomHalfX;
+          b.v.x = -b.v.x * FLOOR_RESTITUTION;
+        }
+        if (Math.abs(b.p.y) > PHYSICS.roomHalfY) {
+          b.p.y = Math.sign(b.p.y) * PHYSICS.roomHalfY;
+          b.v.y = -b.v.y * FLOOR_RESTITUTION;
+        }
+
+        if (b.vz < 0) {
+          const bounce = -b.vz * FLOOR_RESTITUTION;
+          b.vz = bounce < PHYSICS.restVerticalSpeed ? 0 : bounce;
+        }
+        // Carpet, not cloth: it scrubs off travel and spin together.
+        const drag = Math.max(0, 1 - FLOOR_DRAG * h);
+        b.v.x *= drag;
+        b.v.y *= drag;
+        b.w.x *= drag;
+        b.w.y *= drag;
+        b.w.z *= drag;
+
+        /**
+         * Exponential drag only ever approaches zero, so park it outright once
+         * the motion is too small to see. Otherwise the ball creeps and turns by
+         * fractions for ever, which is the thing being fixed here.
+         *
+         * The spin is parked together with the travel rather than on a threshold
+         * of its own: a ball lying still on the carpet that is nonetheless
+         * turning once every thirteen seconds is the same defect in miniature.
+         */
+        if (
+          Math.hypot(b.v.x, b.v.y) < PHYSICS.sleepSpeed &&
+          b.vz === 0 &&
+          b.z <= FLOOR_DROP
+        ) {
+          b.v.x = 0;
+          b.v.y = 0;
+          b.w.x = 0;
+          b.w.y = 0;
+          b.w.z = 0;
+        }
       }
     }
 
@@ -824,9 +900,28 @@ export class World {
         const tx = -ny;
         const ty = nx;
         const vt = ball.v.x * tx + ball.v.y * ty;
-        const outVt =
-          vt * (1 - profile.cushionFriction) +
-          profile.cushionSpinTransfer * BALL_RADIUS * ball.w.z;
+
+        /**
+         * How much of the stored english the rail can actually spend.
+         *
+         * The push used to be `transfer · R · w.z` and nothing else, which made
+         * it a function of the spin alone: a rail brushed at half a metre a
+         * second delivered the same 1.8 m/s sideways kick as one hit at six, so
+         * a ball with full english would fly off a gentle rail at an angle that
+         * had no relation to how it arrived. That is the "out of control" part.
+         *
+         * Friction at a contact cannot exceed `mu · (1 + e) · |vn|` — Coulomb —
+         * and it can never do more than cancel the surface slip. Bounding it by
+         * both keeps the effect (heavy english off a firm rail still opens the
+         * angle right up) while making a soft rail behave like a soft rail.
+         */
+        const surface = BALL_RADIUS * ball.w.z;
+        const grip = profile.cushionFriction * (1 + elastic) * Math.abs(vn);
+        const wanted = profile.cushionSpinTransfer * surface;
+        const push =
+          Math.sign(wanted) * Math.min(Math.abs(wanted), grip, Math.abs(surface));
+
+        const outVt = vt * (1 - profile.cushionFriction) + push;
         ball.v.x += (outVt - vt) * tx;
         ball.v.y += (outVt - vt) * ty;
         ball.w.z *= 1 - profile.cushionSpinLoss;
@@ -928,6 +1023,8 @@ export class World {
         t: this.time,
         ball: ball.number,
         speed: Math.hypot(ball.v.x, ball.v.y),
+        x: ball.p.x,
+        y: ball.p.y,
       });
     }
   }

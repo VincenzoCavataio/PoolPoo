@@ -1060,7 +1060,7 @@ suite('fouls', () => {
     world.simulateUntilRest();
     const cue = world.cueBall()!;
     cue.offTable = true;
-    world.events.push({ kind: 'off-table', t: 1, ball: 0, speed: 4 });
+    world.events.push({ kind: 'off-table', t: 1, ball: 0, speed: 4, x: 1.4, y: 0.7 });
 
     const state = createFreeState(2, ['A', 'B']);
     const { outcome } = resolveFreeShot(state, world, world.events);
@@ -1077,7 +1077,7 @@ suite('fouls', () => {
     world.simulateUntilRest();
     const five = world.ballByNumber(5)!;
     five.offTable = true;
-    world.events.push({ kind: 'off-table', t: 1, ball: 5, speed: 4 });
+    world.events.push({ kind: 'off-table', t: 1, ball: 5, speed: 4, x: 1.4, y: 0.7 });
 
     const before = world.remainingObjectBalls().length;
     const state = createFreeState(2, ['A', 'B']);
@@ -1100,6 +1100,170 @@ suite('fouls', () => {
     if (!outcome.foul) return;
     assertEqual(outcome.turnPassed, true, 'a foul must hand the turn over');
     assert(state.players[0].score < 0, 'a foul should have cost a point');
+  });
+});
+
+suite('a ball on the floor', () => {
+  /**
+   * Sends a ball over the side properly — high enough to clear the nose and
+   * travelling outwards — rather than teleporting it past the rail, which would
+   * be flagged before it ever moved.
+   */
+  function knockOff() {
+    const table = createTable();
+    const world = World.fromLayout([{ number: 0, x: 0, y: table.halfWidth - 0.1 }], table);
+    const cue = world.cueBall()!;
+    cue.v.y = 3;
+    cue.w.z = 120;
+    cue.z = CUSHION_NOSE_HEIGHT + 0.004;
+    cue.vz = 0.4;
+
+    // Stop as soon as it is out, so the rules do not put it back mid-test.
+    for (let i = 0; i < MAX_TICKS && !cue.offTable; i++) world.step(PHYSICS.fixedDt);
+    // Then let it fall and settle on the floor.
+    for (let i = 0; i < MAX_TICKS && !world.atRest; i++) world.step(PHYSICS.fixedDt);
+    return { world, cue };
+  }
+
+  /**
+   * The pirouette.
+   *
+   * Cloth friction skips anything out of play, so a ball that left the table
+   * kept whatever spin it flew off with — 57 turns a second, indefinitely, while
+   * hanging in mid-air. It span because nothing down there was touching it.
+   */
+  test('it stops spinning once it is lying on the floor', () => {
+    const { cue } = knockOff();
+    const spin = Math.hypot(cue.w.x, cue.w.y, cue.w.z);
+    assertEqual(spin, 0, `it is still turning at ${spin.toFixed(1)} rad/s`);
+  });
+
+  test('it lands on the floor instead of stopping in the air', () => {
+    const { cue } = knockOff();
+    assert(cue.z < -0.7, `it came to rest ${(cue.z * 1000).toFixed(0)}mm below the cloth`);
+    assertEqual(cue.vz, 0, 'it should not still be falling');
+    assertEqual(Math.hypot(cue.v.x, cue.v.y), 0, 'it should not still be rolling');
+  });
+
+  test('it does not hold the shot open', () => {
+    const { world } = knockOff();
+    assert(world.atRest, 'the shot never finished with a ball on the floor');
+  });
+
+  /** The replay camera needs somewhere to point, and the ball has moved by then. */
+  test('leaving the table records where it went over', () => {
+    const { world } = knockOff();
+    const fall = world.events.find((e) => e.kind === 'off-table');
+    assert(fall !== undefined, 'no off-table event was recorded');
+    if (fall && fall.kind === 'off-table') {
+      assert(Number.isFinite(fall.x) && Number.isFinite(fall.y), 'the crossing point is not a number');
+      assert(
+        Math.abs(fall.x) <= 2 && Math.abs(fall.y) <= 2,
+        `the crossing point is nowhere near the table: ${fall.x}, ${fall.y}`,
+      );
+    }
+  });
+
+  /**
+   * The replay watches the fall, so the ball has to still be in the room when it
+   * lands. It used to roll straight out through the wall to nearly four metres.
+   */
+  test('it stops at the walls instead of rolling out of the room', () => {
+    const { cue } = knockOff();
+    assert(
+      Math.abs(cue.p.x) <= PHYSICS.roomHalfX + 1e-9,
+      `it ended ${cue.p.x.toFixed(2)}m along, past the wall at ${PHYSICS.roomHalfX.toFixed(2)}`,
+    );
+    assert(
+      Math.abs(cue.p.y) <= PHYSICS.roomHalfY + 1e-9,
+      `it ended ${cue.p.y.toFixed(2)}m across, past the wall at ${PHYSICS.roomHalfY.toFixed(2)}`,
+    );
+  });
+
+  test('a foul reports what it cost', () => {
+    const world = World.rack();
+    world.simulateUntilRest();
+    world.ballByNumber(3)!.offTable = true;
+    world.events.push({ kind: 'off-table', t: 1, ball: 3, speed: 4, x: 1.3, y: 0.6 });
+
+    const state = createFreeState(2, ['A', 'B']);
+    const { outcome } = resolveFreeShot(state, world, world.events);
+    assert(outcome.foul, 'it should be a foul');
+    assert(outcome.penalty > 0, 'the foul has to carry a price the screen can show');
+  });
+});
+
+suite('english off a rail', () => {
+  /** Rolls a ball into the top rail with full side spin and reports the result. */
+  function intoRailWithEnglish(speed: number) {
+    const table = createTable();
+    const world = World.fromLayout(
+      [{ number: 0, x: 0.4, y: table.halfWidth - BALL_RADIUS - 0.02 }],
+      table,
+    );
+    const cue = world.cueBall()!;
+    cue.v.y = speed;
+    cue.w.x = -speed / BALL_RADIUS;
+    // As much english as the tip can impart.
+    cue.w.z = -((5 * PHYSICS.maxShotSpeed) / (2 * BALL_RADIUS)) * PHYSICS.maxTipOffset;
+
+    for (let t = 0; t < MAX_TICKS; t++) {
+      world.step(PHYSICS.fixedDt);
+      if (world.events.some((e) => e.kind === 'cushion-hit')) {
+        world.step(PHYSICS.fixedDt);
+        break;
+      }
+    }
+    return { sideways: Math.abs(cue.v.x), speed };
+  }
+
+  /**
+   * The "out of control" report.
+   *
+   * The sideways push off a rail used to be `transfer · R · w.z` and nothing
+   * else — a function of the stored spin alone. A rail brushed at half a metre a
+   * second handed over the same 1.8 m/s as one struck at six, so a ball with
+   * heavy english left a gentle cushion at 79 degrees. Friction at a contact is
+   * bounded by `mu · (1 + e) · |vn|`, and once it is, a soft rail behaves like a
+   * soft rail.
+   */
+  test('a gently touched rail cannot fling a ball sideways', () => {
+    const soft = intoRailWithEnglish(0.5);
+    const hard = intoRailWithEnglish(6);
+    assert(
+      soft.sideways < hard.sideways * 0.35,
+      `a 0.5 m/s rail gave ${soft.sideways.toFixed(2)} m/s sideways against ` +
+        `${hard.sideways.toFixed(2)} at 6 m/s: the push ignores how hard it was hit`,
+    );
+  });
+
+  test('the sideways push grows with how hard the rail is met', () => {
+    const pushes = [0.5, 1, 2, 4].map((v) => intoRailWithEnglish(v).sideways);
+    for (let i = 1; i < pushes.length; i++) {
+      assert(
+        pushes[i] > pushes[i - 1],
+        `sideways push did not grow: ${pushes.map((p) => p.toFixed(2)).join(', ')}`,
+      );
+    }
+  });
+
+  test('english still opens the angle on a firm rail', () => {
+    // The effect has to survive being bounded, or the fix has removed the shot.
+    assert(
+      intoRailWithEnglish(6).sideways > 1,
+      'heavy english off a hard rail should still throw the ball well sideways',
+    );
+  });
+
+  test('a rail can never hand over more than the spin holds', () => {
+    for (const v of [0.5, 1, 2, 4, 6]) {
+      const { sideways } = intoRailWithEnglish(v);
+      const stored = BALL_RADIUS * ((5 * PHYSICS.maxShotSpeed) / (2 * BALL_RADIUS)) * PHYSICS.maxTipOffset;
+      assert(
+        sideways <= stored + 1e-9,
+        `at ${v} m/s the rail gave ${sideways.toFixed(2)} m/s from ${stored.toFixed(2)} of spin`,
+      );
+    }
   });
 });
 

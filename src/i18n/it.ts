@@ -130,6 +130,10 @@ export const it = {
   'celebration.potOne': 'Palla {number} in buca!',
   'celebration.potMany': '{count} palline!',
   'celebration.foul': 'Fallo',
+  'celebration.penalty': {
+    one: '−{count} punto',
+    other: '−{count} punti',
+  },
   'celebration.skipReplay': 'Salta il replay',
   'celebration.replayHint': 'Replay · tocca per saltare',
 

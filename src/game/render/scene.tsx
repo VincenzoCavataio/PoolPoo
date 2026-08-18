@@ -36,6 +36,8 @@ const DAMPING = 11;
 const REPLAY_DAMPING = 5;
 /** How far ahead of the cue ball the cue view looks. */
 const CUE_LOOK_AHEAD = 1.0;
+/** The aim stops following a fallen ball once it is on the floor. */
+const FLOOR_LOOK_FLOOR = -0.78;
 
 function CameraRig({ table }: { table: Table }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
@@ -115,26 +117,63 @@ function CameraRig({ table }: { table: Table }) {
     let damping = DAMPING;
 
     if (phase === Phase.REPLAY && replay) {
-      // Follow the pots as they come: the next one still to drop, or the last
-      // one once they all have. With the damping below, the camera glides from
-      // pocket to pocket instead of cutting.
+      // Follow the moments as they come: the next one still to happen, or the
+      // last once they all have. With the damping below the camera glides from
+      // one to the next instead of cutting.
       const now = replay.world.time;
       const target =
-        replay.pots.find((p) => p.t >= now - 0.04) ?? replay.pots[replay.pots.length - 1];
-      const pocket = table.pockets.find((p) => p.id === target.pocket);
-      if (pocket) {
-        const px = sceneX(pocket.center);
-        const pz = sceneZ(pocket.center);
-        const length = Math.hypot(px, pz) || 1;
-        const outX = px / length;
-        const outZ = pz / length;
+        replay.moments.find((m) => m.t >= now - 0.04) ??
+        replay.moments[replay.moments.length - 1];
 
-        // Just outside the pocket, low, looking back along the ball's path.
-        wanted.set(px + outX * 0.52, 0.3, pz + outZ * 0.52);
-        wantedLook.set(px - outX * 0.14, -0.03, pz - outZ * 0.14);
+      if (target.kind === 'fall') {
+        /**
+         * A ball going off the table: plant the camera and let the ball fall
+         * through the shot, the way a broadcast camera would cover it.
+         *
+         * The first version chased the ball with the camera pinned a metre
+         * behind it. That is the worst way to film a fall: the ball sits
+         * motionless in frame while the room flies past, so nothing appears to
+         * move except the scenery — and because the ball keeps travelling
+         * outwards, the camera followed it clean through the wall, ending five
+         * metres off the table.
+         *
+         * So the vantage point comes from where the ball *crossed the rail*,
+         * which does not move, and only the aim tracks the ball down. It is set
+         * back far enough to hold the table edge and the floor in one frame, so
+         * you can see what left and how far it had to drop.
+         */
+        const ball = replay.world.balls.find((b) => b.number === target.ball);
+        const exitX = sceneX(target.at);
+        const exitZ = sceneZ(target.at);
+        const length = Math.hypot(exitX, exitZ) || 1;
+        const outX = exitX / length;
+        const outZ = exitZ / length;
+
+        // Outside the rail it went over, above table height, looking down.
+        wanted.set(exitX + outX * 1.15, 0.62, exitZ + outZ * 1.15);
+
+        // The aim follows the ball down; it is the only thing that moves.
+        const lookX = ball ? sceneX(ball.p) : exitX;
+        const lookZ = ball ? sceneZ(ball.p) : exitZ;
+        const lookY = ball ? Math.max(FLOOR_LOOK_FLOOR, ball.z) : 0;
+        wantedLook.set(lookX, lookY, lookZ);
         damping = REPLAY_DAMPING;
       } else {
-        tableView();
+        const pocket = table.pockets.find((p) => p.id === target.pocket);
+        if (pocket) {
+          const px = sceneX(pocket.center);
+          const pz = sceneZ(pocket.center);
+          const length = Math.hypot(px, pz) || 1;
+          const outX = px / length;
+          const outZ = pz / length;
+
+          // Just outside the pocket, low, looking back along the ball's path.
+          wanted.set(px + outX * 0.52, 0.3, pz + outZ * 0.52);
+          wantedLook.set(px - outX * 0.14, -0.03, pz - outZ * 0.14);
+          damping = REPLAY_DAMPING;
+        } else {
+          tableView();
+        }
       }
     } else if (cameraMode === CameraMode.CUE && phase === Phase.AIMING) {
       const cue = world?.cueBall();

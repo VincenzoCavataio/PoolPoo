@@ -41,6 +41,13 @@ export interface OffTableEvent {
   ball: number;
   /** How fast it was travelling as it left, for the sound and the camera. */
   speed: number;
+  /**
+   * Where it crossed out of the playing area. The replay camera needs somewhere
+   * to point, and by the time anyone looks the ball is on the floor rather than
+   * where it went over.
+   */
+  x: number;
+  y: number;
 }
 
 export type ShotEvent = BallHitEvent | CushionHitEvent | PocketedEvent | OffTableEvent;

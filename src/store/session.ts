@@ -59,16 +59,23 @@ export const DEFAULT_POWER = 0.55;
   */
 const REPLAY_LEAD = 0.85;
 const REPLAY_TRAIL = 0.55;
+/** Longer tail for a ball going off the table: the fall is the whole point. */
+const REPLAY_FALL_TRAIL = 1.5;
 const REPLAY_TARGET_SECONDS = 2.6;
 const REPLAY_MIN_SPEED = 0.12;
 const REPLAY_MAX_SPEED = 0.85;
 
-export interface ReplayPot {
-  /** Seconds into the shot. */
-  t: number;
-  ball: number;
-  pocket: PocketId;
-}
+/**
+ * A moment in a shot worth replaying.
+ *
+ * Either a ball dropping into a pocket or one leaving the table altogether.
+ * They share a type because they want identical treatment: both are the payoff
+ * of the shot, both want the camera taken to them, and a shot can produce
+ * several of either in one go.
+ */
+export type ReplayMoment =
+  | { kind: 'pot'; t: number; ball: number; pocket: PocketId }
+  | { kind: 'fall'; t: number; ball: number; at: { x: number; y: number } };
 
 export interface ReplayState {
   /** A second world, replaying the shot; the real one keeps its settled state. */
@@ -76,13 +83,13 @@ export interface ReplayState {
   /** Simulated time at which the replay stops. */
   until: number;
   /**
-   * Every ball potted by the shot, in the order they dropped.
+   * Everything the shot did that is worth watching, in order.
    *
-   * The camera walks this list rather than being pinned to one pocket: a shot
+   * The camera walks this list rather than being pinned to one place: a shot
    * that drops three balls used to replay only the first, which made the other
    * two look like they had never happened.
    */
-  pots: ReplayPot[];
+  moments: ReplayMoment[];
   /** Time scale, solved for so short and long replays feel the same length. */
   speed: number;
 }
@@ -92,6 +99,8 @@ export interface Celebration {
   /** Ball numbers potted, for the overlay to name them. */
   balls: number[];
   reason: Message | null;
+  /** Points lost, shown outright so a foul reads as a cost and not just a scold. */
+  penalty: number;
   /** Changes every time, so the overlay restarts its animation. */
   id: number;
 }
@@ -205,9 +214,9 @@ export const useSession = create<SessionState>((set, get) => {
    * Re-runs the settled shot on a throwaway world and hands back the slice worth
    * watching. Returns null when there is nothing to show.
    */
-  const buildReplay = (pots: ReplayPot[]): ReplayState | null => {
+  const buildReplay = (moments: ReplayMoment[]): ReplayState | null => {
     const live = get().world;
-    if (!pending || !live || pots.length === 0) return null;
+    if (!pending || !live || moments.length === 0) return null;
 
     // Same cloth, same table: a replay on a different profile would not be a
     // replay of the shot that was played.
@@ -216,8 +225,11 @@ export const useSession = create<SessionState>((set, get) => {
 
     // The window runs from before the first ball drops to after the last, so a
     // shot that pots several shows all of them in one continuous clip.
-    const from = Math.max(0, pots[0].t - REPLAY_LEAD);
-    const until = pots[pots.length - 1].t + REPLAY_TRAIL;
+    const from = Math.max(0, moments[0].t - REPLAY_LEAD);
+    // A ball leaving the table needs longer on the end than a pot does: the drop
+    // to the floor is most of the show, and it happens after the event fires.
+    const trail = moments.some((m) => m.kind === 'fall') ? REPLAY_FALL_TRAIL : REPLAY_TRAIL;
+    const until = moments[moments.length - 1].t + trail;
 
     const guard = Math.ceil(PHYSICS.maxShotSeconds / PHYSICS.fixedDt);
     for (let i = 0; i < guard && world.time < from && !world.atRest; i++) {
@@ -231,7 +243,7 @@ export const useSession = create<SessionState>((set, get) => {
     );
 
     replayAccumulator = 0;
-    return { world, until, pots, speed };
+    return { world, until, moments, speed };
   };
 
   /** Applies the rules once the balls have stopped. */
@@ -242,13 +254,24 @@ export const useSession = create<SessionState>((set, get) => {
     world.settle();
     const events = world.events;
 
-    // Captured before the rules run, because a respot rewrites the world.
-    const pots: ReplayPot[] = events
-      .filter((e) => e.kind === 'pocketed' && e.ball !== 0)
-      .map((e) => {
-        const potted = e as Extract<typeof e, { kind: 'pocketed' }>;
-        return { t: potted.t, ball: potted.ball, pocket: potted.pocket };
-      });
+    /**
+     * Captured before the rules run, because a respot rewrites the world.
+     *
+     * Pots and balls driven off the table go into one list, ordered by when they
+     * happened, so a shot that does both replays as a single continuous clip
+     * instead of picking one and dropping the other.
+     */
+    const moments: ReplayMoment[] = events
+      .flatMap<ReplayMoment>((e) => {
+        if (e.kind === 'pocketed' && e.ball !== 0) {
+          return [{ kind: 'pot', t: e.t, ball: e.ball, pocket: e.pocket }];
+        }
+        if (e.kind === 'off-table') {
+          return [{ kind: 'fall', t: e.t, ball: e.ball, at: { x: e.x, y: e.y } }];
+        }
+        return [];
+      })
+      .sort((a, b) => a.t - b.t);
 
     let outcome: ShotOutcome | null = null;
     let finished = false;
@@ -275,9 +298,15 @@ export const useSession = create<SessionState>((set, get) => {
 
     const potted = outcome?.pocketed ?? [];
     const celebration: Celebration | null = potted.length
-      ? { kind: 'pot', balls: potted, reason: null, id: Date.now() }
+      ? { kind: 'pot', balls: potted, reason: null, penalty: 0, id: Date.now() }
       : outcome?.foul
-        ? { kind: 'foul', balls: [], reason: outcome.foulReason, id: Date.now() }
+        ? {
+            kind: 'foul',
+            balls: [],
+            reason: outcome.foulReason,
+            penalty: outcome.penalty ?? 0,
+            id: Date.now(),
+          }
         : null;
 
     set({
@@ -293,7 +322,7 @@ export const useSession = create<SessionState>((set, get) => {
       return;
     }
 
-    const replay = buildReplay(pots);
+    const replay = buildReplay(moments);
     if (replay) {
       set({ phase: Phase.REPLAY, replay });
       const save = buildSave();

@@ -128,6 +128,10 @@ export const en: Record<keyof typeof it, Entry> = {
   'celebration.potOne': 'Ball {number} down!',
   'celebration.potMany': '{count} balls!',
   'celebration.foul': 'Foul',
+  'celebration.penalty': {
+    one: '−{count} point',
+    other: '−{count} points',
+  },
   'celebration.skipReplay': 'Skip the replay',
   'celebration.replayHint': 'Replay · tap to skip',
 

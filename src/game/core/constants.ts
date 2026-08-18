@@ -189,6 +189,18 @@ export const PHYSICS = {
   offTableMargin: BALL_DIAMETER,
 
   /**
+   * Half-extents of the room, in sim axes, so a ball on the floor stops at the
+   * walls instead of rolling out through them.
+   *
+   * Sim `x` runs along the table's length and maps to the room's depth; sim `y`
+   * runs across it and maps to the room's width. The renderer owns the room's
+   * appearance, but where its walls are is something the solver has to know —
+   * it is the only place that can stop a ball at them.
+   */
+  roomHalfX: 3.5 - BALL_RADIUS,
+  roomHalfY: 2.6 - BALL_RADIUS,
+
+  /**
    * Hard ceiling on how fast anything may be travelling upwards.
    *
    * This game has no elevated cue. Every shot is struck horizontally, and a

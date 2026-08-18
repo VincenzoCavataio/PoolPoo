@@ -113,7 +113,7 @@ function PotBanner({ balls }: { balls: number[] }) {
   );
 }
 
-function FoulBanner({ reason }: { reason: Message | null }) {
+function FoulBanner({ reason, penalty }: { reason: Message | null; penalty: number }) {
   const t = useT();
   const render = useMessageRenderer();
   const sink = new Keyframe({
@@ -133,6 +133,10 @@ function FoulBanner({ reason }: { reason: Message | null }) {
       <Animated.View entering={sink.duration(FOUL_DURATION)} style={styles.foulBanner}>
         <Text style={styles.foulTitle}>{t('celebration.foul')}</Text>
         {reason ? <Text style={styles.foulReason}>{render(reason)}</Text> : null}
+        {/* The cost, spelled out: a foul the player cannot price is just a telling-off. */}
+        {penalty > 0 ? (
+          <Text style={styles.foulPenalty}>{t('celebration.penalty', { count: penalty })}</Text>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -166,7 +170,9 @@ export function Celebration() {
         </>
       ) : null}
 
-      {celebration?.kind === 'foul' ? <FoulBanner reason={celebration.reason} /> : null}
+      {celebration?.kind === 'foul' ? (
+        <FoulBanner reason={celebration.reason} penalty={celebration.penalty} />
+      ) : null}
 
       {/* Anywhere on screen cuts the replay short. */}
       {replaying ? (
@@ -239,6 +245,13 @@ const styles = StyleSheet.create({
   foulReason: {
     color: Palette.textMuted,
     fontSize: 13,
+  },
+  foulPenalty: {
+    color: Palette.danger,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 2,
   },
   skipWrap: {
     position: 'absolute',

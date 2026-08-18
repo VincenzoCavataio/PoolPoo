@@ -38,6 +38,8 @@ export interface ShotOutcome {
    * puts them back before the next shot, which is what real rules do too.
    */
   ballsLeftTable: number[];
+  /** Points the foul cost, so the overlay can show the damage rather than imply it. */
+  penalty: number;
   gameOver: boolean;
   /** Lines for the HUD ticker, still untranslated. */
   messages: Message[];
@@ -51,6 +53,7 @@ export function emptyOutcome(): ShotOutcome {
     turnPassed: false,
     cueBallNeedsRespot: false,
     ballsLeftTable: [],
+    penalty: 0,
     gameOver: false,
     messages: [],
   };
