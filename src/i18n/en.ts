@@ -84,7 +84,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.collisionHapticsBody':
     'A light tap on every ball contact. On a break you will feel a good many.',
   'options.mixerHint':
-    'Music and effect volumes live on the player in the room: during a game, tap the turntable (or the radio, or the jukebox) to open it.',
+    'Music and effect volumes live on the player in the room: during a game, open the panel with the ♪ button next to the camera controls, or tap the unit on its shelf when it is in view.',
   'options.language': 'Language',
   'options.languageAuto': 'Automatic',
   'options.languageBody': 'Automatic follows the phone’s language.',
@@ -115,6 +115,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'game.spin': 'spin',
   'game.spinLabel': 'Contact point on the cue ball',
   'game.resetCamera': 'Reset the camera',
+  'game.music': 'Music',
   'game.viewCue': 'Cue',
   'game.viewTable': 'Table',
   'game.viewLabel': '{name} view',
@@ -193,7 +194,6 @@ export const en: Record<keyof typeof it, Entry> = {
   'music.musicVolume': 'Music',
   'music.sfxVolume': 'Effects',
   'music.onlyOne': 'One track for now. Add more in assets/bgm/ and to the manifest.',
-  'music.deviceHint': 'Tap the player in the room to change the music',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Green',

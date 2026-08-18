@@ -115,7 +115,13 @@ function CameraRig({ table }: { table: Table }) {
     let damping = DAMPING;
 
     if (phase === Phase.REPLAY && replay) {
-      const pocket = table.pockets.find((p) => p.id === replay.focus);
+      // Follow the pots as they come: the next one still to drop, or the last
+      // one once they all have. With the damping below, the camera glides from
+      // pocket to pocket instead of cutting.
+      const now = replay.world.time;
+      const target =
+        replay.pots.find((p) => p.t >= now - 0.04) ?? replay.pots[replay.pots.length - 1];
+      const pocket = table.pockets.find((p) => p.id === target.pocket);
       if (pocket) {
         const px = sceneX(pocket.center);
         const pz = sceneZ(pocket.center);

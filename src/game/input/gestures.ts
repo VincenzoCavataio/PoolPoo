@@ -31,7 +31,7 @@ const ORBIT_ELEVATION_PER_PX = 0.005;
 const EYE_HEIGHT_PER_PX = 0.0011;
 const EYE_BACK_PER_SCALE = 0.6;
 /** How near a tap must land to the music player, in points. */
-const DEVICE_TAP_RADIUS = 58;
+const DEVICE_TAP_RADIUS = 76;
 
 /** True when the player is lining a shot up from behind the cue ball. */
 function inCueView(): boolean {

@@ -9,7 +9,9 @@
  */
 
 import { assert, assertEqual, report, suite, test } from '../../core/tests/harness';
+import { createTable } from '../../core/table';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
+import { LOCATIONS, ROOM, type MusicDevice } from '../locations';
 
 const CELL = 64;
 const SIZE = CELL * NUMBER_ATLAS_GRID;
@@ -190,6 +192,97 @@ suite('ball number atlas', () => {
       const centreY = (minY + maxY) / 2;
       assert(Math.abs(centreX - CELL / 2) < 4, `ball ${ball} is off-centre horizontally`);
       assert(Math.abs(centreY - CELL / 2) < 4, `ball ${ball} is off-centre vertically`);
+    }
+  });
+});
+
+
+suite('music device placement', () => {
+  /**
+   * The unit's box in its own axes: half a metre wide, and reaching from just
+   * behind the backing board out to the front lip of the shelf. The sign and
+   * its glow sit inside that width.
+   */
+  const HALF_WIDTH = 0.5;
+  const BEHIND = 0.06;
+  const AHEAD = 0.32;
+
+  /** The unit's footprint in world axes, given the wall it is turned against. */
+  function footprint(device: MusicDevice) {
+    const [x, , z] = device.position;
+    const sin = Math.sin(device.rotationY);
+    const cos = Math.cos(device.rotationY);
+
+    // Local +Z points into the room; local +X runs along the wall.
+    const alongX = Math.abs(cos) * HALF_WIDTH;
+    const alongZ = Math.abs(sin) * HALF_WIDTH;
+    const outX = sin;
+    const outZ = cos;
+
+    const xs = [x + outX * AHEAD, x - outX * BEHIND];
+    const zs = [z + outZ * AHEAD, z - outZ * BEHIND];
+    return {
+      minX: Math.min(...xs) - alongX,
+      maxX: Math.max(...xs) + alongX,
+      minZ: Math.min(...zs) - alongZ,
+      maxZ: Math.max(...zs) + alongZ,
+    };
+  }
+
+  test('every unit stays inside the room', () => {
+    for (const location of LOCATIONS) {
+      const box = footprint(location.musicDevice);
+      const halfW = ROOM.width / 2 + 0.01;
+      const halfD = ROOM.depth / 2 + 0.01;
+      assert(
+        box.minX >= -halfW && box.maxX <= halfW && box.minZ >= -halfD && box.maxZ <= halfD,
+        `${location.id}: the unit pokes through a wall`,
+      );
+    }
+  });
+
+  test('every unit is against a wall, unless it says otherwise', () => {
+    for (const location of LOCATIONS) {
+      const device = location.musicDevice;
+      if (device.freestanding) continue;
+      const [x, , z] = device.position;
+      const toWall = Math.min(ROOM.width / 2 - Math.abs(x), ROOM.depth / 2 - Math.abs(z));
+      assert(toWall <= 0.5, `${location.id}: the unit floats ${toWall.toFixed(2)}m off the wall`);
+    }
+  });
+
+  test('every unit faces into the room', () => {
+    for (const location of LOCATIONS) {
+      const device = location.musicDevice;
+      const [x, , z] = device.position;
+      // The outward normal has to point back towards the middle of the room,
+      // or the player is looking at the back of the shelf.
+      const towardsCentre =
+        Math.sin(device.rotationY) * -x + Math.cos(device.rotationY) * -z;
+      assert(towardsCentre > 0, `${location.id}: the unit faces the wall`);
+    }
+  });
+
+  test('no unit overhangs the table', () => {
+    const table = createTable();
+    // Scene X is the table's width, scene Z its length.
+    const halfX = table.halfWidth + 0.15;
+    const halfZ = table.halfLength + 0.15;
+
+    for (const location of LOCATIONS) {
+      const box = footprint(location.musicDevice);
+      const overlaps =
+        box.minX < halfX && box.maxX > -halfX && box.minZ < halfZ && box.maxZ > -halfZ;
+      assert(!overlaps, `${location.id}: the unit reaches over the table`);
+    }
+  });
+
+  test('the sign clears the shelf and stays in eyeline', () => {
+    for (const location of LOCATIONS) {
+      const device = location.musicDevice;
+      const floorToSign = device.position[1] + device.signHeight;
+      assert(device.signHeight > 0.3, `${location.id}: the sign sits on the board`);
+      assert(floorToSign > 0.6 && floorToSign < 2.4, `${location.id}: the sign is out of eyeline`);
     }
   });
 });

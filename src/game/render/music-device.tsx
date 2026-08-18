@@ -20,14 +20,18 @@ import * as THREE from 'three';
 import { CHANGE_TOTAL_MS, useMusic } from '@/game/audio/music';
 import { trackAt } from '@/game/audio/tracks';
 
-import type { MusicDevice } from './locations';
+import { FLOOR_Y, type MusicDevice } from './locations';
 
 /** Where the device currently is on screen, for the tap gesture to compare. */
 export const musicDeviceScreen = { x: -1, y: -1, onScreen: false };
 
-/** Cosine of the half-angle within which the prompt appears. */
-const LOOK_THRESHOLD = Math.cos((34 * Math.PI) / 180);
+/** Cosine of the half-angle within which the sign lights up fully. */
+const LOOK_THRESHOLD = Math.cos((75 * Math.PI) / 180);
 const SPIN_SPEED = 1.9;
+/** The prompt colour, used by the plate, the note, the ring and the light. */
+const GLOW = '#5cffb0';
+/** Leg length for the rooftop unit: shelf height (0.55) down to the floor. */
+const LEG_DROP = 0.55 - FLOOR_Y;
 
 /**
  * The prompt above the player.
@@ -38,16 +42,25 @@ const SPIN_SPEED = 1.9;
  * back and forth and pulses a ring behind it. It also swells rather than fades
  * in, which the eye catches from the corner.
  */
-function Bubble({ height }: { height: number }) {
+/**
+ * A neon quaver bolted to the wall above the shelf.
+ *
+ * This replaced a speech bubble floating in mid-air. A prompt hanging in space
+ * reads as an interface drawn on top of the room; a sign screwed to the wall
+ * reads as something that is *in* the room, which is what the rest of the
+ * furniture already does. It still pulses and still throws light, so it is no
+ * harder to find — it just belongs there now.
+ */
+function NeonSign({ height }: { height: number }) {
   const group = useRef<THREE.Group>(null);
-  const note = useRef<THREE.Group>(null);
-  const ring = useRef<THREE.Mesh>(null);
+  const glow = useRef<THREE.Mesh>(null);
+  const light = useRef<THREE.PointLight>(null);
   const camera = useThree((state) => state.camera);
   const scratch = useMemo(
-    () => ({ forward: new THREE.Vector3(), toDevice: new THREE.Vector3(), world: new THREE.Vector3() }),
+    () => ({ forward: new THREE.Vector3(), toSign: new THREE.Vector3(), world: new THREE.Vector3() }),
     [],
   );
-  const shown = useRef(0);
+  const attention = useRef(0);
   const clock = useRef(0);
 
   useFrame((_, delta) => {
@@ -58,68 +71,85 @@ function Bubble({ height }: { height: number }) {
 
     node.getWorldPosition(scratch.world);
     camera.getWorldDirection(scratch.forward);
-    scratch.toDevice.copy(scratch.world).sub(camera.position).normalize();
+    scratch.toSign.copy(scratch.world).sub(camera.position).normalize();
 
-    // Only when the player is actually looking at it, which is what makes the
-    // prompt feel like a response rather than clutter.
-    const facing = scratch.forward.dot(scratch.toDevice) > LOOK_THRESHOLD;
-    const target = facing ? 1 : 0;
-    shown.current += (target - shown.current) * Math.min(1, delta * 9);
+    // Brighter when it is being looked at, but never off: it is furniture, and
+    // furniture does not blink out of existence when you turn away.
+    const facing = scratch.forward.dot(scratch.toSign) > LOOK_THRESHOLD ? 1 : 0;
+    attention.current += (facing - attention.current) * Math.min(1, delta * 6);
 
-    node.visible = shown.current > 0.02;
+    const pulse = 0.78 + Math.sin(clock.current * 2.6) * 0.12 + attention.current * 0.3;
 
-    // Overshoot on the way in: it pops rather than appears.
-    const pop = 1 + Math.sin(Math.min(1, shown.current) * Math.PI) * 0.22;
-    const breathe = 1 + Math.sin(clock.current * 3.1) * 0.05;
-    node.scale.setScalar(shown.current * pop * breathe);
-
-    node.quaternion.copy(camera.quaternion);
-    node.position.y = height + Math.sin(clock.current * 2.2) * 0.022;
-
-    if (note.current) {
-      note.current.rotation.z = Math.sin(clock.current * 4.4) * 0.28;
-      note.current.position.y = Math.sin(clock.current * 4.4 + 1) * 0.008;
-    }
-
-    if (ring.current) {
-      const beat = (clock.current % 1.6) / 1.6;
-      ring.current.scale.setScalar(0.6 + beat * 1.5);
-      const material = ring.current.material as THREE.MeshBasicMaterial;
-      material.opacity = Math.max(0, 0.5 - beat * 0.5);
+    if (light.current) light.current.intensity = 0.35 + pulse * 0.9;
+    if (glow.current) {
+      const material = glow.current.material as THREE.MeshBasicMaterial;
+      material.opacity = 0.1 + pulse * 0.14;
+      glow.current.scale.setScalar(0.92 + pulse * 0.16);
     }
   });
 
   return (
-    <group ref={group} position={[0, height, 0]}>
-      <mesh ref={ring} position={[0, 0, -0.006]}>
-        <ringGeometry args={[0.1, 0.125, 24]} />
-        <meshBasicMaterial color="#3ddc84" transparent opacity={0.4} depthWrite={false} />
+    <group ref={group} position={[0, height, 0.03]}>
+      <pointLight ref={light} color={GLOW} intensity={0.9} distance={2.2} decay={2} />
+
+      {/* Bloom on the wall behind the tubes. */}
+      <mesh ref={glow} position={[0, 0, -0.02]}>
+        <circleGeometry args={[0.26, 26]} />
+        <meshBasicMaterial color={GLOW} transparent opacity={0.16} depthWrite={false} />
       </mesh>
 
-      <mesh>
-        <boxGeometry args={[0.17, 0.13, 0.012]} />
-        <meshBasicMaterial color="#101a15" transparent opacity={0.9} />
+      {/* The quaver, as bent neon tube: head, stem, flag. */}
+      <mesh position={[-0.045, -0.055, 0]} rotation={[0, 0, -0.35]}>
+        <sphereGeometry args={[0.05, 14, 12]} />
+        <meshBasicMaterial color={GLOW} />
       </mesh>
-      <mesh position={[0, -0.085, 0]} rotation={[0, 0, Math.PI / 4]}>
-        <boxGeometry args={[0.04, 0.04, 0.01]} />
-        <meshBasicMaterial color="#101a15" transparent opacity={0.9} />
+      <mesh position={[0.004, 0.035, 0]}>
+        <boxGeometry args={[0.018, 0.185, 0.018]} />
+        <meshBasicMaterial color={GLOW} />
+      </mesh>
+      <mesh position={[0.055, 0.09, 0]} rotation={[0, 0, -0.5]}>
+        <boxGeometry args={[0.092, 0.026, 0.018]} />
+        <meshBasicMaterial color={GLOW} />
       </mesh>
 
-      {/* A quaver: head, stem, flag. */}
-      <group ref={note}>
-        <mesh position={[-0.018, -0.022, 0.011]} rotation={[0, 0, -0.35]}>
-          <sphereGeometry args={[0.021, 10, 8]} />
-          <meshBasicMaterial color="#3ddc84" />
+      {/* The bracket it hangs off, so it is mounted rather than levitating. */}
+      <mesh position={[0, -0.15, -0.025]}>
+        <boxGeometry args={[0.02, 0.09, 0.02]} />
+        <meshPhysicalMaterial color="#3a3f45" roughness={0.4} metalness={0.7} />
+      </mesh>
+    </group>
+  );
+}
+
+/** The wall unit the device stands on. */
+function WallShelf({ freestanding }: { freestanding: boolean }) {
+  return (
+    <group>
+      {/* A backing board, so the unit reads as one piece and works outdoors too,
+          where there is no wall behind it. */}
+      <mesh position={[0, 0.22, -0.03]}>
+        <boxGeometry args={[0.92, 0.72, 0.03]} />
+        <meshPhysicalMaterial color="#3a2718" roughness={0.6} clearcoat={0.25} />
+      </mesh>
+      <mesh position={[0, 0, 0.14]}>
+        <boxGeometry args={[0.86, 0.045, 0.32]} />
+        <meshPhysicalMaterial color="#6b4a2f" roughness={0.4} clearcoat={0.45} />
+      </mesh>
+      {[-0.33, 0.33].map((x) => (
+        <mesh key={x} position={[x, -0.09, 0.09]}>
+          <boxGeometry args={[0.03, 0.14, 0.22]} />
+          <meshPhysicalMaterial color="#3a3f45" roughness={0.35} metalness={0.75} />
         </mesh>
-        <mesh position={[0.001, 0.014, 0.011]}>
-          <boxGeometry args={[0.008, 0.075, 0.008]} />
-          <meshBasicMaterial color="#3ddc84" />
-        </mesh>
-        <mesh position={[0.022, 0.036, 0.011]} rotation={[0, 0, -0.5]}>
-          <boxGeometry args={[0.038, 0.012, 0.008]} />
-          <meshBasicMaterial color="#3ddc84" />
-        </mesh>
-      </group>
+      ))}
+
+      {freestanding
+        ? [-0.36, 0.36].map((x) => (
+            <mesh key={`leg-${x}`} position={[x, -0.06 + LEG_DROP / 2, 0.02]}>
+              <boxGeometry args={[0.045, LEG_DROP, 0.045]} />
+              <meshPhysicalMaterial color="#3a3f45" roughness={0.35} metalness={0.75} />
+            </mesh>
+          ))
+        : null}
     </group>
   );
 }
@@ -319,7 +349,7 @@ export function MusicDeviceObject({ device }: { device: MusicDevice }) {
     }
 
     node.getWorldPosition(projected);
-    projected.y += device.bubbleHeight * 0.5;
+    projected.y += device.signHeight;
     projected.project(camera);
 
     // z outside [-1, 1] means behind the camera or past the far plane.
@@ -336,10 +366,17 @@ export function MusicDeviceObject({ device }: { device: MusicDevice }) {
 
   return (
     <group ref={group} position={device.position} rotation={[0, device.rotationY, 0]}>
-      {device.kind === 'turntable' ? <Turntable /> : null}
-      {device.kind === 'jukebox' ? <Jukebox /> : null}
-      {device.kind === 'radio' ? <Radio /> : null}
-      <Bubble height={device.bubbleHeight} />
+      {/* The jukebox is a floor cabinet and brings its own base; everything
+          else stands on the shelf. */}
+      {device.kind !== 'jukebox' ? <WallShelf freestanding={device.freestanding ?? false} /> : null}
+
+      <group position={[0, device.kind === 'jukebox' ? 0 : 0.024, device.kind === 'jukebox' ? 0 : 0.14]}>
+        {device.kind === 'turntable' ? <Turntable /> : null}
+        {device.kind === 'jukebox' ? <Jukebox /> : null}
+        {device.kind === 'radio' ? <Radio /> : null}
+      </group>
+
+      <NeonSign height={device.signHeight} />
     </group>
   );
 }

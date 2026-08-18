@@ -66,8 +66,18 @@ export interface MusicDevice {
   position: [number, number, number];
   /** Rotation about the vertical axis, so it faces into the room. */
   rotationY: number;
-  /** Where the speech bubble floats, relative to the device. */
-  bubbleHeight: number;
+  /**
+   * Height of the neon sign above the shelf board.
+   *
+   * Also where a tap has to land: the sign is the lit part, so it is what the
+   * eye goes to and what the finger aims at.
+   */
+  signHeight: number;
+  /**
+   * True where there is no wall behind the unit — the rooftop. It grows a pair
+   * of legs down to the floor instead of appearing to hang off thin air.
+   */
+  freestanding?: boolean;
 }
 
 /** Cloth sits at y = 0, so the floor is a table's height below it. */
@@ -111,9 +121,9 @@ export const LOCATIONS: GameLocation[] = [
     musicDevice: {
       kind: 'turntable',
       labelKey: 'device.turntable',
-      position: [ROOM.width / 2 - 0.17, 1.15, 0.25],
+      position: [ROOM.width / 2 - 0.16, 0.55, -1.75],
       rotationY: -Math.PI / 2,
-      bubbleHeight: 0.42,
+      signHeight: 0.44,
     },
     props: [
       'shelf',
@@ -154,9 +164,9 @@ export const LOCATIONS: GameLocation[] = [
     musicDevice: {
       kind: 'radio',
       labelKey: 'device.radioWork',
-      position: [ROOM.width / 2 - 0.2, 0.4, -1.35],
-      rotationY: -Math.PI / 2,
-      bubbleHeight: 0.34,
+      position: [1.45, 0.55, -ROOM.depth / 2 + 0.16],
+      rotationY: 0,
+      signHeight: 0.4,
     },
     props: ['shelf', 'speakers', 'bookcase', 'cueRack', 'neon', 'sideTable', 'plants'],
   },
@@ -183,9 +193,9 @@ export const LOCATIONS: GameLocation[] = [
     musicDevice: {
       kind: 'jukebox',
       labelKey: 'device.jukebox',
-      position: [-ROOM.width / 2 + 0.5, FLOOR_Y, -1.4],
+      position: [-ROOM.width / 2 + 0.42, FLOOR_Y, -0.8],
       rotationY: Math.PI / 2,
-      bubbleHeight: 1.6,
+      signHeight: 1.72,
     },
     props: ['arcade', 'speakers', 'neon', 'cueRack', 'stool', 'rug', 'plants'],
     fog: { color: '#0a0714', near: 7.5, far: 18 },
@@ -219,9 +229,10 @@ export const LOCATIONS: GameLocation[] = [
     musicDevice: {
       kind: 'radio',
       labelKey: 'device.boombox',
-      position: [-1.75, FLOOR_Y + 0.66, 2.55],
-      rotationY: 0.35,
-      bubbleHeight: 0.34,
+      position: [-ROOM.width / 2 + 0.16, 0.55, -1.0],
+      rotationY: Math.PI / 2,
+      signHeight: 0.4,
+      freestanding: true,
     },
     props: ['plants', 'stool', 'neon', 'sideTable', 'floorLamp'],
     fog: { color: '#070b14', near: 6, far: 15 },
@@ -241,9 +252,9 @@ export const LOCATIONS: GameLocation[] = [
     musicDevice: {
       kind: 'radio',
       labelKey: 'device.monitor',
-      position: [ROOM.width / 2 - 0.35, FLOOR_Y + 0.9, -1.2],
+      position: [ROOM.width / 2 - 0.16, 0.55, -0.8],
       rotationY: -Math.PI / 2,
-      bubbleHeight: 0.34,
+      signHeight: 0.4,
     },
     props: [],
   },

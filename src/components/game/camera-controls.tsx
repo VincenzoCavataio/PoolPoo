@@ -14,6 +14,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
+import { useMusic } from '@/game/audio/music';
 import { CAMERA_MODE_LABEL, CameraMode, resetRig } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
 import { useT } from '@/i18n/use-t';
@@ -23,6 +24,7 @@ const VIEW_MODES: CameraMode[] = [CameraMode.CUE, CameraMode.TABLE];
 
 export function CameraControls() {
   const t = useT();
+  const openMusic = useMusic((s) => s.openHud);
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
   const setCameraMode = useSession((s) => s.setCameraMode);
@@ -61,6 +63,15 @@ export function CameraControls() {
         onPress={resetRig}
         style={({ pressed }) => [styles.reset, pressed && styles.pressed]}>
         <Text style={styles.resetLabel}>↺</Text>
+      </Pressable>
+
+      {/* The music unit is on the wall, which the table view does not frame, so
+          the panel needs a way in that does not depend on seeing it. */}
+      <Pressable
+        accessibilityLabel={t('game.music')}
+        onPress={openMusic}
+        style={({ pressed }) => [styles.reset, styles.music, pressed && styles.pressed]}>
+        <Text style={styles.musicLabel}>♪</Text>
       </Pressable>
     </View>
   );
@@ -112,5 +123,13 @@ const styles = StyleSheet.create({
     color: Palette.text,
     fontSize: 18,
     lineHeight: 22,
+  },
+  music: {
+    borderColor: 'rgba(92, 255, 176, 0.55)',
+  },
+  musicLabel: {
+    color: '#5cffb0',
+    fontSize: 20,
+    lineHeight: 24,
   },
 });

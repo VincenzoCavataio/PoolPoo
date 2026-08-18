@@ -47,18 +47,44 @@ const MAX_ACCUMULATED = 0.25;
 
 export const DEFAULT_POWER = 0.55;
 
-/** Replay pacing: how slowly it runs, and the window either side of the pot. */
-const REPLAY_SPEED = 0.4;
-const REPLAY_LEAD = 0.7;
-const REPLAY_TRAIL = 0.32;
+/**
+  * Replay pacing.
+  *
+  * The window either side of the pots, and a *target duration* rather than a
+  * fixed speed. A fixed speed was the bug behind short replays flashing past: a
+  * ball potted a quarter of a second after the break leaves almost no window,
+  * and at four-tenths speed that is over before the eye finds it. Solving for
+  * the speed instead means every replay lasts about the same, whether it covers
+  * one pot at the start of the shot or four spread across it.
+  */
+const REPLAY_LEAD = 0.85;
+const REPLAY_TRAIL = 0.55;
+const REPLAY_TARGET_SECONDS = 2.6;
+const REPLAY_MIN_SPEED = 0.12;
+const REPLAY_MAX_SPEED = 0.85;
+
+export interface ReplayPot {
+  /** Seconds into the shot. */
+  t: number;
+  ball: number;
+  pocket: PocketId;
+}
 
 export interface ReplayState {
   /** A second world, replaying the shot; the real one keeps its settled state. */
   world: World;
   /** Simulated time at which the replay stops. */
   until: number;
-  /** Pocket to point the camera at. */
-  focus: PocketId;
+  /**
+   * Every ball potted by the shot, in the order they dropped.
+   *
+   * The camera walks this list rather than being pinned to one pocket: a shot
+   * that drops three balls used to replay only the first, which made the other
+   * two look like they had never happened.
+   */
+  pots: ReplayPot[];
+  /** Time scale, solved for so short and long replays feel the same length. */
+  speed: number;
 }
 
 export interface Celebration {
@@ -167,23 +193,33 @@ export const useSession = create<SessionState>((set, get) => {
    * Re-runs the settled shot on a throwaway world and hands back the slice worth
    * watching. Returns null when there is nothing to show.
    */
-  const buildReplay = (potTime: number, focus: PocketId): ReplayState | null => {
+  const buildReplay = (pots: ReplayPot[]): ReplayState | null => {
     const live = get().world;
-    if (!pending || !live) return null;
+    if (!pending || !live || pots.length === 0) return null;
 
     // Same cloth, same table: a replay on a different profile would not be a
     // replay of the shot that was played.
     const world = World.deserialize(pending.snapshot, live.table, live.profile);
     world.shoot(pending.angle, pending.power, pending.spin);
 
-    const from = Math.max(0, potTime - REPLAY_LEAD);
+    // The window runs from before the first ball drops to after the last, so a
+    // shot that pots several shows all of them in one continuous clip.
+    const from = Math.max(0, pots[0].t - REPLAY_LEAD);
+    const until = pots[pots.length - 1].t + REPLAY_TRAIL;
+
     const guard = Math.ceil(PHYSICS.maxShotSeconds / PHYSICS.fixedDt);
     for (let i = 0; i < guard && world.time < from && !world.atRest; i++) {
       world.step(PHYSICS.fixedDt);
     }
 
+    const span = Math.max(0.05, until - from);
+    const speed = Math.min(
+      REPLAY_MAX_SPEED,
+      Math.max(REPLAY_MIN_SPEED, span / REPLAY_TARGET_SECONDS),
+    );
+
     replayAccumulator = 0;
-    return { world, until: potTime + REPLAY_TRAIL, focus };
+    return { world, until, pots, speed };
   };
 
   /** Applies the rules once the balls have stopped. */
@@ -195,7 +231,12 @@ export const useSession = create<SessionState>((set, get) => {
     const events = world.events;
 
     // Captured before the rules run, because a respot rewrites the world.
-    const firstPot = events.find((e) => e.kind === 'pocketed' && e.ball !== 0);
+    const pots: ReplayPot[] = events
+      .filter((e) => e.kind === 'pocketed' && e.ball !== 0)
+      .map((e) => {
+        const potted = e as Extract<typeof e, { kind: 'pocketed' }>;
+        return { t: potted.t, ball: potted.ball, pocket: potted.pocket };
+      });
 
     let outcome: ShotOutcome | null = null;
     let finished = false;
@@ -240,7 +281,7 @@ export const useSession = create<SessionState>((set, get) => {
       return;
     }
 
-    const replay = firstPot?.kind === 'pocketed' ? buildReplay(firstPot.t, firstPot.pocket) : null;
+    const replay = buildReplay(pots);
     if (replay) {
       set({ phase: Phase.REPLAY, replay });
       const save = buildSave();
@@ -410,7 +451,7 @@ export const useSession = create<SessionState>((set, get) => {
       if (!world) return;
 
       if (phase === Phase.REPLAY && replay) {
-        replayAccumulator = Math.min(replayAccumulator + delta * REPLAY_SPEED, MAX_ACCUMULATED);
+        replayAccumulator = Math.min(replayAccumulator + delta * replay.speed, MAX_ACCUMULATED);
         while (replayAccumulator >= PHYSICS.fixedDt) {
           replay.world.step(PHYSICS.fixedDt);
           replayAccumulator -= PHYSICS.fixedDt;

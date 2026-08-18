@@ -85,7 +85,7 @@ export const it = {
   'options.collisionHapticsBody':
     'Un tocco leggero a ogni contatto fra palline. Su uno spacco se ne sentono parecchi.',
   'options.mixerHint':
-    'I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, tocca il giradischi (o la radio, o il jukebox) per aprirlo.',
+    'I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, apri il pannello col pulsante ♪ accanto alla camera, oppure tocca direttamente l’apparecchio sulla mensola quando lo inquadri.',
   'options.language': 'Lingua',
   'options.languageAuto': 'Automatica',
   'options.languageBody': 'Automatica segue la lingua del telefono.',
@@ -117,6 +117,7 @@ export const it = {
   'game.spin': 'effetto',
   'game.spinLabel': 'Punto di impatto sulla bianca',
   'game.resetCamera': 'Reimposta la camera',
+  'game.music': 'Musica',
   'game.viewCue': 'Mira',
   'game.viewTable': 'Tavolo',
   'game.viewLabel': 'Vista {name}',
@@ -195,7 +196,6 @@ export const it = {
   'music.musicVolume': 'Musica',
   'music.sfxVolume': 'Effetti',
   'music.onlyOne': 'Una sola traccia per ora. Aggiungine altre in assets/bgm/ e nel manifest.',
-  'music.deviceHint': 'Tocca l’apparecchio nella stanza per cambiare musica',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Verde',
