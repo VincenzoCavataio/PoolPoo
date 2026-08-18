@@ -27,6 +27,7 @@ import {
   DEFAULT_PROFILE,
   MAX_TRAVEL_PER_SUBSTEP,
   PHYSICS,
+  SLIP_DECAY,
   type PhysicsProfile,
 } from './constants';
 import type { ShotEvent } from './events';
@@ -313,8 +314,6 @@ export class World {
     const slideDecel = profile.slidingFriction * g * h;
     const rollDecel = profile.rollingFriction * g * h;
     const spinDecel = (5 * profile.spinningFriction * g * h) / (2 * BALL_RADIUS);
-    // Friction at the contact point twists the ball as well as slowing it.
-    const angularGain = (5 * profile.slidingFriction * g * h) / (2 * BALL_RADIUS);
 
     for (let i = 0; i < balls.length; i++) {
       const b = balls[i];
@@ -325,25 +324,44 @@ export class World {
       const slipY = b.v.y + BALL_RADIUS * b.w.x;
       const slip = Math.sqrt(slipX * slipX + slipY * slipY);
 
-      if (slip > PHYSICS.slipEpsilon) {
+      // Sliding: kinetic friction acts where the ball touches the cloth, slowing
+      // the centre and twisting the ball at the same time.
+      let rolling = true;
+      if (slip > 0) {
         const dirX = slipX / slip;
         const dirY = slipY / slip;
 
-        b.v.x -= slideDecel * dirX;
-        b.v.y -= slideDecel * dirY;
-        b.w.x -= angularGain * dirY;
-        b.w.y += angularGain * dirX;
+        /**
+         * The step is capped at exactly the amount that cancels the slip.
+         *
+         * This cap is not a nicety, it is what keeps friction dissipative. An
+         * uncapped step of size `a` changes the ball's total energy by
+         * `-m·a·(slip - 1.75a)`, which turns *positive* once the slip drops
+         * below `1.75a`. Below that the ball is being pumped rather than
+         * damped, and since a substep's `a` is around 0.016 m/s the window
+         * reached up past the speed at which a shot is declared over — so a
+         * cluster of nearly-stopped balls could jitter without ever settling.
+         * See SLIP_DECAY for where the 3.5 comes from.
+         */
+        const step = Math.min(slideDecel, slip / SLIP_DECAY);
 
-        // Friction can only cancel the slip, never reverse it. When a step would
-        // overshoot, the ball has reached rolling and is snapped exactly onto it.
-        const nextSlipX = b.v.x - BALL_RADIUS * b.w.y;
-        const nextSlipY = b.v.y + BALL_RADIUS * b.w.x;
-        if (nextSlipX * dirX + nextSlipY * dirY <= 0) {
+        b.v.x -= step * dirX;
+        b.v.y -= step * dirY;
+        const twist = (5 * step) / (2 * BALL_RADIUS);
+        b.w.x -= twist * dirY;
+        b.w.y += twist * dirX;
+
+        // A capped step is one that ran out of slip: the ball has reached
+        // rolling inside this substep, so it rolls for the rest of it.
+        rolling = step < slideDecel;
+        if (rolling) {
           b.w.x = -b.v.y / BALL_RADIUS;
           b.w.y = b.v.x / BALL_RADIUS;
         }
-      } else {
-        // Rolling: constant deceleration, clamped so friction cannot push a ball
+      }
+
+      if (rolling) {
+        // Constant deceleration, clamped so friction cannot push a ball
         // backwards, with the spin held on the rolling constraint.
         const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y);
         if (speed > 0) {
@@ -443,7 +461,12 @@ export class World {
           BALL_RADIUS * (a.w.z + b.w.z);
 
         if (surfaceSlip !== 0 && impulse > 0) {
-          const magnitude = Math.min(friction * impulse, Math.abs(surfaceSlip) * 0.5);
+          // Capped at the value that cancels the slip, for the same reason the
+          // cloth's step is. The divisor is twice SLIP_DECAY because here *both*
+          // balls take the impulse, so the slip between them closes twice as
+          // fast as it would against a fixed surface. A looser cap reverses the
+          // slip and hands the pair back more spin than it arrived with.
+          const magnitude = Math.min(friction * impulse, Math.abs(surfaceSlip) / (2 * SLIP_DECAY));
           const tangential = -Math.sign(surfaceSlip) * magnitude;
 
           a.v.x -= tx * tangential;

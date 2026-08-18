@@ -8,6 +8,7 @@
  */
 
 import { BALL_DIAMETER, BALL_RADIUS, DEFAULT_PROFILE, PHYSICS } from '../constants';
+import type { Ball } from '../ball';
 import { firstBallHitByCue, pocketedNumbers, type ShotEvent } from '../events';
 import { predictAim } from '../predict';
 import { createTable, headSpot } from '../table';
@@ -471,6 +472,172 @@ suite('aim prediction', () => {
     assert(ballChecks >= 5, `only ${ballChecks} angles reached the rack`);
     assert(cushionChecks >= 5, `only ${cushionChecks} angles reached a rail`);
     console.log(`      cross-checked ${ballChecks} ball contacts and ${cushionChecks} rail contacts`);
+  });
+});
+
+/**
+ * Total kinetic energy per unit mass: translation plus rotation about all three
+ * axes, with a sphere's `I = 2/5 mR²`.
+ */
+function kineticEnergy(world: World): number {
+  const r2 = BALL_RADIUS * BALL_RADIUS;
+  let total = 0;
+  for (const b of world.balls) {
+    if (b.pocketed) continue;
+    total += 0.5 * (b.v.x * b.v.x + b.v.y * b.v.y);
+    total += 0.2 * r2 * (b.w.x * b.w.x + b.w.y * b.w.y + b.w.z * b.w.z);
+  }
+  return total;
+}
+
+/**
+ * A fixed sweep of shots across the shot space. Deterministic on purpose — no
+ * RNG, so a failure here is always reproducible from its index alone.
+ */
+function sweptShot(index: number): World {
+  const world = World.rack();
+  const angle = -0.35 + (index % 40) * (0.7 / 39);
+  const power = 0.3 + Math.floor(index / 40) * 0.07;
+  world.shoot(angle, power, {
+    side: ((index % 7) - 3) / 3,
+    vertical: ((index % 5) - 2) / 2,
+  });
+  return world;
+}
+
+suite('energy', () => {
+  /**
+   * Nothing in a pool table is a motor.
+   *
+   * This is the invariant that a previous version of the sliding-friction step
+   * broke. It applied a fixed velocity decrement per substep regardless of how
+   * much slip was left, and the energy change over such a step works out to
+   * `-a·(slip - 1.75a)` — positive once the slip drops below `1.75a`. Balls in
+   * a cluster ended up being *pumped* by the cloth, gaining speed out of
+   * nothing and drifting for ever because they could not fall below the speed
+   * at which a shot is called over.
+   */
+  test('no shot ever gains energy', () => {
+    let worst = 0;
+    let worstIndex = -1;
+
+    for (let index = 0; index < 240; index++) {
+      const world = sweptShot(index);
+      let previous = kineticEnergy(world);
+
+      for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
+        world.step(PHYSICS.fixedDt);
+        const now = kineticEnergy(world);
+        // Pocketed balls leave the sum, so energy may only ever fall.
+        const gain = now - previous;
+        if (gain > worst) {
+          worst = gain;
+          worstIndex = index;
+        }
+        previous = now;
+      }
+    }
+
+    // A tick of the solver is a few thousand floating-point operations, so an
+    // exact zero is not on offer; this bound is far below anything visible and
+    // several orders under the 1 J/kg the old solver could inject.
+    assert(worst < 1e-9, `shot ${worstIndex} gained ${worst.toExponential(3)} J/kg in one tick`);
+  });
+
+  test('every shot in the sweep comes to rest', () => {
+    for (let index = 0; index < 240; index++) {
+      const world = sweptShot(index);
+      const { settled, ticks } = runShot(world);
+      assert(settled, `shot ${index} was still moving after ${ticks} ticks`);
+    }
+  });
+
+  /**
+   * The regression, pinned down to one ball.
+   *
+   * The direction of the slip relative to the ball's motion is what matters,
+   * and it is why this went unnoticed: a ball whose contact point slips
+   * *forwards* (a normal struck ball) always lost energy, so casual testing
+   * looked fine. A ball in overspin — contact point slipping backwards, which
+   * is what a cluster of balls shoving each other produces — was the one that
+   * gained.
+   *
+   * The mechanism was the snap onto rolling. A full-size friction step carried
+   * the slip past zero, the solver noticed and reset the spin to `v/R`, and for
+   * an overspinning ball that reset *raised* the spin instead of lowering it.
+   * Capping the step so it lands exactly on rolling makes the snap a no-op,
+   * which is what it was always meant to be.
+   */
+  test('the cloth drains a ball whatever way its contact point slips', () => {
+    const decel = DEFAULT_PROFILE.slidingFriction * PHYSICS.gravity * PHYSICS.fixedDt;
+
+    for (let degrees = 0; degrees <= 180; degrees += 15) {
+      const theta = (degrees * Math.PI) / 180;
+
+      // Right through the old danger band and out the other side of it.
+      for (const slip of [0.0085, 0.012, 0.02, 1.75 * decel, 0.04, 0.2]) {
+        const world = World.fromLayout([{ number: 0, x: 0, y: 0 }]);
+        const cue = world.cueBall()!;
+        const speed = 0.65;
+
+        // Solve the spin that gives exactly this slip at exactly this angle,
+        // from slip = (v.x - R·w.y, v.y + R·w.x).
+        cue.v.x = speed;
+        cue.v.y = 0;
+        cue.w.y = (speed - slip * Math.cos(theta)) / BALL_RADIUS;
+        cue.w.x = (slip * Math.sin(theta)) / BALL_RADIUS;
+        cue.w.z = 0;
+
+        const before = kineticEnergy(world);
+        world.step(PHYSICS.fixedDt);
+        const after = kineticEnergy(world);
+
+        assert(
+          after <= before,
+          `slip ${slip.toFixed(4)} m/s at ${degrees}° to the motion gained ` +
+            `${(after - before).toExponential(3)} J/kg`,
+        );
+      }
+    }
+  });
+
+  /**
+   * Friction between two balls cannot reverse the direction they are sliding
+   * across each other — at most it brings that sliding to a stop. The cap on
+   * the tangential impulse is what enforces that, and it is tighter than the
+   * cloth's because both balls take the impulse.
+   *
+   * Tested with an exaggerated ball friction: the real cloths sit low enough
+   * that the normal impulse's own losses hide the defect, which is exactly how
+   * it survived unnoticed. Turn the knob up and it shows.
+   */
+  test('a ball-on-ball contact cannot add energy, even at high friction', () => {
+    for (const friction of [0.06, 0.2, 0.5, 1]) {
+      const profile = { ...DEFAULT_PROFILE, ballFriction: friction };
+      let worst = 0;
+
+      for (let index = 0; index < 60; index++) {
+        const world = World.rack(createTable(), profile);
+        const angle = -0.3 + (index % 20) * (0.6 / 19);
+        world.shoot(angle, 0.45 + Math.floor(index / 20) * 0.2, {
+          side: ((index % 5) - 2) / 2,
+          vertical: ((index % 3) - 1),
+        });
+
+        let previous = kineticEnergy(world);
+        for (let tick = 0; tick < MAX_TICKS && !world.atRest; tick++) {
+          world.step(PHYSICS.fixedDt);
+          const now = kineticEnergy(world);
+          if (now - previous > worst) worst = now - previous;
+          previous = now;
+        }
+      }
+
+      assert(
+        worst < 1e-9,
+        `ballFriction ${friction} gained ${worst.toExponential(3)} J/kg in one tick`,
+      );
+    }
   });
 });
 

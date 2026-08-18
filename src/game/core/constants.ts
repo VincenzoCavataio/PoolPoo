@@ -67,14 +67,29 @@ export const DEFAULT_PROFILE: PhysicsProfile = {
   cushionSpinLoss: 0.4,
 };
 
+/**
+ * How much faster the contact-point slip dies away than the ball's own speed.
+ *
+ * One friction impulse does two things at once: it slows the centre by `J/m`
+ * and spins the ball up, which moves the contact point by a further
+ * `2.5 · J/m` (a sphere's moment of inertia is `2/5 mR²`). The slip therefore
+ * closes at `3.5 ×` the rate the centre slows down, so the step that lands
+ * exactly on rolling is `slip / 3.5` — which is also the classic result that a
+ * struck ball loses `2/7` of its speed before it rolls.
+ *
+ * The solver clamps every sliding step to this. It has to: the energy change
+ * over one uncapped step of size `a` is `-m·a·(slip - 1.75a)`, which turns
+ * *positive* once the slip falls below `1.75a`. Past that point friction would
+ * pump energy into the ball instead of taking it out.
+ */
+export const SLIP_DECAY = 3.5;
+
 export const PHYSICS = {
   gravity: 9.81,
 
   /** Below this speed a ball is parked, so shots terminate in finite time. */
   sleepSpeed: 0.012,
 
-  /** Slip speed under which the contact point counts as rolling, not sliding. */
-  slipEpsilon: 0.005,
 
   /**
    * The simulation only ever advances in whole `fixedDt` ticks. Both the
