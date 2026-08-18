@@ -16,6 +16,7 @@ import { Spacing } from '@/constants/theme';
 import { levelById, nextLevelId } from '@/game/rules/levels';
 import { describeGoal, shotsLeft } from '@/game/rules/puzzle';
 import { Phase } from '@/game/rules/types';
+import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
@@ -30,11 +31,12 @@ export function Stars({ value, max = 3 }: { value: number; max?: number }) {
 
 function BackButton() {
   const router = useRouter();
+  const t = useT();
   const leaveGame = useSession((s) => s.leaveGame);
 
   return (
     <Pressable
-      accessibilityLabel="Torna al menu"
+      accessibilityLabel={t('game.backToMenu')}
       onPress={() => {
         leaveGame();
         router.replace('/menu');
@@ -67,6 +69,8 @@ function FreeScoreboard() {
 }
 
 function PuzzleStatus() {
+  const t = useT();
+  const render = useMessageRenderer();
   const puzzle = useSession((s) => s.puzzle);
   const levelId = useSession((s) => s.levelId);
   const level = levelId ? levelById(levelId) : undefined;
@@ -78,20 +82,21 @@ function PuzzleStatus() {
     <View style={styles.puzzleBox}>
       <View style={styles.puzzleHeader}>
         <Text style={styles.puzzleName} numberOfLines={1}>
-          {level.name}
+          {t(level.nameKey)}
         </Text>
         <Text style={[styles.puzzleShots, remaining <= 1 && styles.puzzleShotsLow]}>
-          {remaining} {remaining === 1 ? 'colpo' : 'colpi'}
+          {t('game.shotsLeft', { count: remaining })}
         </Text>
       </View>
       <Text style={styles.puzzleGoal} numberOfLines={1}>
-        {describeGoal(level)}
+        {render(describeGoal(level))}
       </Text>
     </View>
   );
 }
 
 export function GameHud() {
+  const render = useMessageRenderer();
   const mode = useSession((s) => s.mode);
   const messages = useSession((s) => s.messages);
   const phase = useSession((s) => s.phase);
@@ -111,7 +116,7 @@ export function GameHud() {
       {note ? (
         <View style={styles.note} pointerEvents="none">
           <Text style={styles.noteLabel} numberOfLines={1}>
-            {note}
+            {render(note)}
           </Text>
         </View>
       ) : null}
@@ -121,6 +126,8 @@ export function GameHud() {
 
 export function GameOverOverlay() {
   const router = useRouter();
+  const t = useT();
+  const render = useMessageRenderer();
   const phase = useSession((s) => s.phase);
   const mode = useSession((s) => s.mode);
   const free = useSession((s) => s.free);
@@ -150,8 +157,10 @@ export function GameOverOverlay() {
           <>
             <Text style={styles.overlayTitle}>
               {free.winners.length === 1
-                ? `Vince ${free.players.find((p) => p.id === free.winners[0])?.name ?? ''}`
-                : 'Pareggio'}
+                ? t('result.winner', {
+                    name: free.players.find((p) => p.id === free.winners[0])?.name ?? '',
+                  })
+                : t('result.draw')}
             </Text>
             <View style={styles.resultTable}>
               {[...free.players]
@@ -160,13 +169,13 @@ export function GameOverOverlay() {
                   <View key={player.id} style={styles.resultRow}>
                     <Text style={styles.resultName}>{player.name}</Text>
                     <Text style={styles.resultScore}>
-                      {player.score} {Math.abs(player.score) === 1 ? 'punto' : 'punti'}
+                      {t('result.points', { count: player.score })}
                     </Text>
                   </View>
                 ))}
             </View>
             <GameButton
-              label="Nuova partita"
+              label={t('result.newGame')}
               variant="primary"
               onPress={() => startFree(free.players.length, free.players.map((p) => p.name))}
             />
@@ -175,37 +184,49 @@ export function GameOverOverlay() {
 
         {mode === 'puzzle' && puzzle && level ? (
           <>
-            <Text style={styles.overlayTitle}>{won ? 'Risolto' : 'Non ci siamo'}</Text>
+            <Text style={styles.overlayTitle}>
+              {won ? t('result.solved') : t('result.failed')}
+            </Text>
             {won ? (
               <>
                 <Stars value={puzzle.stars} />
                 <Text style={styles.overlayDetail}>
-                  {puzzle.shotsUsed} {puzzle.shotsUsed === 1 ? 'colpo' : 'colpi'} su {level.maxShots}
+                  {t('game.shotsLeft', { count: puzzle.shotsUsed })} /{' '}
+                  {t('game.shotsLeft', { count: level.maxShots })}
                 </Text>
               </>
             ) : (
-              <Text style={styles.overlayDetail}>{puzzle.failReason ?? 'Riprova'}</Text>
+              <Text style={styles.overlayDetail}>
+                {puzzle.failReason ? render(puzzle.failReason) : t('result.retry')}
+              </Text>
             )}
 
             {won && upcoming ? (
               <GameButton
-                label="Livello successivo"
+                label={t('result.nextLevel')}
                 variant="primary"
-                sublabel={levelById(upcoming)?.name}
+                sublabel={(() => {
+                  const next = levelById(upcoming);
+                  return next ? t(next.nameKey) : undefined;
+                })()}
                 onPress={() => startPuzzle(upcoming)}
               />
             ) : null}
-            <GameButton label={won ? 'Rigioca' : 'Riprova'} onPress={retryLevel} />
+            <GameButton
+              label={won ? t('result.replay') : t('result.retry')}
+              onPress={retryLevel}
+            />
             {won && !upcoming ? (
               <Text style={styles.overlayDetail}>
-                Hai finito tutti i livelli:{' '}
-                {Object.values(stars).reduce((a, b) => a + b, 0)} stelle in totale.
+                {t('result.allLevels', {
+                  count: Object.values(stars).reduce((a, b) => a + b, 0),
+                })}
               </Text>
             ) : null}
           </>
         ) : null}
 
-        <GameButton label="Menu" variant="ghost" onPress={goToMenu} />
+        <GameButton label={t('common.menu')} variant="ghost" onPress={goToMenu} />
       </View>
     </View>
   );

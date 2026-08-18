@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { CLOTH_OPTIONS } from '@/constants/game-theme';
+import type { Locale } from '@/i18n';
 import { LOCATIONS } from '@/game/render/locations';
 
 export const AIM_SENSITIVITY = {
@@ -19,7 +20,11 @@ export const AIM_SENSITIVITY = {
   default: 0.005,
 } as const;
 
+/** `auto` follows the phone; anything else pins the language. */
+export type LanguageSetting = 'auto' | Locale;
+
 export interface SettingsState {
+  language: LanguageSetting;
   clothId: string;
   /** Which room the table stands in. */
   locationId: string;
@@ -46,6 +51,7 @@ export interface SettingsState {
    */
   collisionHaptics: boolean;
 
+  setLanguage: (value: LanguageSetting) => void;
   setCloth: (id: string) => void;
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
@@ -59,6 +65,7 @@ export interface SettingsState {
 }
 
 const DEFAULTS = {
+  language: 'auto' as LanguageSetting,
   clothId: CLOTH_OPTIONS[0].id,
   locationId: LOCATIONS[0].id,
   showAimGuide: true,
@@ -75,6 +82,7 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       ...DEFAULTS,
 
+      setLanguage: (language) => set({ language }),
       setCloth: (clothId) => set({ clothId }),
       setLocation: (locationId) => set({ locationId }),
       setShowAimGuide: (showAimGuide) => set({ showAimGuide }),

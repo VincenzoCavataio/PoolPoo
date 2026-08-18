@@ -28,6 +28,7 @@ import { Spacing } from '@/constants/theme';
 import { CHANGE_LIFT_MS, CHANGE_TOTAL_MS, useMusic } from '@/game/audio/music';
 import { setSfxVolume } from '@/game/audio/sfx';
 import { TRACKS, trackAt } from '@/game/audio/tracks';
+import { useT } from '@/i18n/use-t';
 import { useSettings } from '@/store/settings';
 
 const DISC = 116;
@@ -111,6 +112,7 @@ function VolumeRow({
 }
 
 export function MusicHud() {
+  const t = useT();
   const open = useMusic((s) => s.hudOpen);
   const closeHud = useMusic((s) => s.closeHud);
   const index = useMusic((s) => s.index);
@@ -133,11 +135,11 @@ export function MusicHud() {
 
   return (
     <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(160)} style={styles.overlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={closeHud} accessibilityLabel="Chiudi" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={closeHud} accessibilityLabel={t('common.close')} />
 
       <View style={styles.panel}>
         <View style={styles.header}>
-          <Text style={styles.title}>Giradischi</Text>
+          <Text style={styles.title}>{t('music.title')}</Text>
           <Pressable onPress={closeHud} style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
             <Text style={styles.closeLabel}>✕</Text>
           </Pressable>
@@ -153,7 +155,7 @@ export function MusicHud() {
               {track.artist}
             </Text>
             <Text style={styles.trackState}>
-              {changing ? 'Cambio disco…' : playing ? 'In riproduzione' : 'In pausa'}
+              {changing ? t('music.changing') : playing ? t('music.playing') : t('music.paused')}
             </Text>
           </View>
         </View>
@@ -222,13 +224,11 @@ export function MusicHud() {
             })}
           </ScrollView>
         ) : (
-          <Text style={styles.hint}>
-            Una sola traccia per ora. Aggiungine altre in `assets/bgm/` e nel manifest.
-          </Text>
+          <Text style={styles.hint}>{t('music.onlyOne')}</Text>
         )}
 
         <VolumeRow
-          label="Musica"
+          label={t('music.musicVolume')}
           value={musicVolume}
           onChange={(value) => {
             setMusicVolume(value);
@@ -236,7 +236,7 @@ export function MusicHud() {
           }}
         />
         <VolumeRow
-          label="Effetti"
+          label={t('music.sfxVolume')}
           value={sfxVolume}
           onChange={(value) => {
             setSfxSetting(value);

@@ -13,6 +13,8 @@
  * the fill lights sit below 1: a lamp 1.45 m above the cloth divides by ~2.1.
  */
 
+import type { MessageKey } from '@/i18n';
+
 import type { PropGroup } from './props';
 
 export interface LocationLamp {
@@ -28,8 +30,8 @@ export interface LocationLamp {
 
 export interface GameLocation {
   id: string;
-  label: string;
-  description: string;
+  labelKey: MessageKey;
+  descriptionKey: MessageKey;
   /**
    * Puzzle stars needed to unlock. All five are currently open from the start;
    * the gate is kept because turning it back on is one number per location.
@@ -60,7 +62,7 @@ export type MusicDeviceKind = 'turntable' | 'jukebox' | 'radio';
 
 export interface MusicDevice {
   kind: MusicDeviceKind;
-  label: string;
+  labelKey: MessageKey;
   position: [number, number, number];
   /** Rotation about the vertical axis, so it faces into the room. */
   rotationY: number;
@@ -81,8 +83,8 @@ export const ROOM = { width: 5.2, depth: 7.0 } as const;
 export const LOCATIONS: GameLocation[] = [
   {
     id: 'sala',
-    label: 'Sala biliardo',
-    description: 'Legno, hi-fi a scaffale, giradischi, piante e neon alla parete.',
+    labelKey: 'location.sala',
+    descriptionKey: 'location.salaBody',
     unlockStars: 0,
     background: '#0a0d0b',
     floorColor: '#4a3221',
@@ -108,7 +110,7 @@ export const LOCATIONS: GameLocation[] = [
     ],
     musicDevice: {
       kind: 'turntable',
-      label: 'Giradischi',
+      labelKey: 'device.turntable',
       position: [ROOM.width / 2 - 0.17, 1.15, 0.25],
       rotationY: -Math.PI / 2,
       bubbleHeight: 0.42,
@@ -131,8 +133,8 @@ export const LOCATIONS: GameLocation[] = [
   },
   {
     id: 'garage',
-    label: 'Garage',
-    description: 'Cemento, neon freddo, casse per terra, stecche e scaffali metallici.',
+    labelKey: 'location.garage',
+    descriptionKey: 'location.garageBody',
     unlockStars: 0,
     background: '#14171a',
     floorColor: '#4c4f52',
@@ -151,7 +153,7 @@ export const LOCATIONS: GameLocation[] = [
     ],
     musicDevice: {
       kind: 'radio',
-      label: 'Radio da lavoro',
+      labelKey: 'device.radioWork',
       position: [ROOM.width / 2 - 0.2, 0.4, -1.35],
       rotationY: -Math.PI / 2,
       bubbleHeight: 0.34,
@@ -160,8 +162,8 @@ export const LOCATIONS: GameLocation[] = [
   },
   {
     id: 'arcade',
-    label: 'Sala giochi',
-    description: 'Cabinati che sputano luce colorata, moquette scura e neon a raffica.',
+    labelKey: 'location.arcade',
+    descriptionKey: 'location.arcadeBody',
     unlockStars: 0,
     background: '#0a0714',
     floorColor: '#2a1f38',
@@ -180,7 +182,7 @@ export const LOCATIONS: GameLocation[] = [
     ],
     musicDevice: {
       kind: 'jukebox',
-      label: 'Jukebox',
+      labelKey: 'device.jukebox',
       position: [-ROOM.width / 2 + 0.5, FLOOR_Y, -1.4],
       rotationY: Math.PI / 2,
       bubbleHeight: 1.6,
@@ -190,8 +192,8 @@ export const LOCATIONS: GameLocation[] = [
   },
   {
     id: 'terrazza',
-    label: 'Terrazza notturna',
-    description: 'All’aperto sotto la luna, lampade appese, piante in vaso e la città lontana.',
+    labelKey: 'location.terrazza',
+    descriptionKey: 'location.terrazzaBody',
     unlockStars: 0,
     background: '#070b14',
     floorColor: '#2b2a2c',
@@ -216,7 +218,7 @@ export const LOCATIONS: GameLocation[] = [
     ],
     musicDevice: {
       kind: 'radio',
-      label: 'Boombox',
+      labelKey: 'device.boombox',
       position: [-1.75, FLOOR_Y + 0.66, 2.55],
       rotationY: 0.35,
       bubbleHeight: 0.34,
@@ -226,8 +228,8 @@ export const LOCATIONS: GameLocation[] = [
   },
   {
     id: 'studio',
-    label: 'Studio',
-    description: 'Neutro, luminoso e vuoto: la scelta giusta per vedere bene la fisica.',
+    labelKey: 'location.studio',
+    descriptionKey: 'location.studioBody',
     unlockStars: 0,
     background: '#c9ccd0',
     floorColor: '#b9bdc2',
@@ -238,7 +240,7 @@ export const LOCATIONS: GameLocation[] = [
     lamps: [],
     musicDevice: {
       kind: 'radio',
-      label: 'Monitor da studio',
+      labelKey: 'device.monitor',
       position: [ROOM.width / 2 - 0.35, FLOOR_Y + 0.9, -1.2],
       rotationY: -Math.PI / 2,
       bubbleHeight: 0.34,

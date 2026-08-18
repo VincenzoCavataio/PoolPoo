@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/theme';
 import { usePowerGesture } from '@/game/input/gestures';
 import { CameraMode } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 /** One tap of the fine-aim buttons, in radians — a touch over half a degree. */
@@ -44,6 +45,7 @@ function powerColor(power: number): string {
  * the strip behaves like a rocker switch once you reach the end of it.
  */
 function AimStrip() {
+  const t = useT();
   const [width, setWidth] = useState(0);
   const [edge, setEdge] = useState(0);
 
@@ -121,7 +123,7 @@ function AimStrip() {
       <View
         style={styles.strip}
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        accessibilityLabel="Trascina per ruotare la stecca, tieni ai bordi per continuare">
+        accessibilityLabel={t('game.aimStrip')}>
         <View style={[styles.edgeZone, styles.edgeLeft, edge === -1 && styles.edgeActive]} pointerEvents="none" />
         <View style={[styles.edgeZone, styles.edgeRight, edge === 1 && styles.edgeActive]} pointerEvents="none" />
 
@@ -134,7 +136,7 @@ function AimStrip() {
           ))}
         </View>
         <Text style={styles.stripLabel} pointerEvents="none">
-          ◀ mira ▶
+          ◀ {t('game.aim')} ▶
         </Text>
       </View>
     </GestureDetector>
@@ -142,6 +144,7 @@ function AimStrip() {
 }
 
 export function GameControls() {
+  const t = useT();
   const power = useSession((s) => s.power);
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
@@ -163,7 +166,7 @@ export function GameControls() {
       <View style={styles.panel}>
         <View style={styles.row}>
           <Pressable
-            accessibilityLabel="Ruota la mira a sinistra"
+            accessibilityLabel={t('game.aimLeft')}
             onPress={() => nudgeAim(-FINE_AIM_STEP)}
             style={({ pressed }) => [styles.fine, pressed && styles.pressed]}>
             <Text style={styles.fineLabel}>◀</Text>
@@ -172,7 +175,7 @@ export function GameControls() {
           <AimStrip />
 
           <Pressable
-            accessibilityLabel="Ruota la mira a destra"
+            accessibilityLabel={t('game.aimRight')}
             onPress={() => nudgeAim(FINE_AIM_STEP)}
             style={({ pressed }) => [styles.fine, pressed && styles.pressed]}>
             <Text style={styles.fineLabel}>▶</Text>
@@ -202,7 +205,7 @@ export function GameControls() {
           </GestureDetector>
 
           <Pressable
-            accessibilityLabel={canShoot ? 'Tira' : 'Torna in vista mira per tirare'}
+            accessibilityLabel={canShoot ? t('game.shootLabel') : t('game.goAimLabel')}
             onPress={canShoot ? takeShot : () => setCameraMode(CameraMode.CUE)}
             style={({ pressed }) => [
               styles.shoot,
@@ -210,13 +213,13 @@ export function GameControls() {
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.shootLabel, !canShoot && styles.shootLabelBlocked]}>
-              {canShoot ? 'TIRA' : 'MIRA'}
+              {canShoot ? t('game.shoot') : t('game.goAim')}
             </Text>
           </Pressable>
         </View>
 
         {!fromCue ? (
-          <Text style={styles.hint}>Dall’alto puoi solo guardare: torna in mira per tirare</Text>
+          <Text style={styles.hint}>{t('game.shootBlocked')}</Text>
         ) : null}
       </View>
     </View>

@@ -45,8 +45,8 @@ const sidePocketBall = { x: 0.15, y: 0.38 };
 export const LEVELS: PuzzleLevel[] = [
   {
     id: 'primo-colpo',
-    name: 'Primo colpo',
-    hint: 'La 3 è già in linea con la buca. Mira al centro e dai poca potenza.',
+    nameKey: 'level.primo-colpo',
+    hintKey: 'level.primo-colpoHint',
     maxShots: 2,
     layout: [cue(lineUp(three, 'corner-ne', 0.5)), ball(3, three.x, three.y)],
     goal: { kind: 'pocket-all' },
@@ -55,8 +55,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'doppietta',
-    name: 'Doppietta',
-    hint: 'Due palline, due angoli. La prima è servita, per la seconda pensa a dove lasci la bianca.',
+    nameKey: 'level.doppietta',
+    hintKey: 'level.doppiettaHint',
     maxShots: 3,
     layout: [
       cue(lineUp(doubleA, 'corner-ne', 0.55)),
@@ -69,8 +69,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'in-ordine',
-    name: 'Uno, due, tre',
-    hint: 'Rispetta l’ordine: se ne entra una fuori sequenza il puzzle è perso.',
+    nameKey: 'level.in-ordine',
+    hintKey: 'level.in-ordineHint',
     maxShots: 5,
     layout: [
       cue(lineUp(orderOne, 'corner-ne', 0.5)),
@@ -84,8 +84,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'niente-nera',
-    name: 'Niente nera',
-    hint: 'Imbuca la 4 e la 5. Se cade la 8, hai perso.',
+    nameKey: 'level.niente-nera',
+    hintKey: 'level.niente-neraHint',
     maxShots: 4,
     layout: [
       cue(lineUp(noBlackTarget, 'corner-ne', 0.5)),
@@ -99,8 +99,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'prima-la-5',
-    name: 'Prima la 5',
-    hint: 'La bianca deve toccare la 5 prima di ogni altra pallina.',
+    nameKey: 'level.prima-la-5',
+    hintKey: 'level.prima-la-5Hint',
     maxShots: 3,
     layout: [
       cue(lineUp(fiveFirst, 'corner-ne', 0.6)),
@@ -114,8 +114,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'di-sponda',
-    name: 'Di sponda',
-    hint: 'Prima che una pallina entri, qualcosa deve aver toccato una sponda.',
+    nameKey: 'level.di-sponda',
+    hintKey: 'level.di-spondaHint',
     maxShots: 4,
     layout: [cue({ x: -0.2, y: 0.2 }), ball(6, 1.0, 0.45)],
     goal: { kind: 'pocket-set', numbers: [6] },
@@ -124,8 +124,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'buca-scelta',
-    name: 'Buca scelta',
-    hint: 'La 9 deve entrare nella buca centrale in alto. In un angolo non vale.',
+    nameKey: 'level.buca-scelta',
+    hintKey: 'level.buca-sceltaHint',
     maxShots: 3,
     layout: [cue(lineUp(sidePocketBall, 'side-n', 0.55)), ball(9, sidePocketBall.x, sidePocketBall.y)],
     goal: { kind: 'pocket-into', number: 9, pocket: 'side-n' },
@@ -134,8 +134,8 @@ export const LEVELS: PuzzleLevel[] = [
   },
   {
     id: 'ripulisci',
-    name: 'Ripulisci il tavolo',
-    hint: 'Cinque palline, sette colpi. Ogni pallina ha la sua buca: trovala.',
+    nameKey: 'level.ripulisci',
+    hintKey: 'level.ripulisciHint',
     maxShots: 7,
     layout: [
       cue({ x: 0.0, y: -0.2 }),

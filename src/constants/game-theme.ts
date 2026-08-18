@@ -22,6 +22,7 @@ export const Palette = {
 } as const;
 
 import { DEFAULT_PROFILE, type PhysicsProfile } from '@/game/core/constants';
+import type { MessageKey } from '@/i18n';
 
 /**
  * A cloth is no longer just a colour: each one plays differently, and the table
@@ -30,9 +31,9 @@ import { DEFAULT_PROFILE, type PhysicsProfile } from '@/game/core/constants';
  */
 export interface ClothOption {
   id: string;
-  label: string;
+  labelKey: MessageKey;
   /** One line on how it plays, for the options screen. */
-  feel: string;
+  feelKey: MessageKey;
   /** Cloth colour under full light. */
   cloth: string;
   /** Darker tone used for the cushion faces. */
@@ -49,8 +50,8 @@ export interface ClothOption {
 export const CLOTH_OPTIONS: ClothOption[] = [
   {
     id: 'verde',
-    label: 'Verde',
-    feel: 'Standard. Il riferimento con cui è tarato tutto il resto.',
+    labelKey: 'cloth.verde',
+    feelKey: 'cloth.verdeFeel',
     cloth: '#1f6b4a',
     cushion: '#164f37',
     sheen: '#7fd8ac',
@@ -58,8 +59,8 @@ export const CLOTH_OPTIONS: ClothOption[] = [
   },
   {
     id: 'blu',
-    label: 'Blu',
-    feel: 'Veloce e vivo: le palline corrono di più e le sponde restituiscono meglio.',
+    labelKey: 'cloth.blu',
+    feelKey: 'cloth.bluFeel',
     cloth: '#1c4f7c',
     cushion: '#143b5d',
     sheen: '#7fb6e8',
@@ -67,8 +68,8 @@ export const CLOTH_OPTIONS: ClothOption[] = [
   },
   {
     id: 'bordeaux',
-    label: 'Bordeaux',
-    feel: 'Pesante e lento, sponde smorzate. Perdona meno la potenza di troppo.',
+    labelKey: 'cloth.bordeaux',
+    feelKey: 'cloth.bordeauxFeel',
     cloth: '#7a2230',
     cushion: '#5b1923',
     sheen: '#e08a96',
@@ -76,8 +77,8 @@ export const CLOTH_OPTIONS: ClothOption[] = [
   },
   {
     id: 'grafite',
-    label: 'Grafite',
-    feel: 'Ruvido: mordente alto, l’effetto attacca molto di più.',
+    labelKey: 'cloth.grafite',
+    feelKey: 'cloth.grafiteFeel',
     cloth: '#39424a',
     cushion: '#282f35',
     sheen: '#9fb0be',

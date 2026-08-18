@@ -7,31 +7,36 @@ import { Card, Screen, SectionLabel } from '@/components/ui/screen';
 import { MENU_SELECTED, MenuPalette as Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { LEVELS } from '@/game/rules/levels';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const PLAYER_OPTIONS = [1, 2, 3, 4];
 
 export default function NewGameScreen() {
   const router = useRouter();
+  const t = useT();
   const startFree = useSession((s) => s.startFree);
   const [players, setPlayers] = useState(2);
 
   const beginFree = () => {
-    startFree(players);
+    // Default names are translated, so they are built here and handed to the
+    // rules rather than invented inside them.
+    const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
+    startFree(players, names);
     router.replace('/game');
   };
 
   return (
-    <Screen title="Nuova partita" subtitle="Due modi di giocare" onBack={() => router.back()}>
-      <SectionLabel>Partita libera</SectionLabel>
+    <Screen
+      title={t('newGame.title')}
+      subtitle={t('newGame.subtitle')}
+      onBack={() => router.back()}>
+      <SectionLabel>{t('newGame.freeSection')}</SectionLabel>
       <Card>
-        <Text style={styles.body}>
-          Castello completo, 15 palline. Un punto per pallina imbucata, e chi imbuca continua a
-          tirare. Bianca in buca o nessuna pallina colpita costa un punto e passa il turno.
-        </Text>
+        <Text style={styles.body}>{t('newGame.freeBody')}</Text>
 
         <View>
-          <Text style={styles.fieldLabel}>Giocatori</Text>
+          <Text style={styles.fieldLabel}>{t('newGame.players')}</Text>
           <View style={styles.pillRow}>
             {PLAYER_OPTIONS.map((count) => {
               const selected = count === players;
@@ -54,22 +59,17 @@ export default function NewGameScreen() {
             })}
           </View>
           <Text style={styles.helper}>
-            {players === 1
-              ? 'Con un solo giocatore è una sfida al punteggio.'
-              : `${players} giocatori a turno sullo stesso dispositivo.`}
+            {players === 1 ? t('newGame.soloHint') : t('newGame.multiHint', { count: players })}
           </Text>
         </View>
 
-        <GameButton label="Inizia partita libera" variant="primary" onPress={beginFree} />
+        <GameButton label={t('newGame.startFree')} variant="primary" onPress={beginFree} />
       </Card>
 
-      <SectionLabel>Puzzle</SectionLabel>
+      <SectionLabel>{t('newGame.puzzleSection')}</SectionLabel>
       <Card>
-        <Text style={styles.body}>
-          {LEVELS.length} livelli con un numero limitato di colpi e un obiettivo preciso: imbucare
-          certe palline, in un certo ordine, o in una certa buca. Meno colpi usi, più stelle prendi.
-        </Text>
-        <GameButton label="Scegli un livello" onPress={() => router.push('/levels')} />
+        <Text style={styles.body}>{t('newGame.puzzleBody', { count: LEVELS.length })}</Text>
+        <GameButton label={t('newGame.chooseLevel')} onPress={() => router.push('/levels')} />
       </Card>
     </Screen>
   );

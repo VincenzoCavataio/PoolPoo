@@ -18,6 +18,8 @@ import Animated, { Easing, FadeIn, FadeOut, Keyframe } from 'react-native-reanim
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { Phase } from '@/game/rules/types';
+import type { Message } from '@/i18n';
+import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const CONFETTI_COLORS = ['#ffc857', '#3ddc84', '#ff53d8', '#5cf0ff', '#ff6b5e', '#f2f0e6'];
@@ -92,7 +94,11 @@ function Confetti({ seed }: { seed: number }) {
 }
 
 function PotBanner({ balls }: { balls: number[] }) {
-  const title = balls.length > 1 ? `${balls.length} palline!` : `Palla ${balls[0]} in buca!`;
+  const t = useT();
+  const title =
+    balls.length > 1
+      ? t('celebration.potMany', { count: balls.length })
+      : t('celebration.potOne', { number: balls[0] });
 
   return (
     <Animated.View
@@ -107,7 +113,9 @@ function PotBanner({ balls }: { balls: number[] }) {
   );
 }
 
-function FoulBanner({ reason }: { reason: string | null }) {
+function FoulBanner({ reason }: { reason: Message | null }) {
+  const t = useT();
+  const render = useMessageRenderer();
   const sink = new Keyframe({
     0: { opacity: 0, transform: [{ translateY: -14 }] },
     30: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -123,14 +131,15 @@ function FoulBanner({ reason }: { reason: string | null }) {
         style={styles.foulWash}
       />
       <Animated.View entering={sink.duration(FOUL_DURATION)} style={styles.foulBanner}>
-        <Text style={styles.foulTitle}>Fallo</Text>
-        {reason ? <Text style={styles.foulReason}>{reason}</Text> : null}
+        <Text style={styles.foulTitle}>{t('celebration.foul')}</Text>
+        {reason ? <Text style={styles.foulReason}>{render(reason)}</Text> : null}
       </Animated.View>
     </View>
   );
 }
 
 export function Celebration() {
+  const t = useT();
   const celebration = useSession((s) => s.celebration);
   const phase = useSession((s) => s.phase);
   const dismissCelebration = useSession((s) => s.dismissCelebration);
@@ -161,9 +170,12 @@ export function Celebration() {
 
       {/* Anywhere on screen cuts the replay short. */}
       {replaying ? (
-        <Pressable style={StyleSheet.absoluteFill} onPress={skipReplay} accessibilityLabel="Salta il replay">
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={skipReplay}
+          accessibilityLabel={t('celebration.skipReplay')}>
           <View style={styles.skipWrap} pointerEvents="none">
-            <Text style={styles.skipLabel}>Replay · tocca per saltare</Text>
+            <Text style={styles.skipLabel}>{t('celebration.replayHint')}</Text>
           </View>
         </Pressable>
       ) : null}

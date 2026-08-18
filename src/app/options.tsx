@@ -13,15 +13,17 @@ import {
 } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { isLocationUnlocked, LOCATIONS } from '@/game/render/locations';
+import { LOCALE_LABEL, LOCALES } from '@/i18n';
+import { useT } from '@/i18n/use-t';
 import { clearSavedGame } from '@/store/persistence';
 import { MAX_STARS, totalStars, useProgress } from '@/store/progress';
 import { useSettings } from '@/store/settings';
 
 const SENSITIVITY_STEPS = [
-  { label: 'Lenta', value: 0.003 },
-  { label: 'Media', value: 0.005 },
-  { label: 'Rapida', value: 0.009 },
-];
+  { labelKey: 'options.sensitivitySlow', value: 0.003 },
+  { labelKey: 'options.sensitivityMedium', value: 0.005 },
+  { labelKey: 'options.sensitivityFast', value: 0.009 },
+] as const;
 
 function ToggleRow({
   label,
@@ -52,6 +54,7 @@ function ToggleRow({
 
 export default function OptionsScreen() {
   const router = useRouter();
+  const t = useT();
   const {
     clothId,
     locationId,
@@ -59,6 +62,8 @@ export default function OptionsScreen() {
     showGhostBall,
     aimSensitivity,
     haptics,
+    language,
+    setLanguage,
     collisionHaptics,
     setHaptics,
     setCollisionHaptics,
@@ -80,10 +85,10 @@ export default function OptionsScreen() {
   );
 
   const confirmClearSave = () => {
-    Alert.alert('Cancellare la partita salvata?', 'La partita in corso non sarà più recuperabile.', [
-      { text: 'Annulla', style: 'cancel' },
+    Alert.alert(t('options.clearSaveTitle'), t('options.clearSaveBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Cancella',
+        text: t('options.clearSaveConfirm'),
         style: 'destructive',
         onPress: () => {
           void clearSavedGame();
@@ -94,22 +99,44 @@ export default function OptionsScreen() {
   };
 
   const confirmResetProgress = () => {
-    Alert.alert(
-      'Azzerare i progressi?',
-      'Perderai tutte le stelle, i livelli sbloccati e gli ambienti sbloccati.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        { text: 'Azzera', style: 'destructive', onPress: resetProgress },
-      ],
-    );
+    Alert.alert(t('options.resetProgressTitle'), t('options.resetProgressBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('options.resetProgressConfirm'), style: 'destructive', onPress: resetProgress },
+    ]);
   };
 
   return (
-    <Screen title="Opzioni" onBack={() => router.back()}>
-      <SectionLabel>Ambiente</SectionLabel>
+    <Screen title={t('options.title')} onBack={() => router.back()}>
+      <SectionLabel>{t('options.language')}</SectionLabel>
+      <Card>
+        <Text style={styles.rowDescription}>{t('options.languageBody')}</Text>
+        <View style={styles.pillRow}>
+          {(['auto', ...LOCALES] as const).map((option) => {
+            const selected = option === language;
+            return (
+              <Pressable
+                key={option}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => setLanguage(option)}
+                style={({ pressed }) => [
+                  styles.pill,
+                  selected && styles.pillSelected,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
+                  {option === 'auto' ? t('options.languageAuto') : LOCALE_LABEL[option]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
+
+      <SectionLabel>{t('options.environment')}</SectionLabel>
       <Card>
         <Text style={styles.rowDescription}>
-          Tutti e {LOCATIONS.length} disponibili. Stelle raccolte: {earned} su {MAX_STARS}.
+          {t('options.environmentAll', { count: LOCATIONS.length, earned, total: MAX_STARS })}
         </Text>
         {LOCATIONS.map((location) => {
           const unlocked = isLocationUnlocked(location, earned);
@@ -129,12 +156,12 @@ export default function OptionsScreen() {
               ]}>
               <View style={styles.locationText}>
                 <Text style={[styles.rowLabel, selected && styles.locationLabelSelected]}>
-                  {unlocked ? location.label : `🔒 ${location.label}`}
+                  {unlocked ? t(location.labelKey) : `🔒 ${t(location.labelKey)}`}
                 </Text>
                 <Text style={styles.rowDescription}>
                   {unlocked
-                    ? location.description
-                    : `Servono ${location.unlockStars} stelle per sbloccarlo`}
+                    ? t(location.descriptionKey)
+                    : t('options.environmentLocked', { count: location.unlockStars })}
                 </Text>
               </View>
             </Pressable>
@@ -142,11 +169,9 @@ export default function OptionsScreen() {
         })}
       </Card>
 
-      <SectionLabel>Panno</SectionLabel>
+      <SectionLabel>{t('options.cloth')}</SectionLabel>
       <Card>
-        <Text style={styles.rowDescription}>
-          Il panno non è solo un colore: cambia attrito, scorrimento e resa delle sponde.
-        </Text>
+        <Text style={styles.rowDescription}>{t('options.clothBody')}</Text>
         <View style={styles.swatchRow}>
           {CLOTH_OPTIONS.map((option) => {
             const selected = option.id === clothId;
@@ -154,7 +179,7 @@ export default function OptionsScreen() {
               <Pressable
                 key={option.id}
                 accessibilityRole="radio"
-                accessibilityLabel={option.label}
+                accessibilityLabel={t(option.labelKey)}
                 accessibilityState={{ selected }}
                 onPress={() => setCloth(option.id)}
                 style={({ pressed }) => [styles.swatchWrap, pressed && styles.pressed]}>
@@ -166,41 +191,38 @@ export default function OptionsScreen() {
                   ]}
                 />
                 <Text style={[styles.swatchLabel, selected && styles.swatchLabelSelected]}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-        <Text style={styles.clothFeel}>{clothById(clothId).feel}</Text>
+        <Text style={styles.clothFeel}>{t(clothById(clothId).feelKey)}</Text>
       </Card>
 
-      <SectionLabel>Aiuti di mira</SectionLabel>
+      <SectionLabel>{t('options.aimHelpers')}</SectionLabel>
       <Card>
         <ToggleRow
-          label="Linea di mira"
-          description="Mostra dove arriva la bianca prima di toccare qualcosa."
+          label={t('options.aimLine')}
+          description={t('options.aimLineBody')}
           value={showAimGuide}
           onChange={setShowAimGuide}
         />
         <ToggleRow
-          label="Pallina fantasma"
-          description="Aggiunge il punto d'impatto e la direzione della pallina colpita."
+          label={t('options.ghostBall')}
+          description={t('options.ghostBallBody')}
           value={showGhostBall}
           onChange={setShowGhostBall}
         />
         <View>
-          <Text style={styles.rowLabel}>Sensibilità della mira</Text>
-          <Text style={styles.rowDescription}>
-            Quanto ruota il tiro per ogni trascinamento. In vista mira il trascinamento verticale
-            alza e abbassa l’occhio, e la pizzicata lo avvicina alla bianca.
-          </Text>
+          <Text style={styles.rowLabel}>{t('options.sensitivity')}</Text>
+          <Text style={styles.rowDescription}>{t('options.sensitivityBody')}</Text>
           <View style={styles.pillRow}>
             {SENSITIVITY_STEPS.map((step) => {
               const selected = step.value === activeStep.value;
               return (
                 <Pressable
-                  key={step.label}
+                  key={step.labelKey}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   onPress={() => setAimSensitivity(step.value)}
@@ -210,7 +232,7 @@ export default function OptionsScreen() {
                     pressed && styles.pressed,
                   ]}>
                   <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
-                    {step.label}
+                    {t(step.labelKey)}
                   </Text>
                 </Pressable>
               );
@@ -219,36 +241,33 @@ export default function OptionsScreen() {
         </View>
       </Card>
 
-      <SectionLabel>Audio</SectionLabel>
+      <SectionLabel>{t('options.audio')}</SectionLabel>
       <Card>
         <ToggleRow
-          label="Vibrazione"
-          description="Un colpetto quando tiri, uno diverso quando imbuchi."
+          label={t('options.haptics')}
+          description={t('options.hapticsBody')}
           value={haptics}
           onChange={setHaptics}
         />
         <ToggleRow
-          label="Vibrazione sulle collisioni"
-          description="Un tocco leggero a ogni contatto fra palline. Su uno spacco se ne sentono parecchi."
+          label={t('options.collisionHaptics')}
+          description={t('options.collisionHapticsBody')}
           value={collisionHaptics}
           onChange={setCollisionHaptics}
         />
-        <Text style={styles.rowDescription}>
-          I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, tocca il
-          giradischi (o la radio, o il jukebox) per aprirlo.
-        </Text>
+        <Text style={styles.rowDescription}>{t('options.mixerHint')}</Text>
       </Card>
 
-      <SectionLabel>Dati</SectionLabel>
+      <SectionLabel>{t('options.data')}</SectionLabel>
       <Card>
-        <GameButton label="Ripristina le opzioni" onPress={resetSettings} />
+        <GameButton label={t('options.resetSettings')} onPress={resetSettings} />
         <GameButton
-          label="Cancella la partita salvata"
+          label={t('options.clearSave')}
           variant="danger"
-          sublabel={savedCleared ? 'Cancellata' : undefined}
+          sublabel={savedCleared ? t('options.cleared') : undefined}
           onPress={confirmClearSave}
         />
-        <GameButton label="Azzera i progressi puzzle" variant="danger" onPress={confirmResetProgress} />
+        <GameButton label={t('options.resetProgress')} variant="danger" onPress={confirmResetProgress} />
       </Card>
     </Screen>
   );

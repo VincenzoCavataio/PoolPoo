@@ -14,6 +14,11 @@ import { LEVELS, levelById, nextLevelId } from '../levels';
 import { createPuzzleState, resolvePuzzleShot, starsFor } from '../puzzle';
 import { solveLevel, verifySolution } from './solver';
 
+/** Player names, which the caller owns; the rules only carry them. */
+function names(count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `P${i + 1}`);
+}
+
 // ------------------------------------------------------------ synthetic events
 
 const hit = (a: number, b: number): ShotEvent => ({ kind: 'ball-hit', t: 0.1, a, b, speed: 1.5 });
@@ -51,7 +56,7 @@ function worldWith(numbers: number[], pocketed: number[] = []): World {
 suite('free play scoring', () => {
   test('potting scores a point and keeps the turn', () => {
     const world = worldWith([1, 2], [1]);
-    const { state, outcome } = resolveFreeShot(createFreeState(2), world, [hit(0, 1), pot(1)]);
+    const { state, outcome } = resolveFreeShot(createFreeState(2, names(2)), world, [hit(0, 1), pot(1)]);
 
     assertEqual(state.players[0].score, 1, 'score');
     assertEqual(state.current, 0, 'still the same player');
@@ -61,7 +66,7 @@ suite('free play scoring', () => {
 
   test('a clean miss passes the turn', () => {
     const world = worldWith([1, 2]);
-    const { state, outcome } = resolveFreeShot(createFreeState(2), world, [hit(0, 1), rail(1)]);
+    const { state, outcome } = resolveFreeShot(createFreeState(2, names(2)), world, [hit(0, 1), rail(1)]);
 
     assertEqual(state.players[0].score, 0, 'score');
     assertEqual(state.current, 1, 'next player');
@@ -71,7 +76,7 @@ suite('free play scoring', () => {
 
   test('potting the cue ball is a foul that costs a point and the turn', () => {
     const world = worldWith([1, 2]);
-    const { state, outcome } = resolveFreeShot(createFreeState(2), world, [hit(0, 1), pot(0)]);
+    const { state, outcome } = resolveFreeShot(createFreeState(2, names(2)), world, [hit(0, 1), pot(0)]);
 
     assertEqual(state.players[0].score, -1, 'score');
     assertEqual(outcome.foul, true, 'foul');
@@ -82,15 +87,15 @@ suite('free play scoring', () => {
 
   test('hitting nothing at all is a foul', () => {
     const world = worldWith([1, 2]);
-    const { outcome } = resolveFreeShot(createFreeState(2), world, [rail(0)]);
+    const { outcome } = resolveFreeShot(createFreeState(2, names(2)), world, [rail(0)]);
 
     assertEqual(outcome.foul, true, 'foul');
-    assertEqual(outcome.foulReason, 'Nessuna pallina colpita', 'reason');
+    assertEqual(outcome.foulReason?.key, 'rules.foulNoContact', 'reason');
   });
 
   test('a foul ends the turn even when the shot potted a ball', () => {
     const world = worldWith([1, 2], [1]);
-    const { state, outcome } = resolveFreeShot(createFreeState(2), world, [
+    const { state, outcome } = resolveFreeShot(createFreeState(2, names(2)), world, [
       hit(0, 1),
       pot(1),
       pot(0),
@@ -104,14 +109,14 @@ suite('free play scoring', () => {
 
   test('a solo game never changes player', () => {
     const world = worldWith([1, 2]);
-    const { state } = resolveFreeShot(createFreeState(1), world, [hit(0, 1)]);
+    const { state } = resolveFreeShot(createFreeState(1, names(1)), world, [hit(0, 1)]);
     assertEqual(state.current, 0, 'current player');
     assertEqual(state.players.length, 1, 'player count');
   });
 
   test('the last ball ends the game and the top score wins', () => {
     const world = worldWith([1], [1]);
-    const { state, outcome } = resolveFreeShot(createFreeState(3), world, [hit(0, 1), pot(1)]);
+    const { state, outcome } = resolveFreeShot(createFreeState(3, names(3)), world, [hit(0, 1), pot(1)]);
 
     assertEqual(outcome.gameOver, true, 'game over');
     assertEqual(state.finished, true, 'finished');
@@ -121,7 +126,7 @@ suite('free play scoring', () => {
   test('equal scores produce a shared win', () => {
     const world = worldWith([1], [1]);
     const tied: FreeState = {
-      ...createFreeState(2),
+      ...createFreeState(2, names(2)),
       players: [
         { id: 0, name: 'A', score: 4, ballsPocketed: 4 },
         { id: 1, name: 'B', score: 5, ballsPocketed: 5 },
@@ -131,11 +136,13 @@ suite('free play scoring', () => {
     assertEqual(state.winners.join(','), '0,1', 'winners');
   });
 
-  test('player names fall back to a numbered default', () => {
+  test('names come from the caller, never from the rules', () => {
+    // Defaults are translated strings, so this module must not invent one. It
+    // only carries what it is handed, and refuses to leave a name blank.
     const state = createFreeState(3, ['Vince', '  ']);
     assertEqual(state.players[0].name, 'Vince', 'given name');
-    assertEqual(state.players[1].name, 'Giocatore 2', 'blank name');
-    assertEqual(state.players[2].name, 'Giocatore 3', 'missing name');
+    assertEqual(state.players[1].name, '#2', 'blank name');
+    assertEqual(state.players[2].name, '#3', 'missing name');
   });
 });
 
@@ -160,7 +167,7 @@ suite('puzzle objectives', () => {
 
     const { state } = resolvePuzzleShot(level, createPuzzleState(level), world, [hit(0, 8), pot(8)]);
     assertEqual(state.status, 'failed', 'status');
-    assertEqual(state.failReason, 'La 8 non doveva entrare', 'reason');
+    assertEqual(state.failReason?.key, 'puzzle.failForbidden', 'reason');
   });
 
   test('hitting the wrong ball first loses the level', () => {
@@ -169,7 +176,7 @@ suite('puzzle objectives', () => {
 
     const { state } = resolvePuzzleShot(level, createPuzzleState(level), world, [hit(0, 2)]);
     assertEqual(state.status, 'failed', 'status');
-    assertEqual(state.failReason, 'Dovevi colpire prima la 5', 'reason');
+    assertEqual(state.failReason?.key, 'puzzle.failWrongFirst', 'reason');
   });
 
   test('an ordered goal advances one ball at a time', () => {
@@ -189,7 +196,7 @@ suite('puzzle objectives', () => {
 
     const { state } = resolvePuzzleShot(level, createPuzzleState(level), world, [hit(0, 2), pot(2)]);
     assertEqual(state.status, 'failed', 'status');
-    assertEqual(state.failReason, 'Fuori ordine: toccava alla 1', 'reason');
+    assertEqual(state.failReason?.key, 'puzzle.failOutOfOrder', 'reason');
   });
 
   test('potting without the required rail loses the level', () => {
@@ -218,7 +225,7 @@ suite('puzzle objectives', () => {
 
     const { state } = resolvePuzzleShot(level, createPuzzleState(level), world, [hit(0, 9), pot(9)]);
     assertEqual(state.status, 'failed', 'status');
-    assertEqual(state.failReason, 'Buca sbagliata', 'reason');
+    assertEqual(state.failReason?.key, 'puzzle.failWrongPocket', 'reason');
   });
 
   test('running out of shots loses the level', () => {
@@ -230,7 +237,7 @@ suite('puzzle objectives', () => {
       state = resolvePuzzleShot(level, state, world, [hit(0, 3)]).state;
     }
     assertEqual(state.status, 'failed', 'status');
-    assertEqual(state.failReason, 'Colpi esauriti', 'reason');
+    assertEqual(state.failReason?.key, 'puzzle.failOutOfShots', 'reason');
   });
 
   test('star thresholds match the level definition', () => {

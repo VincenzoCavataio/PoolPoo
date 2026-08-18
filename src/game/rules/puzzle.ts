@@ -15,6 +15,8 @@ import {
   type ShotEvent,
 } from '../core/events';
 import type { PocketId } from '../core/table';
+import { msg, type Message, type MessageKey } from '@/i18n';
+
 import type { BallLayout, World } from '../core/world';
 import { emptyOutcome, type ShotOutcome } from './types';
 
@@ -32,9 +34,9 @@ export type PuzzleConstraint =
 
 export interface PuzzleLevel {
   id: string;
-  name: string;
-  /** One line shown under the title, in Italian. */
-  hint: string;
+  /** Catalogue keys, not prose: this module has no language. */
+  nameKey: MessageKey;
+  hintKey: MessageKey;
   maxShots: number;
   layout: BallLayout[];
   goal: PuzzleGoal;
@@ -51,7 +53,7 @@ export interface PuzzleState {
   /** How far through an ordered goal the player has got. */
   orderIndex: number;
   status: PuzzleStatus;
-  failReason: string | null;
+  failReason: Message | null;
   stars: number;
 }
 
@@ -76,17 +78,17 @@ export function shotsLeft(level: PuzzleLevel, state: PuzzleState): number {
   return Math.max(0, level.maxShots - state.shotsUsed);
 }
 
-export function describeGoal(level: PuzzleLevel): string {
+export function describeGoal(level: PuzzleLevel): Message {
   const goal = level.goal;
   switch (goal.kind) {
     case 'pocket-all':
-      return 'Imbuca tutte le palline';
+      return msg('goal.pocketAll');
     case 'pocket-set':
-      return `Imbuca la ${goal.numbers.join(', la ')}`;
+      return msg('goal.pocketSet', { numbers: goal.numbers.join(', ') });
     case 'pocket-in-order':
-      return `Imbuca in ordine: ${goal.numbers.join(' → ')}`;
+      return msg('goal.pocketInOrder', { numbers: goal.numbers.join(' → ') });
     case 'pocket-into':
-      return `Imbuca la ${goal.number} nella buca indicata`;
+      return msg('goal.pocketInto', { number: goal.number });
   }
 }
 
@@ -112,10 +114,10 @@ export function resolvePuzzleShot(
   // Recorded as a reason and a flag, with the status derived once at the end.
   // Mutating a status variable through a closure also defeats TypeScript's
   // narrowing, which turned the later comparisons into "impossible" errors.
-  let failure: string | null = null;
+  let failure: Message | null = null;
   let solved = false;
 
-  const fail = (reason: string) => {
+  const fail = (reason: Message) => {
     if (failure === null && !solved) failure = reason;
   };
 
@@ -126,7 +128,7 @@ export function resolvePuzzleShot(
 
     switch (constraint.kind) {
       case 'no-cue-pocket':
-        if (cueBallPocketed(events)) fail('Bianca in buca');
+        if (cueBallPocketed(events)) fail(msg('rules.foulScratch'));
         break;
 
       case 'must-hit-first': {
@@ -134,8 +136,8 @@ export function resolvePuzzleShot(
         if (first !== constraint.number) {
           fail(
             first === null
-              ? 'Non hai colpito nessuna pallina'
-              : `Dovevi colpire prima la ${constraint.number}`,
+              ? msg('puzzle.failNoContact')
+              : msg('puzzle.failWrongFirst', { number: constraint.number }),
           );
         }
         break;
@@ -143,7 +145,7 @@ export function resolvePuzzleShot(
 
       case 'forbid-pocket': {
         const offender = potted.find((n) => constraint.numbers.includes(n));
-        if (offender !== undefined) fail(`La ${offender} non doveva entrare`);
+        if (offender !== undefined) fail(msg('puzzle.failForbidden', { number: offender }));
         break;
       }
 
@@ -151,8 +153,8 @@ export function resolvePuzzleShot(
         if (potted.length > 0 && cushionsBeforeFirstPot(events) < constraint.count) {
           fail(
             constraint.count === 1
-              ? 'Serve almeno una sponda prima di imbucare'
-              : `Servono almeno ${constraint.count} sponde prima di imbucare`,
+              ? msg('puzzle.failOneCushion')
+              : msg('puzzle.failCushions', { count: constraint.count }),
           );
         }
         break;
@@ -173,7 +175,7 @@ export function resolvePuzzleShot(
       case 'pocket-in-order': {
         for (const n of potted) {
           if (n !== goal.numbers[orderIndex]) {
-            fail(`Fuori ordine: toccava alla ${goal.numbers[orderIndex]}`);
+            fail(msg('puzzle.failOutOfOrder', { number: goal.numbers[orderIndex] }));
             break;
           }
           orderIndex += 1;
@@ -186,7 +188,7 @@ export function resolvePuzzleShot(
         const ball = world.ballByNumber(goal.number);
         if (ball?.pocketed) {
           if (ball.pocketedIn === goal.pocket) solved = true;
-          else fail('Buca sbagliata');
+          else fail(msg('puzzle.failWrongPocket'));
         }
         break;
       }
@@ -194,7 +196,7 @@ export function resolvePuzzleShot(
   }
 
   if (failure === null && !solved && shotsUsed >= level.maxShots) {
-    fail('Colpi esauriti');
+    fail(msg('puzzle.failOutOfShots'));
   }
 
   const status: PuzzleStatus = failure !== null ? 'failed' : solved ? 'won' : 'playing';
@@ -203,13 +205,15 @@ export function resolvePuzzleShot(
 
   if (potted.length > 0) {
     outcome.messages.push(
-      potted.length === 1 ? `Imbucata la ${potted[0]}` : `Imbucate ${potted.length} palline`,
+      potted.length === 1
+        ? msg('puzzle.potted', { number: potted[0] })
+        : msg('puzzle.pottedMany', { count: potted.length }),
     );
   }
   if (status === 'won') {
-    outcome.messages.push(`Risolto in ${shotsUsed} ${shotsUsed === 1 ? 'colpo' : 'colpi'}`);
+    outcome.messages.push(msg('puzzle.solvedIn', { count: shotsUsed }));
   } else if (status === 'failed') {
-    outcome.messages.push(failReason ?? 'Puzzle fallito');
+    outcome.messages.push(failReason ?? msg('puzzle.failed'));
   }
 
   outcome.gameOver = status !== 'playing';

@@ -16,11 +16,13 @@ import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { CAMERA_MODE_LABEL, CameraMode, resetRig } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const VIEW_MODES: CameraMode[] = [CameraMode.CUE, CameraMode.TABLE];
 
 export function CameraControls() {
+  const t = useT();
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
   const setCameraMode = useSession((s) => s.setCameraMode);
@@ -38,7 +40,7 @@ export function CameraControls() {
                 key={mode}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={`Vista ${CAMERA_MODE_LABEL[mode]}`}
+                accessibilityLabel={t('game.viewLabel', { name: t(CAMERA_MODE_LABEL[mode]) })}
                 onPress={() => setCameraMode(mode)}
                 style={({ pressed }) => [
                   styles.segment,
@@ -46,7 +48,7 @@ export function CameraControls() {
                   pressed && styles.pressed,
                 ]}>
                 <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
-                  {mode === CameraMode.CUE ? 'Mira' : 'Tavolo'}
+                  {t(CAMERA_MODE_LABEL[mode])}
                 </Text>
               </Pressable>
             );
@@ -55,7 +57,7 @@ export function CameraControls() {
       ) : null}
 
       <Pressable
-        accessibilityLabel="Reimposta la camera"
+        accessibilityLabel={t('game.resetCamera')}
         onPress={resetRig}
         style={({ pressed }) => [styles.reset, pressed && styles.pressed]}>
         <Text style={styles.resetLabel}>↺</Text>

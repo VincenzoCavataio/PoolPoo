@@ -24,6 +24,7 @@ import { PHYSICS } from '@/game/core/constants';
 import { createTable, type PocketId } from '@/game/core/table';
 import { angleOf, dist2, sub } from '@/game/core/vec';
 import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core/world';
+import type { Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
 import { createFreeState, resolveFreeShot, type FreeState } from '@/game/rules/free';
 import { levelById } from '@/game/rules/levels';
@@ -64,7 +65,7 @@ export interface Celebration {
   kind: 'pot' | 'foul';
   /** Ball numbers potted, for the overlay to name them. */
   balls: number[];
-  reason: string | null;
+  reason: Message | null;
   /** Changes every time, so the overlay restarts its animation. */
   id: number;
 }
@@ -91,13 +92,13 @@ export interface SessionState {
   cameraMode: CameraMode;
   replay: ReplayState | null;
   celebration: Celebration | null;
-  /** Lines describing the last shot, for the HUD. */
-  messages: string[];
+  /** Lines describing the last shot, still untranslated. */
+  messages: Message[];
   lastOutcome: ShotOutcome | null;
   /** Bumped when the ball set changes, so the scene remounts. */
   gameId: number;
 
-  startFree: (playerCount: number, names?: string[]) => void;
+  startFree: (playerCount: number, names: string[]) => void;
   startPuzzle: (levelId: string) => boolean;
   resume: (save: SavedGame) => boolean;
   retryLevel: () => void;
@@ -350,7 +351,7 @@ export const useSession = create<SessionState>((set, get) => {
         cameraMode: CameraMode.CUE,
         replay: null,
         celebration: null,
-        messages: ['Partita ripresa'],
+        messages: [{ key: 'rules.resumed' }],
         lastOutcome: null,
         gameId: get().gameId + 1,
       });

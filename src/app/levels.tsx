@@ -7,11 +7,14 @@ import { MENU_SELECTED, MenuPalette as Palette, Radius } from '@/constants/game-
 import { Spacing } from '@/constants/theme';
 import { LEVELS } from '@/game/rules/levels';
 import { describeGoal } from '@/game/rules/puzzle';
+import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { isLevelUnlocked, MAX_STARS, totalStars, useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
 export default function LevelsScreen() {
   const router = useRouter();
+  const t = useT();
+  const render = useMessageRenderer();
   const stars = useProgress((s) => s.stars);
   const startPuzzle = useSession((s) => s.startPuzzle);
 
@@ -21,8 +24,8 @@ export default function LevelsScreen() {
 
   return (
     <Screen
-      title="Livelli"
-      subtitle={`${totalStars(stars)} di ${MAX_STARS} stelle`}
+      title={t('levels.title')}
+      subtitle={t('levels.subtitle', { earned: totalStars(stars), total: MAX_STARS })}
       onBack={() => router.back()}>
       {LEVELS.map((level, index) => {
         const unlocked = isLevelUnlocked(stars, level.id);
@@ -47,13 +50,13 @@ export default function LevelsScreen() {
             </View>
 
             <View style={styles.rowBody}>
-              <Text style={styles.name}>{level.name}</Text>
+              <Text style={styles.name}>{t(level.nameKey)}</Text>
               <Text style={styles.goal} numberOfLines={2}>
-                {unlocked ? describeGoal(level) : 'Prendi una stella nel livello precedente'}
+                {unlocked ? render(describeGoal(level)) : t('levels.locked')}
               </Text>
               {unlocked ? (
                 <Text style={styles.budget}>
-                  {level.maxShots} colpi · {level.stars.three} per tre stelle
+                  {t('levels.budget', { shots: level.maxShots, three: level.stars.three })}
                 </Text>
               ) : null}
             </View>

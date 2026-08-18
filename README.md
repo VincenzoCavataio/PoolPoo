@@ -271,6 +271,34 @@ ogni contatto: per questo una sicura sussurra e uno spacco spacca. Il rumore
 viene da un generatore con seme, non da `Math.random`, così ogni build produce
 byte identici e i test hanno senso.
 
+## Lingue
+
+Italiano e inglese, con l'italiano come **sorgente di verita**: `MessageKey` e
+derivato dal catalogo italiano, quindi l'inglese e verificato contro di esso a
+compile time e una traduzione dimenticata e un errore di compilazione, non una
+frase che esce nella lingua sbagliata.
+
+Nessuna libreria. Due lingue e centosettantasette stringhe non giustificano una
+dipendenza, e tenere tutto come dati semplici significa che il controllo piu
+importante gira in Node insieme a quelli della fisica.
+
+**Il livello regole non produce prosa.** Un tiro restituisce descrittori
+`Message` (una chiave e i suoi valori) e la UI decide in che lingua renderli.
+Questo tiene la logica di gioco senza lingua, e fa si che i suoi test asseriscano
+su una chiave stabile invece che su una frase italiana che una traduzione
+romperebbe. Per lo stesso motivo i nomi predefiniti dei giocatori arrivano dallo
+schermo che avvia la partita: "Giocatore 3" e una stringa tradotta, e le regole
+non ne hanno una.
+
+Un valore puo essere a sua volta un messaggio, cosi una frase ne cita un'altra:
+"Fallo: bianca in buca" e una riga di fallo con dentro un motivo, e traducono
+entrambe le meta.
+
+I test coprono cio che TypeScript non vede: che i due cataloghi abbiano lo stesso
+insieme di chiavi, che una chiave plurale sia plurale in entrambe le lingue, e
+soprattutto **che nessuna traduzione perda un segnaposto**. Una `{name}` caduta
+compila benissimo e poi lascia un buco nella frase.
+
 ## I test
 
 45 test, tutti in Node:
@@ -279,7 +307,8 @@ byte identici e i test hanno senso.
 npm run test:core    23 test: attrito, effetto, urti, sponde, buche, determinismo, mira
 npm run test:rules   28 test: punteggio, obiettivi, e la risolvibilità dei livelli
 npm run test:render   9 test: l'atlante dei numeri sulle palline
-npm run test:audio    7 test: gli effetti sonori sintetizzati
+npm run test:audio    8 test: gli effetti sonori sintetizzati
+npm run test:i18n    12 test: parita dei cataloghi e interpolazione
 ```
 
 Il **panno è una scelta fisica**, non un colore: verde standard, blu veloce con

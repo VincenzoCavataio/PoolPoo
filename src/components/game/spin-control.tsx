@@ -15,6 +15,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useMemo } from 'react';
 
 import { Palette } from '@/constants/game-theme';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const SIZE = 56;
@@ -22,6 +23,7 @@ const RADIUS = SIZE / 2;
 const DOT = 14;
 
 export function SpinControl() {
+  const t = useT();
   const spin = useSession((s) => s.spin);
   const setSpin = useSession((s) => s.setSpin);
 
@@ -53,7 +55,7 @@ export function SpinControl() {
   return (
     <View style={styles.wrap}>
       <GestureDetector gesture={gesture}>
-        <View style={styles.ball} accessibilityLabel="Punto di impatto sulla bianca">
+        <View style={styles.ball} accessibilityLabel={t('game.spinLabel')}>
           <View style={styles.crosshairH} pointerEvents="none" />
           <View style={styles.crosshairV} pointerEvents="none" />
           <View
@@ -70,7 +72,7 @@ export function SpinControl() {
         </View>
       </GestureDetector>
       <Text style={styles.caption} onPress={() => setSpin({ side: 0, vertical: 0 })}>
-        effetto
+        {t('game.spin')}
       </Text>
     </View>
   );

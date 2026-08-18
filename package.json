@@ -13,6 +13,7 @@
     "expo-gl": "~16.0.10",
     "expo-haptics": "~15.0.8",
     "expo-linking": "~8.0.12",
+    "expo-localization": "~17.0.9",
     "expo-router": "~6.0.24",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
@@ -50,7 +51,8 @@
     "test:render": "tsx src/game/render/tests/run.ts",
     "test:audio": "tsx src/game/audio/tests/run.ts",
     "sfx:build": "tsx scripts/generate-sfx.ts",
-    "test": "npm run test:core && npm run test:rules && npm run test:render && npm run test:audio"
+    "test": "npm run test:core && npm run test:rules && npm run test:render && npm run test:audio && npm run test:i18n",
+    "test:i18n": "tsx src/i18n/tests/run.ts"
   },
   "private": true
 }

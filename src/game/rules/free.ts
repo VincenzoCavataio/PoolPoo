@@ -13,11 +13,19 @@ import {
   pocketedObjectBalls,
   type ShotEvent,
 } from '../core/events';
+import { msg } from '@/i18n';
+
 import type { World } from '../core/world';
 import { emptyOutcome, type ShotOutcome } from './types';
 
 export interface Player {
   id: number;
+  /**
+   * Supplied by the caller, never invented here.
+   *
+   * A default like "Player 3" is a translated string, and the rules have no
+   * language. The screen that starts the game passes the names in.
+   */
   name: string;
   score: number;
   ballsPocketed: number;
@@ -40,11 +48,15 @@ export const FREE_RULES = {
   foulPenalty: 1,
 } as const;
 
-export function createFreeState(playerCount: number, names?: string[]): FreeState {
+/**
+ * `names` is required because a default name is a translated string, and this
+ * module has no language. The caller has the translator; it passes them in.
+ */
+export function createFreeState(playerCount: number, names: string[]): FreeState {
   const count = Math.max(1, Math.min(8, Math.floor(playerCount)));
   const players: Player[] = Array.from({ length: count }, (_, i) => ({
     id: i,
-    name: names?.[i]?.trim() || `Giocatore ${i + 1}`,
+    name: names[i]?.trim() || `#${i + 1}`,
     score: 0,
     ballsPocketed: 0,
   }));
@@ -85,10 +97,10 @@ export function resolveFreeShot(
   // Without this, a player could safely roll the cue ball nowhere forever.
   if (scratched) {
     outcome.foul = true;
-    outcome.foulReason = 'Bianca in buca';
+    outcome.foulReason = msg('rules.foulScratch');
   } else if (contacted === null) {
     outcome.foul = true;
-    outcome.foulReason = 'Nessuna pallina colpita';
+    outcome.foulReason = msg('rules.foulNoContact');
   }
 
   const players = state.players.map((p) => ({ ...p }));
@@ -99,14 +111,23 @@ export function resolveFreeShot(
     player.ballsPocketed += potted.length;
     outcome.messages.push(
       potted.length === 1
-        ? `${player.name}: +${FREE_RULES.pointsPerBall} punto`
-        : `${player.name}: +${potted.length * FREE_RULES.pointsPerBall} punti (${potted.length} palline)`,
+        ? msg('rules.gained', { name: player.name, count: FREE_RULES.pointsPerBall })
+        : msg('rules.gainedMany', {
+            name: player.name,
+            points: potted.length * FREE_RULES.pointsPerBall,
+            balls: potted.length,
+          }),
     );
   }
 
   if (outcome.foul) {
     player.score -= FREE_RULES.foulPenalty;
-    outcome.messages.push(`Fallo: ${outcome.foulReason} (−${FREE_RULES.foulPenalty})`);
+    outcome.messages.push(
+      msg('rules.foulPenalty', {
+        reason: outcome.foulReason ?? msg('rules.foulNoContact'),
+        count: FREE_RULES.foulPenalty,
+      }),
+    );
     outcome.cueBallNeedsRespot = scratched;
   }
 
@@ -123,9 +144,9 @@ export function resolveFreeShot(
     outcome.gameOver = true;
   } else if (!keepsTurn && players.length > 1) {
     current = (state.current + 1) % players.length;
-    outcome.messages.push(`Turno a ${players[current].name}`);
+    outcome.messages.push(msg('rules.turnTo', { name: players[current].name }));
   } else if (keepsTurn) {
-    outcome.messages.push('Continui tu');
+    outcome.messages.push(msg('rules.keepShooting'));
   }
 
   let winners: number[] = [];
@@ -134,8 +155,8 @@ export function resolveFreeShot(
     winners = players.filter((p) => p.score === best).map((p) => p.id);
     outcome.messages.push(
       winners.length === 1
-        ? `Vince ${players[winners[0]].name} con ${best} punti`
-        : `Pareggio a ${best} punti`,
+        ? msg('rules.winsWith', { name: players[winners[0]].name, count: best })
+        : msg('rules.drawAt', { count: best }),
     );
   }
 

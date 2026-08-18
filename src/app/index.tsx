@@ -27,6 +27,7 @@ import { Breathe, GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/
 import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { colorForBall } from '@/game/core/ball';
+import { useT } from '@/i18n/use-t';
 
 const HOLD_MS = 2800;
 const RACK_PREVIEW = [1, 3, 8, 11, 14];
@@ -55,6 +56,7 @@ function DriftingBall({ number, index }: { number: number; index: number }) {
 
 export default function TitleScreen() {
   const router = useRouter();
+  const t = useT();
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {
@@ -71,11 +73,11 @@ export default function TitleScreen() {
 
       <View style={styles.centre}>
         <Animated.View entering={FadeIn.duration(700)}>
-          <Overline color={Luxe.textFaint}>Sala da biliardo</Overline>
+          <Overline color={Luxe.textFaint}>{t('title.kicker')}</Overline>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(760)} style={styles.wordmark}>
-          <Heading size={54}>Biliardo</Heading>
+          <Heading size={54}>{t('title.wordmark')}</Heading>
         </Animated.View>
 
         <Animated.View entering={FadeIn.delay(280).duration(700)} style={styles.ruleRow}>
@@ -83,7 +85,7 @@ export default function TitleScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeIn.delay(420).duration(700)}>
-          <Text style={styles.dimension}>T R E   D I M E N S I O N I</Text>
+          <Text style={styles.dimension}>{t('title.dimension')}</Text>
         </Animated.View>
       </View>
 
@@ -96,7 +98,7 @@ export default function TitleScreen() {
 
         <Animated.View entering={FadeIn.delay(1200).duration(900)}>
           <Breathe>
-            <Overline color={Luxe.textMuted}>Tocca per entrare</Overline>
+            <Overline color={Luxe.textMuted}>{t('title.enter')}</Overline>
           </Breathe>
         </Animated.View>
       </View>

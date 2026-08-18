@@ -11,6 +11,8 @@
  * lifts you up to watch it, and settling drops you back down.
  */
 
+import type { MessageKey } from '@/i18n';
+
 export const CameraMode = {
   /** Overhead view of the whole table; orbit and zoom from there. */
   TABLE: 'table',
@@ -20,9 +22,9 @@ export const CameraMode = {
 
 export type CameraMode = (typeof CameraMode)[keyof typeof CameraMode];
 
-export const CAMERA_MODE_LABEL: Record<CameraMode, string> = {
-  table: 'Tavolo',
-  cue: 'Prima persona',
+export const CAMERA_MODE_LABEL: Record<CameraMode, MessageKey> = {
+  table: 'game.viewTable',
+  cue: 'game.viewCue',
 };
 
 export interface CameraRigState {

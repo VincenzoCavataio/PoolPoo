@@ -8,22 +8,26 @@ import { GlowRule, LuxeFonts, Overline } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { levelById } from '@/game/rules/levels';
+import { useT } from '@/i18n/use-t';
+import type { Translator } from '@/i18n';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
 import { MAX_STARS, totalStars, useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
-function describeSavedGame(save: SavedGame): string {
+function describeSavedGame(save: SavedGame, t: Translator): string {
   const when = describeSave(save);
   if (save.mode === 'free') {
     const players = save.free?.players.length ?? 1;
-    return `Partita libera · ${players} ${players === 1 ? 'giocatore' : 'giocatori'}${when ? ` · ${when}` : ''}`;
+    return `${t('menu.savedFree', { count: players })}${when ? ` · ${when}` : ''}`;
   }
-  const name = save.levelId ? levelById(save.levelId)?.name : undefined;
-  return `Puzzle${name ? ` · ${name}` : ''}${when ? ` · ${when}` : ''}`;
+  const level = save.levelId ? levelById(save.levelId) : undefined;
+  const name = level ? t(level.nameKey) : '';
+  return `${t('menu.savedPuzzle', { name })}${when ? ` · ${when}` : ''}`;
 }
 
 export default function MenuScreen() {
   const router = useRouter();
+  const t = useT();
   const resume = useSession((s) => s.resume);
   const stars = useProgress((s) => s.stars);
 
@@ -53,28 +57,32 @@ export default function MenuScreen() {
   const earned = totalStars(stars);
 
   return (
-    <Screen title="Biliardo" subtitle="Tre dimensioni">
+    <Screen title={t('title.wordmark')} subtitle={t('menu.subtitle')}>
       <GameButton
-        label="Nuova partita"
+        label={t('menu.newGame')}
         variant="primary"
-        sublabel="Partita libera oppure puzzle"
+        sublabel={t('menu.newGameSub')}
         onPress={() => router.push('/new-game')}
       />
 
       <GameButton
-        label="Continua"
+        label={t('menu.continue')}
         onPress={onContinue}
         disabled={!save}
         sublabel={
-          save ? describeSavedGame(save) : checked ? 'Nessuna partita salvata' : 'Controllo…'
+          save
+            ? describeSavedGame(save, t)
+            : checked
+              ? t('menu.noSave')
+              : t('common.checking')
         }
       />
 
-      <GameButton label="Opzioni" onPress={() => router.push('/options')} />
+      <GameButton label={t('menu.options')} onPress={() => router.push('/options')} />
 
       <View style={styles.ledger}>
         <View style={styles.ledgerRow}>
-          <Overline>Stelle raccolte</Overline>
+          <Overline>{t('menu.stars')}</Overline>
           <Text style={styles.ledgerValue}>
             {earned}
             <Text style={styles.ledgerTotal}> / {MAX_STARS}</Text>
