@@ -89,10 +89,9 @@ export default function GameScreen() {
             than the screen's, and the celebration reads as happening on the
             board. */}
         <ShotNote />
+        <CameraControls />
         <Celebration />
       </View>
-
-      <CameraControls />
 
       <View style={[styles.controlLayer, { paddingBottom: insets.bottom + Spacing.two }]}>
         <GameControls />

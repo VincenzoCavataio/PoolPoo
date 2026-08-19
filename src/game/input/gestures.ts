@@ -21,7 +21,7 @@ import { Gesture, type ComposedGesture } from 'react-native-gesture-handler';
 
 import { useMusic } from '@/game/audio/music';
 import { adjustEye, CameraMode, orbitRig, zoomRig } from '@/game/render/camera';
-import { musicDeviceScreen } from '@/game/render/music-device';
+import { flashMusicDevice, musicDeviceScreen } from '@/game/render/music-device';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -97,6 +97,9 @@ export function useTableGestures(): ComposedGesture {
         const dx = event.x - musicDeviceScreen.x;
         const dy = event.y - musicDeviceScreen.y;
         if (Math.hypot(dx, dy) > DEVICE_TAP_RADIUS) return;
+        // Light it up first: the panel slides in over the next few frames, and
+        // the flash is what connects it to the thing that was touched.
+        flashMusicDevice();
         useMusic.getState().openHud();
       });
 

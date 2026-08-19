@@ -84,7 +84,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.collisionHapticsBody':
     'A light tap on every ball contact. On a break you will feel a good many.',
   'options.mixerHint':
-    'Music and effect volumes live on the player in the room: during a game, open the panel with the ♪ button next to the camera controls, or tap the unit on its shelf when it is in view.',
+    'Music and effect volumes live on the player in the room: during a game, tap the record player on its shelf when it is in view — turn your aim towards the wall to bring it into frame.',
   'options.language': 'Language',
   'options.languageAuto': 'Automatic',
   'options.languageBody': 'Automatic follows the phone’s language.',
@@ -114,8 +114,8 @@ export const en: Record<keyof typeof it, Entry> = {
   'game.goAimLabel': 'Go back to the cue view to shoot',
   'game.spin': 'spin',
   'game.spinLabel': 'Contact point on the cue ball',
-  'game.resetCamera': 'Reset the camera',
-  'game.music': 'Music',
+  'game.switchView': 'Switch view',
+  'game.resetCamera': 'Hold to reset the camera',
   'game.viewCue': 'Cue',
   'game.viewTable': 'Table',
   'game.viewLabel': '{name} view',

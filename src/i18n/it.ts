@@ -85,7 +85,7 @@ export const it = {
   'options.collisionHapticsBody':
     'Un tocco leggero a ogni contatto fra palline. Su uno spacco se ne sentono parecchi.',
   'options.mixerHint':
-    'I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, apri il pannello col pulsante ♪ accanto alla camera, oppure tocca direttamente l’apparecchio sulla mensola quando lo inquadri.',
+    'I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, tocca il giradischi sulla mensola quando lo inquadri, ruotando la mira verso la parete.',
   'options.language': 'Lingua',
   'options.languageAuto': 'Automatica',
   'options.languageBody': 'Automatica segue la lingua del telefono.',
@@ -116,8 +116,8 @@ export const it = {
   'game.goAimLabel': 'Torna in vista mira per tirare',
   'game.spin': 'effetto',
   'game.spinLabel': 'Punto di impatto sulla bianca',
-  'game.resetCamera': 'Reimposta la camera',
-  'game.music': 'Musica',
+  'game.switchView': 'Cambia vista',
+  'game.resetCamera': 'Tieni premuto per reimpostare la camera',
   'game.viewCue': 'Mira',
   'game.viewTable': 'Tavolo',
   'game.viewLabel': 'Vista {name}',

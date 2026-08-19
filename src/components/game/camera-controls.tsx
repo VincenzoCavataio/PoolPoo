@@ -1,168 +1,91 @@
 /**
- * The strip directly under the table: view controls at one end, music at the
- * other.
+ * One camera button, sitting on the board itself.
  *
- * Grouped by what they belong to rather than by where they fit. Switching view
- * and resetting the view are the same job, so they share a panel; music has
- * nothing to do with either and sits apart, at the far end, where it cannot be
- * hit by someone reaching for the camera.
+ * It was a row of controls under the table: two view buttons, a reset, and a
+ * music button beside them. That is four targets for what is really one
+ * decision — which way you are looking — plus one thing that has nothing to do
+ * with the camera at all.
  *
- * The switcher only appears while aiming, because that is the only time the
- * choice is the player's: taking a shot lifts the camera to watch it and
- * settling drops it back behind the cue, so a button fighting the game for the
- * camera would just feel broken. The reset stays put through all of it — the row
- * keeps its height either way, so nothing below it moves.
+ * Now it is a single button in the corner of the stage. A tap swaps the view,
+ * and holding resets the zoom and pan. Putting it over the table rather than
+ * under it means the board keeps every point the layout gives it, and a control
+ * that changes what you see belongs on the thing it changes.
+ *
+ * The music button is gone entirely: the record player in the room is tappable,
+ * which is a better answer than a button that does the same job from off-stage.
+ *
+ * It only appears while aiming, because that is the only time the choice is the
+ * player's. Taking a shot lifts the camera to watch it and settling drops it back
+ * behind the cue, so a button fighting the game for the camera would just feel
+ * broken.
  */
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { HUD_SURFACE, HUD_SURFACE_ACTIVE } from '@/components/game/hud';
+import { HUD_SURFACE } from '@/components/game/hud';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { useMusic } from '@/game/audio/music';
-import { CAMERA_MODE_LABEL, CameraMode, resetRig } from '@/game/render/camera';
+import { CameraMode, resetRig } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
-const VIEW_MODES: CameraMode[] = [CameraMode.CUE, CameraMode.TABLE];
-
-/**
- * One glyph per view, in place of the words.
- *
- * The accessible label still says "Vista mira" / "Vista tavolo" — the icon
- * replaces the visible text, not the name of the control, so a screen reader is
- * no worse off than before.
- */
-const VIEW_ICON: Record<CameraMode, string> = {
-  cue: '▲',
-  table: '▦',
-};
-
 export function CameraControls() {
   const t = useT();
-  const openMusic = useMusic((s) => s.openHud);
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
   const setCameraMode = useSession((s) => s.setCameraMode);
 
-  const aiming = phase === Phase.AIMING;
+  if (phase !== Phase.AIMING) return null;
+
+  const other = cameraMode === CameraMode.CUE ? CameraMode.TABLE : CameraMode.CUE;
 
   return (
-    <View style={styles.row}>
-      {/* Everything that moves the camera, in one panel. */}
-      <View style={styles.group}>
-        {aiming
-          ? VIEW_MODES.map((mode) => {
-              const active = mode === cameraMode;
-              return (
-                <Pressable
-                  key={mode}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={t('game.viewLabel', { name: t(CAMERA_MODE_LABEL[mode]) })}
-                  onPress={() => setCameraMode(mode)}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    active && styles.segmentActive,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.segmentIcon, active && styles.segmentLabelActive]}>
-                    {VIEW_ICON[mode]}
-                  </Text>
-                </Pressable>
-              );
-            })
-          : null}
-
-        <Pressable
-          accessibilityLabel={t('game.resetCamera')}
-          onPress={resetRig}
-          style={({ pressed }) => [
-            styles.segment,
-            aiming && styles.segmentDivided,
-            pressed && styles.pressed,
-          ]}>
-          <Text style={styles.utilityLabel}>↺</Text>
-        </Pressable>
-      </View>
-
-      {/* The music unit is on the wall, which the table view does not frame, so
-          the panel needs a way in that does not depend on seeing it. */}
+    <View style={styles.corner} pointerEvents="box-none">
       <Pressable
-        accessibilityLabel={t('game.music')}
-        onPress={openMusic}
-        style={({ pressed }) => [styles.musicButton, pressed && styles.pressed]}>
-        <Text style={styles.musicLabel}>♪</Text>
+        accessibilityLabel={t('game.switchView')}
+        accessibilityHint={t('game.resetCamera')}
+        onPress={() => setCameraMode(other)}
+        onLongPress={resetRig}
+        style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
+        <Text style={styles.icon}>{'▦'}</Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
+  /**
+   * Bottom-left of the stage: the corner furthest from the shooting hand, and
+   * the one the cue is least often pointing into.
+   */
+  corner: {
+    position: 'absolute',
+    left: Spacing.two,
+    bottom: Spacing.two,
   },
-
-  /** The camera panel: view switcher and reset, sharing one outline. */
-  group: {
-    flexDirection: 'row',
+  /**
+   * Deliberately quiet. It sits over the table all the time, so it reads as a
+   * faint marker until it is looked for — hence the low-contrast glyph and a
+   * panel barely separated from what is behind it.
+   */
+  button: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: HUD_SURFACE,
     borderRadius: Radius.small,
     borderWidth: 1,
     borderColor: Palette.border,
-    overflow: 'hidden',
+    opacity: 0.75,
   },
-  segment: {
-    width: 42,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  /** Hairline between the switcher and the reset beside it. */
-  segmentDivided: {
-    borderLeftWidth: 1,
-    borderLeftColor: Palette.border,
-  },
-  segmentActive: {
-    backgroundColor: HUD_SURFACE_ACTIVE,
-  },
-  segmentIcon: {
+  icon: {
     color: Palette.textMuted,
     fontSize: 16,
     lineHeight: 19,
   },
-  segmentLabelActive: {
-    color: Palette.accent,
-  },
-  utilityLabel: {
-    color: Palette.textMuted,
-    fontSize: 17,
-    lineHeight: 20,
-  },
-
-  /** Music, alone at the far end: a different job from the controls opposite. */
-  musicButton: {
-    width: 42,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: HUD_SURFACE,
-    borderRadius: Radius.small,
-    borderWidth: 1,
-    borderColor: Palette.border,
-  },
-  musicLabel: {
-    color: Palette.accent,
-    fontSize: 18,
-    lineHeight: 21,
-  },
-
   pressed: {
-    opacity: 0.7,
+    opacity: 1,
   },
 });

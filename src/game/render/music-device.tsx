@@ -25,6 +25,25 @@ import { FLOOR_Y, type MusicDevice } from './locations';
 /** Where the device currently is on screen, for the tap gesture to compare. */
 export const musicDeviceScreen = { x: -1, y: -1, onScreen: false };
 
+/**
+ * How much of a tap's flash is still burning, 1 down to 0.
+ *
+ * Module state for the same reason the screen position above is: the gesture
+ * layer and the render loop have to agree on something every frame, and routing
+ * it through React would re-render a component sixty times a second to move a
+ * number the renderer reads directly. The gesture sets it to 1 and the frame
+ * loop burns it down.
+ */
+export const musicDeviceFlash = { level: 0 };
+
+/** Lights the device up, in answer to a tap on it. */
+export function flashMusicDevice(): void {
+  musicDeviceFlash.level = 1;
+}
+
+/** How long the flash takes to fade, in seconds. */
+const FLASH_FADE = 0.55;
+
 /** Cosine of the half-angle within which the sign lights up fully. */
 const LOOK_THRESHOLD = Math.cos((75 * Math.PI) / 180);
 const SPIN_SPEED = 1.9;
@@ -78,13 +97,27 @@ function NeonSign({ height }: { height: number }) {
     const facing = scratch.forward.dot(scratch.toSign) > LOOK_THRESHOLD ? 1 : 0;
     attention.current += (facing - attention.current) * Math.min(1, delta * 6);
 
+    /**
+     * The answer to a tap: a hard flash that decays.
+     *
+     * Squared on the way out, so it hits at full strength and falls away quickly
+     * rather than dimming evenly — that shape is what reads as *being struck*
+     * instead of merely brightening.
+     */
+    if (musicDeviceFlash.level > 0) {
+      musicDeviceFlash.level = Math.max(0, musicDeviceFlash.level - delta / FLASH_FADE);
+    }
+    const flash = musicDeviceFlash.level * musicDeviceFlash.level;
+
     const pulse = 0.78 + Math.sin(clock.current * 2.6) * 0.12 + attention.current * 0.3;
 
-    if (light.current) light.current.intensity = 0.35 + pulse * 0.9;
+    if (light.current) light.current.intensity = 0.35 + pulse * 0.9 + flash * 6;
     if (glow.current) {
       const material = glow.current.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.1 + pulse * 0.14;
-      glow.current.scale.setScalar(0.92 + pulse * 0.16);
+      material.opacity = 0.1 + pulse * 0.14 + flash * 0.5;
+      // Grows as well as brightens, so the flash carries at a distance where a
+      // change in brightness alone would be lost against the lamps.
+      glow.current.scale.setScalar(0.92 + pulse * 0.16 + flash * 0.9);
     }
   });
 
