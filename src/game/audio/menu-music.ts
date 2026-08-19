@@ -40,13 +40,26 @@ function ensurePlayer(): AudioPlayer | null {
   return player;
 }
 
-/** Starts the theme, or does nothing if it is already playing. */
+/**
+ * Starts the theme from the top.
+ *
+ * From the top, not from wherever it was paused. Leaving a game and coming back
+ * to the menu is a return to the front of the app, and resuming three minutes
+ * into the track — often mid-phrase — sounds like something that was left
+ * running rather than something that greeted you. The lamp comes back on from
+ * dark for the same reason.
+ *
+ * Rewinding only when it is not already playing, so navigating between the
+ * menus themselves does not restart it: those are all one visit.
+ */
 export function startMenuMusic(): void {
+  const alreadyPlaying = wanted;
   wanted = true;
   const active = ensurePlayer();
   if (!active) return;
 
   try {
+    if (!alreadyPlaying) void active.seekTo(0);
     active.play();
   } catch (error) {
     console.warn('[pool] musica dei menu non avviata', error);

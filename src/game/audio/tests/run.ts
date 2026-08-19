@@ -101,7 +101,22 @@ suite('sound effects', () => {
     for (const name of NAMES) {
       const duration = EFFECTS[name]().length / SAMPLE_RATE;
       assert(duration > 0.02, `${name} is only ${(duration * 1000).toFixed(0)} ms`);
-      assert(duration < 0.8, `${name} runs ${duration.toFixed(2)} s, too long for a hit`);
+
+      /**
+       * The ceiling is about overlap, so it only applies to what overlaps.
+       *
+       * Every other effect is an impact fired from the solver, potentially many
+       * in a second, and one that outlasts the gap to the next of its kind piles
+       * up into a drone. The ballast is not that: it is a two-second buzz played
+       * once, when the menu's strip light strikes, and nothing else triggers it.
+       * Holding it to a hit's budget would mean cutting a sustained sound off
+       * mid-fade to satisfy a rule written for collisions.
+       */
+      const ceiling = name === 'ballast' ? 2.5 : 0.8;
+      assert(
+        duration < ceiling,
+        `${name} runs ${duration.toFixed(2)} s, too long to fire repeatedly`,
+      );
     }
   });
 

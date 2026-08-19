@@ -32,6 +32,7 @@ import { StyleSheet, View } from 'react-native';
 import * as THREE from 'three';
 
 import { currentTilt, useTilt } from '@/components/ui/floating';
+import { playBallast, playSwitch } from '@/game/audio/sfx';
 import { createTable } from '@/game/core/table';
 import { TableMesh } from '@/game/render/table-mesh';
 
@@ -71,14 +72,25 @@ const SHOTS: Record<string, Shot> = {
    */
   '/menu': { from: [0.1, 1.75, 2.55], look: [0, -0.28, -0.55], drift: 0.05 },
 
-  /** Almost on the cloth at the head, looking along it. Where you break from. */
-  '/new-game': { from: [0.0, 0.12, 1.5], look: [0, -0.05, -0.6], drift: 0.03 },
+  /**
+   * Low at the head, looking along the cloth. Where you break from.
+   *
+   * Aimed a little above the bed rather than level with it, so the light over
+   * the table is in the frame. Dead level it was a handsome shot of a dark room
+   * with the one thing lighting it just above the top edge.
+   */
+  '/new-game': { from: [0.0, 0.12, 1.5], look: [0, 0.42, -0.6], drift: 0.03 },
 
-  /** Side on and close, raking across the bed — the cloth fills the frame. */
-  '/setup': { from: [1.45, 0.3, -0.35], look: [-0.3, -0.09, 0.1], drift: 0.045 },
+  /**
+   * Side on and close, raking across the bed — the cloth fills the frame.
+   *
+   * Raised from 0.3m for the same reason as the shot above: from down at rail
+   * height, tilted down, no part of the ceiling was ever in shot.
+   */
+  '/setup': { from: [1.45, 0.5, -0.35], look: [-0.3, 0.45, 0.1], drift: 0.045 },
 
   /** High and back over the far end, the whole table small in the frame. */
-  '/options': { from: [-0.7, 1.65, -1.9], look: [0, -0.24, 0.2], drift: 0.07 },
+  '/options': { from: [-0.7, 1.65, -1.9], look: [0, -0.05, 0.2], drift: 0.07 },
 };
 
 const DEFAULT_SHOT = SHOTS['/menu'];
@@ -171,35 +183,48 @@ function DriftingCamera({ shot }: { shot: Shot }) {
 }
 
 /** A cue lying across the cloth, which is what makes the table read as in use. */
+/**
+ * The cue's colours, as bands along its length.
+ *
+ * Distance from the tip, in metres, and the colour from there back. Painted into
+ * the mesh rather than built as separate rings around it — see `RestingCue`.
+ */
+const CUE_BANDS: [number, string][] = [
+  [0.0, '#5d7e9e'], // the tip
+  [0.014, '#efe8d6'], // ferrule
+  [0.05, '#e8d5b0'], // pale shaft, most of the cue
+  [0.86, '#c9c9cc'], // the joint ring
+  [0.88, '#c2a273'], // forearm, a shade deeper than the shaft
+  [1.03, '#5b3a1e'], // the wrap: brown, and the only dark stretch
+  [1.36, '#c2a273'], // a hand's width of wood below the wrap
+  [1.43, '#241d17'], // the bumper
+];
+
 function RestingCue() {
   /**
    * A cue as one continuous piece of wood, tapering the whole way.
    *
-   * Two earlier attempts were wrong in two different ways. The first was too
-   * short. The second was the right length but built from a shaft cylinder and a
-   * butt cylinder set end to end, and that is the shape of a cue in a case, not
-   * a cue: where the two met, the silhouette stepped. A real cue is a single
-   * unbroken line from the bumper to the tip, narrowing all the way, and the
-   * eye reads any break in that line immediately even when it cannot say why.
+   * Two things had to be right at once, and earlier versions each got one. The
+   * silhouette is a single unbroken line from bumper to tip — one lathe, not a
+   * shaft cylinder and a butt cylinder set end to end, which stepped where they
+   * met. And the colour changes along that line without anything being laid on
+   * top of it.
    *
-   * So the body is one lathe, not two meshes. `LatheGeometry` takes the profile
-   * — the radius at each point down the length — and turns it, which is exactly
-   * how a cue is actually made. The joint and the wrap are still there, but as
-   * bands ON the surface rather than as separate lengths of it, so they decorate
-   * the silhouette instead of interrupting it.
+   * That second part is why the bands are vertex colours rather than meshes. The
+   * ferrule, joint, wrap and bumper used to be thin cylinders sleeved over the
+   * body at almost exactly its radius — clearances between −0.3mm and +0.17mm,
+   * which is to say two surfaces fighting for the same pixels. At this distance
+   * that is textbook z-fighting, and it is what was shimmering on the phone.
+   * Pushing them further out would have fixed the flicker by making the cue
+   * lumpy; colouring the body's own vertices removes the second surface
+   * altogether, so there is nothing left to fight.
    *
-   * Radii, tip to bumper: 6mm at the tip, out through 10mm at the joint, to
-   * 13mm at the butt — 1.45m overall, against a 2.54m table.
+   * Radii, tip to bumper: 6mm out through 10mm at the joint to 13mm at the butt,
+   * 1.45m overall. The taper is close to flat behind the tip — the "pro taper"
+   * that runs through the bridge hand — and only then opens out.
    */
   const geometry = useMemo(() => {
-    /**
-     * The profile, as (distance from tip, radius) in metres.
-     *
-     * Not a straight line between the ends: a cue's taper is close to flat for
-     * the first stretch behind the tip — the "pro taper", which is the part
-     * that runs through the bridge hand — and then opens out. A single linear
-     * cone from 6mm to 13mm looks like a chair leg.
-     */
+    /** The profile, as (distance from tip, radius) in metres. */
     const profile: [number, number][] = [
       [0.0, 0.0],
       [0.0, 0.0062],
@@ -215,43 +240,65 @@ function RestingCue() {
       [1.45, 0.0],
     ];
 
-    const points = profile.map(([along, radius]) => new THREE.Vector2(radius, along - 0.725));
+    /**
+     * The profile, resampled so every colour boundary falls on a real vertex.
+     *
+     * A lathe only has rings where the profile has points, and a colour can only
+     * change at a ring. Without this the wrap would start wherever the nearest
+     * existing ring happened to be and bleed across a 30cm interpolation.
+     */
+    const cuts = new Set<number>();
+    for (const [along] of profile) cuts.add(along);
+    for (const [along] of CUE_BANDS) {
+      cuts.add(along);
+      // A second ring a hair along, so the change is a line and not a fade.
+      cuts.add(along + 0.001);
+    }
+
+    const radiusAt = (along: number): number => {
+      for (let i = 1; i < profile.length; i++) {
+        const [a0, r0] = profile[i - 1];
+        const [a1, r1] = profile[i];
+        if (along >= a0 && along <= a1) {
+          const t = a1 === a0 ? 0 : (along - a0) / (a1 - a0);
+          return r0 + (r1 - r0) * t;
+        }
+      }
+      return 0;
+    };
+
+    const sorted = [...cuts].filter((a) => a >= 0 && a <= 1.45).sort((a, b) => a - b);
+    const points = sorted.map((along) => new THREE.Vector2(radiusAt(along), along - 0.725));
+
     // 14 segments around: it is a thin object seen from a distance, behind a menu.
-    return new THREE.LatheGeometry(points, 14);
+    const lathe = new THREE.LatheGeometry(points, 14);
+
+    // Paint the rings. Each vertex takes the colour of the last band at or
+    // before its distance from the tip.
+    const position = lathe.getAttribute('position');
+    const colors = new Float32Array(position.count * 3);
+    const colour = new THREE.Color();
+
+    for (let i = 0; i < position.count; i++) {
+      const along = position.getY(i) + 0.725;
+      let hex = CUE_BANDS[0][1];
+      for (const [from, value] of CUE_BANDS) {
+        if (along >= from - 1e-6) hex = value;
+      }
+      colour.set(hex);
+      colors[i * 3] = colour.r;
+      colors[i * 3 + 1] = colour.g;
+      colors[i * 3 + 2] = colour.b;
+    }
+
+    lathe.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return lathe;
   }, []);
 
   return (
     <group position={[0.2, 0.03, 0.05]} rotation={[Math.PI / 2, 0, 0.34]}>
       <mesh geometry={geometry}>
-        <meshPhysicalMaterial color="#c69a62" roughness={0.34} clearcoat={0.6} />
-      </mesh>
-
-      {/* The tip, and the pale ferrule under it. Bands, not sections. */}
-      <mesh position={[0, -0.7, 0]}>
-        <cylinderGeometry args={[0.0063, 0.0063, 0.03, 14]} />
-        <meshPhysicalMaterial color="#efe6d2" roughness={0.35} clearcoat={0.5} />
-      </mesh>
-      <mesh position={[0, -0.72, 0]}>
-        <cylinderGeometry args={[0.0061, 0.0062, 0.009, 14]} />
-        <meshStandardMaterial color="#4f7396" roughness={0.85} />
-      </mesh>
-
-      {/* The joint ring, sitting flush on the taper rather than splitting it. */}
-      <mesh position={[0, 0.095, 0]}>
-        <cylinderGeometry args={[0.0103, 0.0103, 0.014, 14]} />
-        <meshPhysicalMaterial color="#b9bfc6" roughness={0.28} metalness={0.85} />
-      </mesh>
-
-      {/* The wrap: darker over the same taper, so the line still runs through. */}
-      <mesh position={[0, 0.46, 0]}>
-        <cylinderGeometry args={[0.0122, 0.0114, 0.26, 14]} />
-        <meshStandardMaterial color="#231d18" roughness={0.9} />
-      </mesh>
-
-      {/* The bumper at the very end. */}
-      <mesh position={[0, 0.722, 0]}>
-        <cylinderGeometry args={[0.0127, 0.0122, 0.012, 14]} />
-        <meshStandardMaterial color="#0e0d0c" roughness={0.95} />
+        <meshPhysicalMaterial vertexColors roughness={0.36} clearcoat={0.55} />
       </mesh>
     </group>
   );
@@ -305,66 +352,216 @@ function StrayBalls() {
  */
 let lit = false;
 
+/** How long the room stays dark before the switch is thrown. */
 const DARK_HOLD = 1.0;
-const LAMP_FADE = 1.4;
+
+/**
+ * One strike of the tube: when it fires, and for how long.
+ *
+ * A fluorescent tube does not fade up. The starter closes, the tube flashes at
+ * something near full brightness, the starter opens again and it goes out —
+ * several times, unevenly — until the cathodes are hot enough to hold the arc.
+ * So this is a list of flashes with gaps between them, not a ramp: the previous
+ * lamp faded in over 1.4s, which is a filament bulb or a dimmer, and reads as
+ * neither of the things a 90s strip light does.
+ *
+ * Built fresh each time, with random timings, so it never stutters twice the
+ * same way.
+ */
+interface Flash {
+  at: number;
+  until: number;
+  /** Not every misfire is as bright as the last. */
+  power: number;
+}
+
+function buildStrikes(): { flashes: Flash[]; settled: number } {
+  const flashes: Flash[] = [];
+  // Two to four false starts. One is not a stutter and five is a broken tube.
+  const count = 2 + Math.floor(Math.random() * 3);
+  let t = DARK_HOLD;
+
+  for (let i = 0; i < count; i++) {
+    // Short flashes, and the gaps between them grow as the tube warms up.
+    const on = 0.04 + Math.random() * 0.07;
+    flashes.push({ at: t, until: t + on, power: 0.55 + Math.random() * 0.45 });
+    t += on + 0.07 + Math.random() * 0.22 * (1 + i * 0.5);
+  }
+
+  // Then it catches and stays on.
+  flashes.push({ at: t, until: Number.POSITIVE_INFINITY, power: 1 });
+  return { flashes, settled: t };
+}
+
+/** How quickly the tube reaches full output once the arc holds. */
+const WARM_UP = 0.55;
+
+/**
+ * Per lamp, and there are two of them.
+ *
+ * Brighter than the pendant it replaces: a tube over a table is the working
+ * light of the room, not a mood light. The scrim over the whole backdrop is what
+ * keeps the menu readable underneath.
+ */
+const LAMP_INTENSITY = 4.6;
 
 function CeilingLamp({ armed }: { armed: boolean }) {
-  const light = useRef<THREE.PointLight>(null);
-  const shade = useRef<THREE.Mesh>(null);
-  const clock = useRef(lit ? DARK_HOLD + LAMP_FADE : 0);
+  // Every lamp along the tube, so none is left dark when the arc takes.
+  const lights = useRef<(THREE.PointLight | null)[]>([null, null, null]);
+  const tube = useRef<THREE.Mesh>(null);
+  const clock = useRef(0);
+  const heard = useRef(0);
+
+  // A different stutter every launch, and none at all if it is already lit.
+  const strikes = useMemo(buildStrikes, []);
 
   useFrame((_, delta) => {
     /**
      * The clock only runs once the menu is showing.
      *
      * The backdrop is mounted at the root and so is already drawing behind the
-     * splash. Left free-running, the dark second and most of the fade would be
+     * splash. Left free-running, the dark second and the whole stutter would be
      * spent behind the title card, and the menu would arrive on a room that was
      * already lit — the switch-on would have happened where nobody saw it.
      */
     if (!armed) return;
+
+    // Already been through it once: navigating back to the menu finds the light
+    // on, not a tube that strikes itself again every time.
+    if (lit) {
+      for (const lamp of lights.current) if (lamp) lamp.intensity = LAMP_INTENSITY;
+      if (tube.current) {
+        (tube.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 3.4;
+      }
+      return;
+    }
+
+    const before = clock.current;
     clock.current += delta;
+    const now = clock.current;
+
+    let glow = 0;
+    for (let i = 0; i < strikes.flashes.length; i++) {
+      const flash = strikes.flashes[i];
+      if (now < flash.at || now >= flash.until) continue;
+
+      if (flash.until === Number.POSITIVE_INFINITY) {
+        // The arc has taken. It still needs a moment to reach full output.
+        glow = Math.min(1, (now - flash.at) / WARM_UP);
+        if (glow >= 1) lit = true;
+      } else {
+        glow = flash.power;
+      }
+      break;
+    }
 
     /**
-     * A second of dark, then a rise that is fast at first and eases in.
+     * The switch, and each time the tube strikes.
      *
-     * Squared rather than linear: a filament does not come up at a constant
-     * rate, and a linear ramp on an intensity reads as a dimmer being turned
-     * evenly by hand rather than as a lamp being switched on.
+     * Fired on the frame a flash begins — comparing against the previous frame's
+     * clock rather than testing a window, so a slow frame cannot step over one
+     * and lose its click.
      */
-    const t = Math.min(1, Math.max(0, (clock.current - DARK_HOLD) / LAMP_FADE));
-    const glow = t * t * (3 - 2 * t);
+    for (let i = heard.current; i < strikes.flashes.length; i++) {
+      const flash = strikes.flashes[i];
+      if (flash.at > before && flash.at <= now) {
+        playSwitch(flash.until === Number.POSITIVE_INFINITY ? 'settle' : 'strike');
+        /**
+         * The ballast starts buzzing with the first strike, not the last.
+         *
+         * It is the ballast that is *doing* the striking — the buzz and the
+         * stutter are one event, so starting it when the tube finally catches
+         * would put the sound after its cause. Its own two-second fade then
+         * runs out under the settled light, which is why it is fired once here
+         * rather than held and stopped later.
+         */
+        if (i === 0) playBallast();
+        heard.current = i + 1;
+      }
+    }
 
-    if (glow >= 1) lit = true;
-
-    if (light.current) light.current.intensity = glow * 5.4;
-    if (shade.current) {
-      const material = shade.current.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = glow * 1.8;
+    for (const lamp of lights.current) if (lamp) lamp.intensity = glow * LAMP_INTENSITY;
+    if (tube.current) {
+      const material = tube.current.material as THREE.MeshStandardMaterial;
+      // The tube itself reads far brighter than the light it casts.
+      material.emissiveIntensity = glow * 3.4;
     }
   });
 
   return (
-    <group position={[0, 0.92, 0]}>
-      {/* The flex, so the shade hangs from something. */}
-      <mesh position={[0, 0.26, 0]}>
-        <cylinderGeometry args={[0.004, 0.004, 0.52, 6]} />
-        <meshStandardMaterial color="#14161a" roughness={0.9} />
+    /*
+      Hung 0.95m over the cloth, turned 20 degrees off the table's axis.
+      
+      The height is what stops it burning out the cloth and the cue beneath it.
+      Brightness falls with the square of distance, so lower down the two lamps
+      nearest the middle were close enough to drive the greens and the pale
+      shaft towards white — the fix for a blown-out surface is to move the
+      source away, not to turn it down, because turning it down dims the whole
+      room along with it.
+      
+      The angle is for the low framings. Square to the table the tube presents
+      almost nothing to a camera looking along that same axis; turned, it cuts
+      across the frame and reads as a fitting rather than as a bright line at
+      the edge. Only 20 degrees: measured, turning it further shortens it in
+      perspective and starts losing more than the angle wins back.
+    */
+    <group position={[0, 0.95, 0]} rotation={[0, 0.35, 0]}>
+      {/* Two drops, because a strip light hangs from both ends. */}
+      {[-0.52, 0.52].map((z) => (
+        <mesh key={z} position={[0, 0.3, z]}>
+          <cylinderGeometry args={[0.003, 0.003, 0.6, 6]} />
+          <meshStandardMaterial color="#14161a" roughness={0.9} />
+        </mesh>
+      ))}
+
+      {/* The steel channel the tube sits in. */}
+      <mesh position={[0, 0.045, 0]}>
+        <boxGeometry args={[0.12, 0.05, 1.46]} />
+        <meshStandardMaterial color="#2b2f35" roughness={0.55} metalness={0.5} />
       </mesh>
 
-      {/* The shade, lit from within rather than by anything else. */}
-      <mesh ref={shade}>
-        <coneGeometry args={[0.17, 0.15, 18, 1, true]} />
+      {/*
+        The tube. Lying along the table, which is how these are always hung over
+        one — the light is even down its length rather than pooling in the middle.
+      */}
+      <mesh ref={tube} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.026, 0.026, 1.4, 12]} />
         <meshStandardMaterial
-          color="#20242a"
-          emissive="#ffd9a0"
+          color="#dfeaf2"
+          emissive="#eaf4ff"
           emissiveIntensity={0}
-          roughness={0.55}
-          side={THREE.DoubleSide}
+          roughness={0.35}
         />
       </mesh>
 
-      <pointLight ref={light} position={[0, -0.06, 0]} color="#ffe2b4" intensity={0} distance={4.5} decay={2} />
+      {/* End caps, so the tube stops rather than just ending. */}
+      {[-0.71, 0.71].map((z) => (
+        <mesh key={z} position={[0, 0, z]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.028, 0.028, 0.03, 12]} />
+          <meshStandardMaterial color="#3a3f46" roughness={0.6} metalness={0.4} />
+        </mesh>
+      ))}
+
+      {/*
+        Three lights along the tube rather than one at its centre.
+        
+        A strip light is over a metre of emitter, and a single point under it
+        lights the middle of the cloth and lets both ends fall away — which is
+        the look of a bulb, not a tube. A third was added with the extra length.
+      */}
+      {[-0.45, 0, 0.45].map((z, i) => (
+        <pointLight
+          key={z}
+          ref={(node) => {
+            lights.current[i] = node;
+          }}
+          position={[0, -0.05, z]}
+          color="#eaf4ff"
+          intensity={0}
+          distance={5}
+          decay={2}
+        />
+      ))}
     </group>
   );
 }
@@ -459,8 +656,22 @@ export function TableBackdrop() {
   const pathname = usePathname();
   const shot = shotFor(pathname);
 
-  // The splash is the one screen the backdrop is not behind, in effect.
-  const armed = pathname !== '/';
+  /**
+   * The tube strikes once, on the way into the menus, and never again.
+   *
+   * `armed` excludes the game as well as the splash. The backdrop is mounted at
+   * the root and keeps drawing underneath the table, so with the game armed the
+   * lamp ran its stutter — clicks, buzz and all — behind a screen nobody can see
+   * it from, which is where the ticking during play was coming from.
+   *
+   * An earlier version made it re-strike on every return from a game, to match
+   * the menu theme restarting. That was wrong twice over: the sound arrived
+   * under the game itself, and the light show is a thing you watch on arrival,
+   * not something to sit through each time you back out of a frame. `lit` is
+   * never cleared now, so the first launch gets the switch-on and every visit
+   * after it finds the room already lit.
+   */
+  const armed = pathname !== '/' && pathname !== '/game';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

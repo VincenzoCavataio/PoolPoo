@@ -300,12 +300,56 @@ export function encodeWav(samples: Float32Array, sampleRate = SAMPLE_RATE): Uint
   return buffer;
 }
 
+/**
+ * The buzz of a fluorescent ballast, for the menu's strip light.
+ *
+ * Mains hum. A magnetic ballast vibrates at twice the supply frequency, so the
+ * fundamental is 100Hz here, and the core saturating on every half cycle is
+ * what adds the odd harmonics — that is the difference between a buzz and a
+ * hum, and why only odd multiples are present. A little filtered hiss on top is
+ * the tube itself.
+ *
+ * Two seconds, fading to nothing across its own length: the buzz belongs to the
+ * tube striking, not to the room afterwards. A fixture that hums indefinitely is
+ * a broken one, and a menu is not somewhere to sit under that.
+ *
+ * By far the longest effect here, and the only sustained one — everything else
+ * in this file is an impact.
+ */
+export function ballastHum(): Float32Array {
+  const length = seconds(2);
+  const output = new Float32Array(length);
+  const noise = createNoise(0x7d31c4);
+  let filtered = 0;
+
+  for (let i = 0; i < length; i++) {
+    const t = i / SAMPLE_RATE;
+
+    // 100Hz and odd harmonics, falling away as they climb.
+    let sample = Math.sin(2 * Math.PI * 100 * t) * 0.5;
+    sample += Math.sin(2 * Math.PI * 300 * t) * 0.2;
+    sample += Math.sin(2 * Math.PI * 500 * t) * 0.09;
+    sample += Math.sin(2 * Math.PI * 700 * t) * 0.04;
+
+    // The tube's own hiss, low-passed so it sits under the hum.
+    filtered += (noise() - filtered) * 0.4;
+    sample += filtered * 0.06;
+
+    // Settles as the cathodes warm: loudest while it is still striking.
+    const settle = Math.pow(Math.max(0, 1 - t / 2), 1.6);
+    output[i] = sample * settle;
+  }
+
+  return normalise(output, 0.55);
+}
+
 export const EFFECTS = {
   'ball-hit': ballHit,
   cushion: cushionHit,
   cue: cueStrike,
   pocket: pocketDrop,
   needle: needleDrop,
+  ballast: ballastHum,
 } as const;
 
 export type EffectName = keyof typeof EFFECTS;

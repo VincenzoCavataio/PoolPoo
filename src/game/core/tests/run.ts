@@ -20,7 +20,7 @@ import { predictAim } from '../predict';
 import { createTable, headSpot } from '../table';
 import { obstaclesFor } from '../../render/locations';
 import { add, angleOf, normalize, scale, sub } from '../vec';
-import { NO_SPIN, World } from '../world';
+import { NO_SPIN, World, type ShotSpin } from '../world';
 import { createFreeState, resolveFreeShot } from '../../rules/free';
 import { assert, assertClose, assertEqual, report, suite, test } from './harness';
 
@@ -1367,5 +1367,62 @@ suite('furniture on the floor', () => {
     }
   });
 });
+
+/**
+ * A replay has to be the shot again, not a shot like it.
+ *
+ * The store rebuilds the shot on a throwaway world from the snapshot taken
+ * before the cue struck, so the only way the two can agree is if the solver is
+ * deterministic and the snapshot is complete. Comparing whole trajectories
+ * rather than the final position: a replay that ends in the right place having
+ * taken a visibly different route is still the wrong replay.
+ */
+suite('a replay retraces the shot exactly', () => {
+  function trace(angle: number, power: number, spin: ShotSpin) {
+    const live = World.rack();
+    live.simulateUntilRest();
+    const snapshot = live.serialize();
+
+    live.shoot(angle, power, spin);
+    const played: string[] = [];
+    for (let i = 0; i < MAX_TICKS && !live.atRest; i++) {
+      live.step(PHYSICS.fixedDt);
+      played.push(live.stateHash());
+    }
+
+    // Exactly what the store does to build a replay.
+    const again = World.deserialize(snapshot, live.table, live.profile);
+    again.shoot(angle, power, spin);
+    const replayed: string[] = [];
+    for (let i = 0; i < MAX_TICKS && !again.atRest; i++) {
+      again.step(PHYSICS.fixedDt);
+      replayed.push(again.stateHash());
+    }
+
+    return { played, replayed };
+  }
+
+  const shots: [string, number, number, ShotSpin][] = [
+    ['a soft centre-ball shot', 1.15, 0.55, { side: 0, vertical: 0 }],
+    ['a hard shot with english', 1.15, 0.92, { side: 0.3, vertical: -0.4 }],
+    ['full draw with side', 1.6, 1, { side: -0.9, vertical: -1 }],
+    ['full follow', 0.4, 1, { side: 0.9, vertical: 1 }],
+  ];
+
+  for (const [label, angle, power, spin] of shots) {
+    test(`${label} replays step for step`, () => {
+      const { played, replayed } = trace(angle, power, spin);
+      assert(played.length > 0, 'the shot did nothing at all');
+      assert(
+        played.length === replayed.length,
+        `the replay ran ${replayed.length} steps against the shot's ${played.length}`,
+      );
+      for (let i = 0; i < played.length; i++) {
+        assert(played[i] === replayed[i], `they parted company at step ${i}`);
+      }
+    });
+  }
+});
+
 
 report();

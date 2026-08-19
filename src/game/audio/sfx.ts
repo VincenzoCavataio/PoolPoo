@@ -14,7 +14,7 @@
 
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
-export type EffectName = 'ball-hit' | 'cushion' | 'cue' | 'pocket' | 'needle';
+export type EffectName = 'ball-hit' | 'cushion' | 'cue' | 'pocket' | 'needle' | 'ballast';
 
 const SOURCES: Record<EffectName, number> = {
   'ball-hit': require('../../../assets/sfx/ball-hit.wav') as number,
@@ -22,15 +22,17 @@ const SOURCES: Record<EffectName, number> = {
   cue: require('../../../assets/sfx/cue.wav') as number,
   pocket: require('../../../assets/sfx/pocket.wav') as number,
   needle: require('../../../assets/sfx/needle.wav') as number,
+  ballast: require('../../../assets/sfx/ballast.wav') as number,
 };
 
 /** Enough voices to cover an overlapping cluster, no more. */
 const VOICE_COUNT: Record<EffectName, number> = {
   'ball-hit': 5,
   cushion: 3,
-  cue: 1,
+  cue: 2,
   pocket: 2,
   needle: 1,
+  ballast: 1,
 };
 
 /** Shortest gap between two triggers of the same effect. */
@@ -40,6 +42,7 @@ const MIN_GAP_MS: Record<EffectName, number> = {
   cue: 0,
   pocket: 60,
   needle: 0,
+  ballast: 0,
 };
 
 interface Voice {
@@ -146,6 +149,37 @@ export function playEffect(name: EffectName, gain = 1): void {
  */
 export function playTap(kind: 'select' | 'confirm' = 'select'): void {
   playEffect('ball-hit', kind === 'confirm' ? 0.5 : 0.28);
+}
+
+/**
+ * The snap of the light switch behind the menu.
+ *
+ * The cue's own sound, played short and quiet. It is a dry wooden knock with no
+ * tail, which is what a switch is; the alternative was shipping another asset
+ * for a sound heard once per launch. Each strike of the tube gets one, so the
+ * stutter is heard as well as seen.
+ *
+ * `strike` is a starter misfiring, `settle` is the one that takes — fuller,
+ * because that is the throw of the switch that actually holds.
+ */
+export function playSwitch(kind: 'strike' | 'settle' = 'strike'): void {
+  playEffect('cue', kind === 'settle' ? 0.42 : 0.26);
+}
+
+/**
+ * The buzz of the ballast as the tube settles.
+ *
+ * Mains hum: a magnetic ballast vibrates at twice the supply frequency, so the
+ * fundamental is 100Hz with odd harmonics off the saturating core and a little
+ * hiss from the tube. It fades to nothing across its own two seconds, because
+ * the buzz belongs to the striking — a fixture that hums forever is a fault, and
+ * a menu is not the place to sit under one.
+ *
+ * Very quiet on purpose. It should be the thing you notice only once the room
+ * has gone quiet again, not a layer over the music.
+ */
+export function playBallast(): void {
+  playEffect('ballast', 0.2);
 }
 
 /** Maps an impact speed in m/s onto a sensible loudness. */

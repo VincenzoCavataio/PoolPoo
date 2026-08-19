@@ -19,6 +19,7 @@ import * as THREE from 'three';
 
 import { BallKind } from '@/game/core/ball';
 import { ballSetById, colorForBallIn, type BallSet } from '@/constants/ball-sets';
+import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 import { BALL_RADIUS, PHYSICS } from '@/game/core/constants';
 import type { World } from '@/game/core/world';
@@ -320,10 +321,28 @@ export function Balls({ world }: { world: World }) {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [world, count, scratch, set]);
 
-  useFrame((_, delta) => {
+  useFrame((_, frameDelta) => {
     const mesh = ballsRef.current;
     const shadows = shadowsRef.current;
     if (!mesh || !shadows) return;
+
+    /**
+     * Render time, on the same clock as the world being drawn.
+     *
+     * Everything below advances something over time — how far a ball has turned,
+     * how far it has dropped into a pocket — and all of it used the wall-clock
+     * frame delta. That is right while the shot is live, because the solver is
+     * stepping in real time too. It is wrong during a replay, which runs the
+     * world at a fraction of speed on purpose: the ball drifted to the pocket in
+     * slow motion and then fell in at full speed, and spun at full speed the
+     * whole way. Same shot, visibly different physics.
+     *
+     * Scaling by the same factor the store steps the world by puts them back on
+     * one clock, so a replay is the shot slowed down rather than a different
+     * thing happening.
+     */
+    const replay = useSession.getState().replay;
+    const delta = replay ? frameDelta * replay.speed : frameDelta;
 
     const { object, axis, spin } = scratch;
 
