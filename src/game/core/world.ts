@@ -237,6 +237,44 @@ export class World {
    * Checking speed alone would end a draw shot the instant the cue ball paused,
    * a moment before its backspin dragged it back up the table.
    */
+  /**
+   * True once the only thing still moving is a ball that has left the table.
+   *
+   * The shot is decided at this point: everything in play has stopped, and what
+   * is left is a ball rolling about on the floor with nothing to hit and no
+   * bearing on the result. It can run for several seconds — measured at nearly
+   * five from a fast one — and the game waits for `atRest` before it settles,
+   * which put that whole roll between the shot and its replay.
+   *
+   * It is not folded into `atRest` itself: the solver still has to carry the
+   * ball to a stop, or it freezes mid-floor and keeps spinning. This only lets
+   * the caller decide it has seen enough.
+   */
+  get decided(): boolean {
+    const threshold = PHYSICS.sleepSpeed * PHYSICS.sleepSpeed;
+    let anyOffTableMoving = false;
+
+    for (const b of this.balls) {
+      if (b.pocketed) continue;
+
+      if (b.offTable) {
+        // Still in the air: that is the part worth watching, so not yet.
+        if (b.vz !== 0) return false;
+        if (b.v.x * b.v.x + b.v.y * b.v.y > threshold) anyOffTableMoving = true;
+        continue;
+      }
+
+      if (b.z > 0 || b.vz !== 0) return false;
+      if (b.v.x * b.v.x + b.v.y * b.v.y > threshold) return false;
+
+      const slipX = b.v.x - BALL_RADIUS * b.w.y;
+      const slipY = b.v.y + BALL_RADIUS * b.w.x;
+      if (slipX * slipX + slipY * slipY > threshold) return false;
+    }
+
+    return anyOffTableMoving;
+  }
+
   get atRest(): boolean {
     const threshold = PHYSICS.sleepSpeed * PHYSICS.sleepSpeed;
     for (const b of this.balls) {

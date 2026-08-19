@@ -1270,8 +1270,29 @@ suite('english off a rail', () => {
 
 suite('furniture on the floor', () => {
   /** The sala, with the sideboard, cabinet, chairs and plants it really has. */
+  /**
+   * A room with furniture in it, described here rather than read from a location.
+   *
+   * The locations were stripped back to the table, the light over it and the
+   * shelf the music sits on, so `obstaclesFor` now returns nothing for every one
+   * of them — and a suite that fed on that was testing an empty list and passing
+   * for the wrong reason.
+   *
+   * The obstacle solver is still there and still has to work: a room can gain a
+   * piece of furniture again at any time, and these tests are what says it will
+   * behave when it does. So the pieces are written out here — a tall case, a
+   * cabinet lively enough to turn a ball, and a soft chair that swallows one.
+   */
   function furnished() {
-    return { ...createTable(), obstacles: obstaclesFor('sala') };
+    return {
+      ...createTable(),
+      obstacles: [
+        { x: 0.0, y: 2.41, halfX: 1.1, halfY: 0.17, height: 1.93, restitution: 0.4 },
+        { x: -0.9, y: -2.36, halfX: 0.58, halfY: 0.24, height: 1.66, restitution: 0.5 },
+        { x: -2.95, y: -0.92, halfX: 0.37, halfY: 0.35, height: 0.93, restitution: 0.12 },
+        { x: 2.0, y: 1.6, halfX: 0.2, halfY: 0.2, height: 0.67, restitution: 0.3 },
+      ],
+    };
   }
 
   /** Rolls a ball across the carpet from the middle of the room. */
@@ -1287,8 +1308,21 @@ suite('furniture on the floor', () => {
     return { table, ball };
   }
 
-  test('the room has furniture the solver knows about', () => {
-    assert(furnished().obstacles.length > 0, 'the sala has no obstacles at all');
+  test('the solver is given furniture it can see', () => {
+    assert(furnished().obstacles.length > 0, 'the fixture has no obstacles at all');
+  });
+
+  /**
+   * Every location is clear, which is the state the rooms were stripped to.
+   *
+   * Paired with the test above rather than replacing it: one says the mechanism
+   * works when there is furniture, the other says there is none right now. If a
+   * room gains a piece back, this is the test that will say so.
+   */
+  test('the rooms are empty of furniture', () => {
+    for (const id of ['sala', 'garage', 'arcade', 'terrazza', 'studio']) {
+      assertEqual(obstaclesFor(id).length, 0, `${id} still has furniture`);
+    }
   });
 
   /**
@@ -1422,6 +1456,64 @@ suite('a replay retraces the shot exactly', () => {
       }
     });
   }
+});
+
+
+/**
+ * A shot is decided before it has finished moving.
+ *
+ * A ball knocked onto the floor rolls for seconds after the result is settled,
+ * and the turn used to wait for all of it — which is what put a long silence
+ * between a ball going over the rail and the replay of it doing so.
+ */
+suite('a shot settles before the floor is still', () => {
+  /** Sends the cue ball over the rail and off the table. */
+  function knockedOff() {
+    const world = World.fromLayout([{ number: 0, x: 0, y: 0 }], createTable());
+    const cue = world.cueBall()!;
+    cue.offTable = true;
+    cue.z = 0;
+    cue.vz = 0.4;
+    cue.v.x = 4;
+    cue.v.y = 1.5;
+    return { world, cue };
+  }
+
+  test('a ball still in the air has not decided anything', () => {
+    const { world } = knockedOff();
+    assert(!world.decided, 'the fall is the part worth watching');
+  });
+
+  test('it is decided once the ball is down but still rolling', () => {
+    const { world, cue } = knockedOff();
+
+    let decidedAt = -1;
+    for (let t = 0; t < MAX_TICKS && !world.atRest; t++) {
+      world.step(PHYSICS.fixedDt);
+      if (decidedAt < 0 && world.decided) decidedAt = world.time;
+    }
+
+    assert(decidedAt > 0, 'the shot was never decided');
+    assert(
+      decidedAt < world.time,
+      'it was only decided once everything had stopped, which saves nothing',
+    );
+    assert(
+      Math.hypot(cue.v.x, cue.v.y) < 1e-6,
+      'the ball should still have been carried to a stop',
+    );
+  });
+
+  test('a shot still in play is never decided', () => {
+    const world = World.rack();
+    world.simulateUntilRest();
+    world.shoot(1.2, 0.9, NO_SPIN);
+
+    for (let t = 0; t < 200; t++) {
+      world.step(PHYSICS.fixedDt);
+      assert(!world.decided, `a shot with balls in play was called decided at t=${world.time}`);
+    }
+  });
 });
 
 

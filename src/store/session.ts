@@ -25,6 +25,8 @@ import { createTable, type PocketId } from '@/game/core/table';
 import { effectiveLocation, obstaclesFor } from '@/game/render/locations';
 import { angleOf, dist2, sub } from '@/game/core/vec';
 import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core/world';
+import { detectShot, emptyRunState, type TrophyRunState } from '@/game/trophies/detect';
+import { useTrophies } from '@/store/trophies';
 import type { Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
 import { createFreeState, resolveFreeShot, type FreeState } from '@/game/rules/free';
@@ -39,6 +41,15 @@ import { useSettings } from './settings';
  */
 let accumulator = 0;
 let replayAccumulator = 0;
+
+/**
+ * What the trophy detector remembers between shots of a game.
+ *
+ * Module-level next to the other per-shot scratch state, and reset wherever a
+ * game starts — a streak carried into a new frame would hand out a run somebody
+ * never played.
+ */
+let trophyRun: TrophyRunState = emptyRunState();
 
 /** Ceiling on catch-up work after a stutter, so a slow frame cannot cascade. */
 const MAX_ACCUMULATED = 0.25;
@@ -62,6 +73,15 @@ const REPLAY_FALL_TRAIL = 1.5;
 const REPLAY_TARGET_SECONDS = 2.6;
 const REPLAY_MIN_SPEED = 0.12;
 const REPLAY_MAX_SPEED = 0.85;
+
+/**
+ * How much of a settled shot's tail is run out in one frame.
+ *
+ * Six hundred ticks is five seconds of simulation, which covers the longest roll
+ * a ball can have across the floor. It is spent in a single frame — one dropped
+ * frame at the moment the shot ends, against several seconds of waiting.
+ */
+const FAST_FORWARD_TICKS = 600;
 
 /**
  * A moment in a shot worth replaying.
@@ -235,13 +255,37 @@ export const useSession = create<SessionState>((set, get) => {
     // A ball leaving the table needs longer on the end than a pot does: the drop
     // to the floor is most of the show, and it happens after the event fires.
     const trail = moments.some((m) => m.kind === 'fall') ? REPLAY_FALL_TRAIL : REPLAY_TRAIL;
-    const until = moments[moments.length - 1].t + trail;
+
+    /**
+     * The window, capped rather than allowed to run as long as the shot did.
+     *
+     * Solving for a speed that fits any span into the target only works while
+     * that speed is inside its own limits. Past them the clamp takes over and the
+     * duration escapes: a span of five seconds against a ceiling of 0.85 plays
+     * for nearly six, which is why some replays ran two seconds and others ten.
+     *
+     * A ball knocked onto the floor is what produces those long spans — it can
+     * roll for several seconds after the drop everyone actually wants to see. So
+     * the tail is trimmed to what the slowest allowed speed can still show at the
+     * target length, and what is cut is the part after the ball has landed.
+     */
+    const longest = REPLAY_MAX_SPEED * REPLAY_TARGET_SECONDS;
+    const wanted = moments[moments.length - 1].t + trail;
+    const until = Math.min(wanted, from + longest);
 
     const guard = Math.ceil(PHYSICS.maxShotSeconds / PHYSICS.fixedDt);
     for (let i = 0; i < guard && world.time < from && !world.atRest; i++) {
       world.step(PHYSICS.fixedDt);
     }
 
+    /**
+     * Solved so every replay lasts about the same, whatever it covers.
+     *
+     * The clamp still guards the short end — a pot a quarter second after the
+     * break leaves almost no window, and playing that at a twelfth speed is the
+     * best that can be done with it. The long end no longer needs guarding
+     * because the window above is already trimmed to fit.
+     */
     const span = Math.max(0.05, until - from);
     const speed = Math.min(
       REPLAY_MAX_SPEED,
@@ -288,6 +332,38 @@ export const useSession = create<SessionState>((set, get) => {
       finished = resolved.outcome.gameOver;
       if (resolved.outcome.cueBallNeedsRespot) world.respotCueBall();
       set({ free: resolved.state });
+    }
+
+    /**
+     * What the shot earned.
+     *
+     * Read from the outcome the rules already produced rather than from a second
+     * pass over the events, so a trophy can never disagree with the score. The
+     * detector is pure; this is the only place it meets the store.
+     */
+    if (outcome && mode === 'free' && free) {
+      const shooter = free.players[free.current];
+      const others = free.players.filter((_, i) => i !== free.current);
+      const runnerUp = others.reduce((best, p) => Math.max(best, p.score), 0);
+
+      const { awards, run } = detectShot(
+        {
+          events,
+          outcome,
+          spin: pending?.spin ?? NO_SPIN,
+          isBreak: free.shotsTaken === 0,
+          wonGame: finished && get().free?.winners.includes(free.current) === true,
+          players: free.players.length,
+          winnerScore: shooter?.score ?? 0,
+          runnerUpScore: runnerUp,
+        },
+        trophyRun,
+      );
+
+      trophyRun = run;
+      const trophies = useTrophies.getState();
+      for (const id of awards.award) trophies.award(id);
+      for (const id of awards.advance) trophies.advance(id);
     }
 
     const potted = outcome?.pocketed ?? [];
@@ -347,6 +423,7 @@ export const useSession = create<SessionState>((set, get) => {
     startFree: (playerCount, names) => {
       accumulator = 0;
       pending = null;
+      trophyRun = emptyRunState();
       // The cloth is a physics choice, not only a colour, so the table is built
       // with the profile the player picked.
       const world = World.rack(furnishedTable(), clothProfile(useSettings.getState().clothId));
@@ -374,6 +451,7 @@ export const useSession = create<SessionState>((set, get) => {
 
       accumulator = 0;
       pending = null;
+      trophyRun = emptyRunState();
       set({
         mode: save.mode,
         world: World.deserialize(
@@ -468,6 +546,26 @@ export const useSession = create<SessionState>((set, get) => {
         if (world.time > PHYSICS.maxShotSeconds) break;
       }
 
+      /**
+       * Run the tail of the shot out at speed once nothing is left to watch.
+       *
+       * A ball knocked onto the floor keeps rolling long after the shot has been
+       * decided — up to about five seconds — and the turn does not settle until
+       * everything has stopped, so all of that sat between the shot and its
+       * replay. The solver still has to carry the ball to a halt, or it freezes
+       * mid-floor still spinning, so the fix is to step it there quickly rather
+       * than to stop early.
+       *
+       * Bounded: a shot that somehow never settles is caught by the same
+       * `maxShotSeconds` valve as the loop above.
+       */
+      if (!world.atRest && world.decided) {
+        for (let i = 0; i < FAST_FORWARD_TICKS && !world.atRest; i++) {
+          world.step(PHYSICS.fixedDt);
+          if (world.time > PHYSICS.maxShotSeconds) break;
+        }
+      }
+
       if (world.atRest || world.time > PHYSICS.maxShotSeconds) {
         settleShot();
       }
@@ -476,6 +574,7 @@ export const useSession = create<SessionState>((set, get) => {
     leaveGame: () => {
       accumulator = 0;
       pending = null;
+      trophyRun = emptyRunState();
       set({
         mode: null,
         world: null,

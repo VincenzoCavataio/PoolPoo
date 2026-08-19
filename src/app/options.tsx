@@ -19,6 +19,7 @@ import { useT } from '@/i18n/use-t';
 import { setMenuMusicVolume } from '@/game/audio/menu-music';
 import { setSfxVolume as setSfxLevel } from '@/game/audio/sfx';
 import { clearSavedGame } from '@/store/persistence';
+import { trophyTally, useTrophies } from '@/store/trophies';
 import { useSettings } from '@/store/settings';
 
 const SENSITIVITY_STEPS = [
@@ -84,9 +85,20 @@ export default function OptionsScreen() {
   const setQuality = useSettings((s) => s.setQuality);
   const [savedCleared, setSavedCleared] = useState(false);
 
+  const unlocked = useTrophies((s) => s.unlocked);
+  const resetTrophies = useTrophies((s) => s.resetTrophies);
+  const tally = trophyTally(unlocked);
+
   const activeStep = SENSITIVITY_STEPS.reduce((best, step) =>
     Math.abs(step.value - aimSensitivity) < Math.abs(best.value - aimSensitivity) ? step : best,
   );
+
+  const confirmResetTrophies = () => {
+    Alert.alert(t('trophy.reset'), t('trophy.resetBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('trophy.reset'), style: 'destructive', onPress: resetTrophies },
+    ]);
+  };
 
   const confirmClearSave = () => {
     Alert.alert(t('options.clearSaveTitle'), t('options.clearSaveBody'), [
@@ -246,6 +258,12 @@ export default function OptionsScreen() {
           variant="danger"
           sublabel={savedCleared ? t('options.cleared') : undefined}
           onPress={confirmClearSave}
+        />
+        <GameButton
+          label={t('trophy.reset')}
+          variant="danger"
+          sublabel={t('trophy.resetBody')}
+          onPress={confirmResetTrophies}
         />
       </Card>
     </Screen>

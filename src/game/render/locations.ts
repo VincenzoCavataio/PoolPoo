@@ -114,31 +114,17 @@ interface SceneObstacle {
   restitution: number;
 }
 
-const FURNITURE: Record<string, SceneObstacle[]> = {
-  sala: [
-    // Measured from the shapes `props.tsx` actually draws, not estimated. An
-    // approximation smaller than the furniture lets a ball sink into it, and one
-    // in the wrong place is a collision box with nothing to collide with.
-    { x: 2.41, z: 0.0, halfX: 0.17, halfZ: 1.1, height: 1.93, restitution: 0.4 },
-    { x: -2.42, z: -1.8, halfX: 0.16, halfZ: 0.82, height: 1.9, restitution: 0.35 },
-    { x: -2.51, z: 0.9, halfX: 0.06, halfZ: 0.3, height: 1.56, restitution: 0.45 },
-    // Glass and hardwood: the liveliest thing on the floor.
-    { x: -2.36, z: -0.2, halfX: 0.24, halfZ: 0.58, height: 1.66, restitution: 0.5 },
-    // Velvet over a frame, so the chairs swallow a ball rather than return it.
-    { x: -0.92, z: 2.95, halfX: 0.35, halfZ: 0.37, height: 0.93, restitution: 0.12 },
-    { x: 0.33, z: 2.95, halfX: 0.35, halfZ: 0.36, height: 0.93, restitution: 0.12 },
-    { x: 1.6, z: 2.0, halfX: 0.2, halfZ: 0.2, height: 0.67, restitution: 0.3 },
-    { x: -1.55, z: 2.15, halfX: 0.2, halfZ: 0.2, height: 0.67, restitution: 0.3 },
-    { x: 0.75, z: -3.0, halfX: 0.3, halfZ: 0.3, height: 0.96, restitution: 0.35 },
-    { x: 2.1, z: -2.5, halfX: 0.23, halfZ: 0.23, height: 1.77, restitution: 0.3 },
-    // Soil in terracotta: almost dead.
-    { x: 2.06, z: 2.79, halfX: 0.28, halfZ: 0.24, height: 1.05, restitution: 0.15 },
-    { x: -2.09, z: 2.59, halfX: 0.25, halfZ: 0.22, height: 1.08, restitution: 0.15 },
-    { x: -1.34, z: -2.91, halfX: 0.28, halfZ: 0.24, height: 1.05, restitution: 0.15 },
-    { x: 2.38, z: -1.55, halfX: 0.19, halfZ: 0.16, height: 0.9, restitution: 0.35 },
-    { x: 2.38, z: 1.55, halfX: 0.19, halfZ: 0.16, height: 0.9, restitution: 0.35 },
-  ],
-};
+/**
+ * Collision boxes for whatever a ball can hit on the floor.
+ *
+ * Empty, and deliberately so: the rooms were stripped back to the table, the
+ * light over it and the shelf the music sits on, so there is no longer any
+ * furniture for a ball knocked off the cloth to meet. It stays as a table rather
+ * than being deleted because the shape is still the contract — a room that gains
+ * a piece of furniture again gains its box here, and the tests below check the
+ * two against each other in both directions.
+ */
+const FURNITURE: Record<string, SceneObstacle[]> = {};
 
 /**
  * The room's furniture in the solver's axes.
@@ -192,23 +178,7 @@ export const LOCATIONS: GameLocation[] = [
       rotationY: -Math.PI / 2,
       signHeight: 0.44,
     },
-    props: [
-      'parquet',
-      'rug',
-      'shelf',
-      'speakers',
-      'bookcase',
-      'plants',
-      'neon',
-      'cueRack',
-      'gallery',
-      'armchair',
-      'trophyCase',
-      'stool',
-      'clock',
-      'sideTable',
-      'floorLamp',
-    ],
+    props: ['parquet', 'rug'],
     fog: { color: '#0a0d0b', near: 8, far: 20 },
   },
   {
@@ -237,7 +207,7 @@ export const LOCATIONS: GameLocation[] = [
       rotationY: 0,
       signHeight: 0.4,
     },
-    props: ['shelf', 'speakers', 'bookcase', 'cueRack', 'neon', 'sideTable', 'plants'],
+    props: [],
   },
   {
     id: 'arcade',
@@ -265,7 +235,7 @@ export const LOCATIONS: GameLocation[] = [
       rotationY: Math.PI / 2,
       signHeight: 1.72,
     },
-    props: ['arcade', 'speakers', 'neon', 'cueRack', 'stool', 'rug', 'plants'],
+    props: ['rug'],
     fog: { color: '#0a0714', near: 7.5, far: 18 },
   },
   {
@@ -301,7 +271,7 @@ export const LOCATIONS: GameLocation[] = [
       signHeight: 0.4,
       freestanding: true,
     },
-    props: ['plants', 'stool', 'neon', 'sideTable', 'floorLamp'],
+    props: [],
     fog: { color: '#070b14', near: 6, far: 15 },
   },
   {

@@ -181,7 +181,18 @@ export default function MenuScreen() {
 
           {/* Options: a strip, not a tile. Lighter than the two above it in
               every respect — no panel, no detail line, small type. */}
-          <Animated.View entering={FadeIn.delay(180).duration(280)}>
+          <Animated.View entering={FadeIn.delay(180).duration(280)} style={styles.quietRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                playTap();
+                router.push('/trophies');
+              }}
+              style={({ pressed }) => [styles.quiet, pressed && styles.quietPressed]}>
+              <Text style={styles.quietMark}>★</Text>
+              <Text style={styles.quietLabel}>{t('trophy.title')}</Text>
+            </Pressable>
+
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -344,7 +355,23 @@ const styles = StyleSheet.create({
   },
 
   // --------------------------------------------------------------- options
+  /**
+   * Trophies and options, sharing a line.
+   *
+   * Both lead away from playing, and neither is a decision anybody agonises
+   * over, so they get one strip between them rather than a row each. Splitting
+   * the width equally keeps either from reading as the more important of the
+   * two.
+   */
+  quietRow: {
+    flexDirection: 'row',
+  },
+  quietMark: {
+    color: Luxe.textMuted,
+    fontSize: 14,
+  },
   quiet: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

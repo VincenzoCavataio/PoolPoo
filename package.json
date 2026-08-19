@@ -50,9 +50,10 @@
     "test:core": "tsx src/game/core/tests/run.ts",
     "test:rules": "tsx src/game/rules/tests/run.ts",
     "test:render": "tsx src/game/render/tests/run.ts",
+    "test:trophies": "tsx src/game/trophies/tests/run.ts",
     "test:audio": "tsx src/game/audio/tests/run.ts",
     "sfx:build": "tsx scripts/generate-sfx.ts",
-    "test": "npm run test:core && npm run test:rules && npm run test:render && npm run test:audio && npm run test:i18n",
+    "test": "npm run test:core && npm run test:rules && npm run test:render && npm run test:trophies && npm run test:audio && npm run test:i18n",
     "test:i18n": "tsx src/i18n/tests/run.ts"
   },
   "private": true

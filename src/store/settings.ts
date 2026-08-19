@@ -12,6 +12,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { BALL_SETS } from '@/constants/ball-sets';
 import { QUALITY_PRESETS, type QualityLevel } from '@/constants/quality';
+import { useTrophies } from '@/store/trophies';
 import { CLOTH_OPTIONS } from '@/constants/game-theme';
 import type { Locale } from '@/i18n';
 import { LOCATIONS } from '@/game/render/locations';
@@ -93,9 +94,16 @@ export const useSettings = create<SettingsState>()(
 
       setLanguage: (language) => set({ language }),
       setCloth: (clothId) => set({ clothId }),
-      setBallSet: (ballSetId) => set({ ballSetId }),
+      setBallSet: (ballSetId) => {
+        // Trying every set is a thing only curiosity does.
+        useTrophies.getState().discover('ballSets', ballSetId, 'collector', BALL_SETS.length);
+        set({ ballSetId });
+      },
       setQuality: (quality) => set({ quality }),
-      setLocation: (locationId) => set({ locationId }),
+      setLocation: (locationId) => {
+        useTrophies.getState().discover('rooms', locationId, 'grand-tour', LOCATIONS.length);
+        set({ locationId });
+      },
       setShowAimGuide: (showAimGuide) => set({ showAimGuide }),
       setShowGhostBall: (showGhostBall) => set({ showGhostBall }),
       setAimSensitivity: (value) =>

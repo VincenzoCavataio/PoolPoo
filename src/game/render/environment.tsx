@@ -47,16 +47,22 @@ function Walls({ color, height }: { color: string; height: number }) {
             <meshStandardMaterial color={color} roughness={0.95} />
           </mesh>
 
-          {/* Skirting and a picture rail. Flat walls of one colour read as a
-              backdrop; two horizontal lines at human heights are enough to make
-              them read as a room. */}
+          {/*
+            Skirting, and only skirting.
+
+            There was a picture rail above this as well, a second pale line at
+            about a metre. It made sense when the walls were behind bookcases and
+            pictures; with the rooms stripped back to the table it was the one
+            bright thing left up there, a stripe running round an empty room with
+            nothing to explain it.
+
+            The skirting stays because it is not a decoration — it is the join
+            between the wall and the floor, and without it the two planes meet at
+            a hard seam that reads as a hole rather than a corner.
+          */}
           <mesh position={[0, -height / 2 + 0.06, 0.02]}>
             <boxGeometry args={[wall.size[0], 0.12, 0.04]} />
             <meshPhysicalMaterial color="#efe7d6" roughness={0.5} clearcoat={0.35} />
-          </mesh>
-          <mesh position={[0, -height / 2 + 1.05, 0.015]}>
-            <boxGeometry args={[wall.size[0], 0.05, 0.03]} />
-            <meshPhysicalMaterial color="#efe7d6" roughness={0.55} clearcoat={0.3} />
           </mesh>
         </group>
       ))}

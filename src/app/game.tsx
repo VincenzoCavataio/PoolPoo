@@ -25,6 +25,7 @@ import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
 import { GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
 import { MusicHud } from '@/components/game/music-hud';
+import { TrophyBanner } from '@/components/game/trophy-banner';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { releaseMusic, useMusic } from '@/game/audio/music';
@@ -90,6 +91,7 @@ export default function GameScreen() {
         <GameControls />
       </View>
 
+      <TrophyBanner />
       <MusicHud />
       <GameOverOverlay />
     </View>

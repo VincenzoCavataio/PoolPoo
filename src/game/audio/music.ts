@@ -14,6 +14,8 @@
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { create } from 'zustand';
 
+import { useTrophies } from '@/store/trophies';
+
 import { playEffect } from './sfx';
 import { TRACKS, trackAt, type Track } from './tracks';
 
@@ -112,6 +114,9 @@ export const useMusic = create<MusicState>((set, get) => {
       if (TRACKS.length === 0) return;
       const target = ((index % TRACKS.length) + TRACKS.length) % TRACKS.length;
       if (get().changing) return;
+
+      // Putting a different record on is a thing nobody is told they can do.
+      if (target !== get().index) useTrophies.getState().award('dj');
 
       const active = ensurePlayer();
       if (!active) return;

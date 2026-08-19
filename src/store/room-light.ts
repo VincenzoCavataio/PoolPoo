@@ -15,6 +15,8 @@
 
 import { create } from 'zustand';
 
+import { useTrophies } from '@/store/trophies';
+
 interface RoomLightState {
   /** Whether the switch is thrown. The lamp answers this, with its own timing. */
   on: boolean;
@@ -23,5 +25,10 @@ interface RoomLightState {
 
 export const useRoomLight = create<RoomLightState>((set) => ({
   on: true,
-  toggle: () => set((state) => ({ on: !state.on })),
+  toggle: () =>
+    set((state) => {
+      // Turning the room dark is the kind of thing nobody is told to try.
+      if (state.on) useTrophies.getState().award('lights-out');
+      return { on: !state.on };
+    }),
 }));
