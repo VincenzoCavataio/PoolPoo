@@ -17,6 +17,7 @@ import {
 } from '../core/events';
 import { msg } from '@/i18n';
 
+import type { Difficulty } from '../ai/opponent';
 import type { World } from '../core/world';
 import { emptyOutcome, type ShotOutcome } from './types';
 
@@ -31,6 +32,15 @@ export interface Player {
   name: string;
   score: number;
   ballsPocketed: number;
+  /**
+   * Which computer plays this seat, if any.
+   *
+   * Absent means a person. It lives on the player rather than on the game
+   * because a single game can mix the two — one human against three machines of
+   * different strengths is the point of the mode — and because whose turn it is
+   * is already answered by `current`.
+   */
+  cpu?: Difficulty;
 }
 
 export interface FreeState {
@@ -54,13 +64,25 @@ export const FREE_RULES = {
  * `names` is required because a default name is a translated string, and this
  * module has no language. The caller has the translator; it passes them in.
  */
-export function createFreeState(playerCount: number, names: string[]): FreeState {
+/**
+ * Starts a game.
+ *
+ * `cpus` says which seats a computer takes, by index — an entry of `undefined`
+ * is a person. Omitting it entirely gives a table of people, which is what every
+ * caller wanted before the mode existed.
+ */
+export function createFreeState(
+  playerCount: number,
+  names: string[],
+  cpus: (Difficulty | undefined)[] = [],
+): FreeState {
   const count = Math.max(1, Math.min(8, Math.floor(playerCount)));
   const players: Player[] = Array.from({ length: count }, (_, i) => ({
     id: i,
     name: names[i]?.trim() || `#${i + 1}`,
     score: 0,
     ballsPocketed: 0,
+    cpu: cpus[i],
   }));
 
   return {

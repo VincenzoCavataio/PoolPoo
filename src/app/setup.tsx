@@ -155,13 +155,29 @@ export default function SetupScreen() {
 
   const players = useSession((s) => s.free?.players.length ?? 2);
   const startFree = useSession((s) => s.startFree);
+  /**
+   * Who is already sitting at the table.
+   *
+   * This screen restarts the game, and it has to put back exactly the people the
+   * screens before it set up. Rebuilding with fresh names dropped every computer
+   * seat on the floor — the difficulty screen's entire answer — so a game against
+   * the computer arrived at the table as a game between people, and no machine
+   * ever took a turn because there was no machine.
+   */
+  const seats = useSession((s) => s.free?.players);
 
   const begin = () => {
     playTap('confirm');
-    const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
+
+    const names = Array.from(
+      { length: players },
+      (_, i) => seats?.[i]?.name ?? t('rules.player', { number: i + 1 }),
+    );
+    const cpus = Array.from({ length: players }, (_, i) => seats?.[i]?.cpu);
+
     // Restarted here rather than on the previous screen, so the table is built
     // with the cloth and room chosen on this one.
-    startFree(players, names);
+    startFree(players, names, cpus);
     // Through the pause rather than straight to the table: the world is built
     // here, so the loading screen has a game to hold while it holds the quiet.
     router.replace('/loading');

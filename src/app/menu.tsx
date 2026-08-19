@@ -127,7 +127,7 @@ export default function MenuScreen() {
               accessibilityRole="button"
               onPress={() => {
                 playTap('confirm');
-                router.push('/new-game');
+                router.push('/mode');
               }}
               style={({ pressed }) => [styles.main, pressed && styles.mainPressed]}>
               <View style={styles.mainIcon}>

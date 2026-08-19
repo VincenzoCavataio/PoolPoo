@@ -98,6 +98,21 @@ export const en: Record<keyof typeof it, Entry> = {
   'trophy.longRun': 'Long run',
   'trophy.longRunHint': 'Six scoring shots in a row',
 
+  // ------------------------------------------------------------------- modes
+  'mode.title': 'How you play',
+  'mode.solo': 'On your own',
+  'mode.soloBody': 'The table to yourself, nobody to beat',
+  'mode.cpu': 'Against the computer',
+  'mode.cpuBody': 'One to seven opponents, each as good as you like',
+  'mode.human': 'With friends',
+  'mode.humanBody': 'Several people on one phone, taking turns',
+
+  'difficulty.title': 'How good they are',
+  'difficulty.easy': 'Easy',
+  'difficulty.medium': 'Medium',
+  'difficulty.hard': 'Hard',
+  'difficulty.cpuName': 'Computer {number}',
+
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'New game',

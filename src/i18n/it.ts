@@ -99,6 +99,21 @@ export const it = {
   'trophy.longRun': 'In serie aperta',
   'trophy.longRunHint': 'Sei tiri di fila a segno',
 
+  // ------------------------------------------------------------------- modes
+  'mode.title': 'Come si gioca',
+  'mode.solo': 'Da solo',
+  'mode.soloBody': 'Il tavolo tutto per te, senza avversari',
+  'mode.cpu': 'Contro il computer',
+  'mode.cpuBody': 'Da uno a sette avversari, ognuno con la sua bravura',
+  'mode.human': 'Tra amici',
+  'mode.humanBody': 'Più persone sullo stesso telefono, a turno',
+
+  'difficulty.title': 'Quanto sono bravi',
+  'difficulty.easy': 'Facile',
+  'difficulty.medium': 'Medio',
+  'difficulty.hard': 'Difficile',
+  'difficulty.cpuName': 'Computer {number}',
+
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'Nuova partita',

@@ -25,6 +25,7 @@ import { createTable, type PocketId } from '@/game/core/table';
 import { effectiveLocation, obstaclesFor } from '@/game/render/locations';
 import { angleOf, dist2, sub } from '@/game/core/vec';
 import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core/world';
+import { planShot, type Difficulty } from '@/game/ai/opponent';
 import { detectShot, emptyRunState, type TrophyRunState } from '@/game/trophies/detect';
 import { useTrophies } from '@/store/trophies';
 import type { Message } from '@/i18n';
@@ -50,6 +51,29 @@ let replayAccumulator = 0;
  * never played.
  */
 let trophyRun: TrophyRunState = emptyRunState();
+
+/**
+ * The shape of a computer's turn, in milliseconds.
+ *
+ * Long enough to read as somebody deciding, short enough not to be a wait: a
+ * machine that answers instantly does not feel like an opponent, and one that
+ * takes three seconds feels like the app has hung. About a second and a half in
+ * total, most of it spent visibly aiming.
+ */
+const CPU_LOOK_MS = 450;
+const CPU_AIM_MS = 650;
+const CPU_DRAW_MS = 320;
+/** How often the turn advances. 60Hz would gain nothing a cue swing can show. */
+const CPU_TICK_MS = 33;
+
+/** The computer's turn in progress, so it can be cancelled if the game goes. */
+let cpuTimer: ReturnType<typeof setInterval> | null = null;
+
+function cancelCpuTurn(): void {
+  if (cpuTimer === null) return;
+  clearInterval(cpuTimer);
+  cpuTimer = null;
+}
 
 /** Ceiling on catch-up work after a stutter, so a slow frame cannot cascade. */
 const MAX_ACCUMULATED = 0.25;
@@ -149,7 +173,7 @@ export interface SessionState {
   /** Bumped when the ball set changes, so the scene remounts. */
   gameId: number;
 
-  startFree: (playerCount: number, names: string[]) => void;
+  startFree: (playerCount: number, names: string[], cpus?: (Difficulty | undefined)[]) => void;
   resume: (save: SavedGame) => boolean;
   setAimAngle: (angle: number) => void;
   nudgeAim: (delta: number) => void;
@@ -220,6 +244,116 @@ export const useSession = create<SessionState>((set, get) => {
     aimAtNearestTarget();
     const save = buildSave();
     if (save) void saveGame(save);
+
+    takeCpuTurnIfNeeded();
+  };
+
+  /**
+   * Hands the table to the computer when the seat that just came up is one.
+   *
+   * Delayed rather than immediate, and the delay is the point: a machine that
+   * shoots the instant the balls stop reads as a glitch rather than as an
+   * opponent. A beat to "look at the table" is what makes it legible as somebody
+   * taking their turn — and it also gives the player a moment to see the
+   * position before it changes.
+   *
+   * Guarded on the phase at the moment the timer fires, not when it is set: a
+   * player who backs out to the menu in between must not come back to a shot
+   * being played on an abandoned game.
+   */
+  const takeCpuTurnIfNeeded = () => {
+    const { free, phase } = get();
+    if (!free || free.finished || phase !== Phase.AIMING) return;
+
+    const seat = free.players[free.current];
+    if (!seat?.cpu) return;
+
+    const world = get().world;
+    if (!world) return;
+
+    const shot = planShot(world, seat.cpu, Date.now() & 0xffff);
+    if (!shot) return;
+
+    cancelCpuTurn();
+
+    /*
+     * Behind the cue, whatever the last player left the camera on.
+     *
+     * `takeShot` refuses to play from the overhead view — you line a shot up
+     * from behind the cue, not from the ceiling — so a player who wandered off
+     * to look at the table from above and then handed over would have left the
+     * computer unable to shoot at all, waiting forever on a turn it could never
+     * take. It is also the view its aiming is worth watching from.
+     */
+    set({ cameraMode: CameraMode.CUE });
+
+    /**
+     * The computer plays the controls rather than the outcome.
+     *
+     * It used to set the aim, the power and the shot in one statement, which is
+     * correct and reads as nothing at all: the table simply erupted. A person at
+     * a table does three separable things — they look, they line up, and they
+     * strike — and the interface already draws two of them, so the opponent
+     * drives those instead of stepping around them.
+     *
+     * Three phases, each with a job:
+     *
+     *  - **look** — a beat before anything moves, so the turn is legibly somebody
+     *    else's rather than a delayed reaction to the last shot;
+     *  - **aim** — the cue swings round to the shot, at a speed a hand could
+     *    manage. The aim guide follows it, so you can see what it is going for
+     *    before it gets there;
+     *  - **draw** — the power bar fills, which is the cue going back.
+     *
+     * Driven by an interval rather than by the frame loop: this is interface,
+     * not physics, and it must keep running whether or not the renderer is busy.
+     */
+    const startAngle = get().aimAngle;
+
+    /*
+     * The shorter way round.
+     *
+     * Interpolating between two angles naively can take the cue the long way
+     * round the table — from just under +180° to just over −180° is a hair of
+     * movement described as a full turn.
+     */
+    let delta = shot.angle - startAngle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+
+    let elapsed = 0;
+    cpuTimer = setInterval(() => {
+      elapsed += CPU_TICK_MS;
+
+      const state = get();
+      const current = state.free?.players[state.free.current];
+      // Everything may have changed while it was playing its turn.
+      if (!state.world || state.phase !== Phase.AIMING || !current?.cpu) {
+        cancelCpuTurn();
+        return;
+      }
+
+      if (elapsed <= CPU_LOOK_MS) return;
+
+      const aiming = Math.min(1, (elapsed - CPU_LOOK_MS) / CPU_AIM_MS);
+      // Eased at both ends: a hand does not start or stop a cue abruptly.
+      const swung = aiming * aiming * (3 - 2 * aiming);
+      state.setAimAngle(startAngle + delta * swung);
+
+      if (aiming < 1) return;
+
+      const drawing = Math.min(
+        1,
+        (elapsed - CPU_LOOK_MS - CPU_AIM_MS) / CPU_DRAW_MS,
+      );
+      state.setPower(Math.max(0.05, shot.power * drawing));
+
+      if (drawing >= 1) {
+        cancelCpuTurn();
+        state.setSpin(shot.spin);
+        state.takeShot();
+      }
+    }, CPU_TICK_MS);
   };
 
   /**
@@ -420,7 +554,7 @@ export const useSession = create<SessionState>((set, get) => {
     lastOutcome: null,
     gameId: 0,
 
-    startFree: (playerCount, names) => {
+    startFree: (playerCount, names, cpus) => {
       accumulator = 0;
       pending = null;
       trophyRun = emptyRunState();
@@ -431,7 +565,7 @@ export const useSession = create<SessionState>((set, get) => {
         mode: 'free',
         world,
         phase: Phase.AIMING,
-        free: createFreeState(playerCount, names),
+        free: createFreeState(playerCount, names, cpus),
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -442,6 +576,8 @@ export const useSession = create<SessionState>((set, get) => {
         gameId: get().gameId + 1,
       });
       aimAtNearestTarget();
+      // A game that opens on a computer's turn plays itself from the off.
+      takeCpuTurnIfNeeded();
       const save = buildSave();
       if (save) void saveGame(save);
     },
@@ -471,6 +607,7 @@ export const useSession = create<SessionState>((set, get) => {
         gameId: get().gameId + 1,
       });
       aimAtNearestTarget();
+      takeCpuTurnIfNeeded();
       return true;
     },
 
@@ -575,6 +712,7 @@ export const useSession = create<SessionState>((set, get) => {
       accumulator = 0;
       pending = null;
       trophyRun = emptyRunState();
+      cancelCpuTurn();
       set({
         mode: null,
         world: null,

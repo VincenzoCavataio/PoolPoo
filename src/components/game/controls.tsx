@@ -152,6 +152,12 @@ export function GameControls() {
   const nudgeAim = useSession((s) => s.nudgeAim);
   const setCameraMode = useSession((s) => s.setCameraMode);
 
+  /** True while the seat whose turn it is belongs to the computer. */
+  const isCpuTurn = useSession((s) => {
+    const free = s.free;
+    return Boolean(free && !free.finished && free.players[free.current]?.cpu);
+  });
+
   const [trackWidth, setTrackWidth] = useState(0);
   const powerGesture = usePowerGesture(trackWidth);
 
@@ -163,7 +169,21 @@ export function GameControls() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.panel}>
+      {/*
+        While a computer is at the table the panel stays, and stops responding.
+
+        It was hidden outright at first, which was wrong once the opponent began
+        playing the controls rather than the outcome: the aim strip swinging
+        round and the power bar filling *are* the computer taking its turn, and
+        hiding them left the table erupting out of nothing.
+
+        `pointerEvents` off rather than each control disabled — every one of them
+        is a live surface, and a player must not be able to quietly re-aim a shot
+        somebody else is about to play.
+      */}
+      <View
+        style={[styles.panel, isCpuTurn && styles.panelCpu]}
+        pointerEvents={isCpuTurn ? 'none' : 'auto'}>
         <View style={styles.row}>
           <Pressable
             accessibilityLabel={t('game.aimLeft')}
@@ -227,6 +247,10 @@ export function GameControls() {
 }
 
 const styles = StyleSheet.create({
+  /** Dimmed while the computer plays: visible, and plainly not yours. */
+  panelCpu: {
+    opacity: 0.72,
+  },
   container: {
     paddingHorizontal: Spacing.three,
   },

@@ -10,7 +10,7 @@
  * four choices, all visible at once, none needing to be read.
  */
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -35,6 +35,10 @@ export default function NewGameScreen() {
   const startFree = useSession((s) => s.startFree);
   const [players, setPlayers] = useState(2);
 
+  // Carried from the mode screen. Anything else is a game between people.
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const mode = params.mode === 'cpu' ? 'cpu' : 'human';
+
   /**
    * On to dressing the table.
    *
@@ -45,6 +49,18 @@ export default function NewGameScreen() {
    */
   const next = () => {
     playTap('confirm');
+
+    /*
+     * Against the computer, the seats still need strengths.
+     *
+     * The game is not started here in that case: the difficulty screen is what
+     * knows who is a machine, and starting twice would throw away its answer.
+     */
+    if (mode === 'cpu') {
+      router.push({ pathname: '/difficulty', params: { players: String(players) } });
+      return;
+    }
+
     const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
     startFree(players, names);
     router.push('/setup');
