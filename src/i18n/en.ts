@@ -18,12 +18,24 @@ export const en: Record<keyof typeof it, Entry> = {
   'common.menu': 'Menu',
 
   // ------------------------------------------------------------------- title
-  'title.wordmark': 'Billiards',
-  'title.dimension': 'Three dimensions',
+  /**
+   * The name, and it is the same in every language.
+   *
+   * `title.dimension` and `menu.subtitle` are the second half of the wordmark,
+   * not a description of the game: "After Hours — Pool Hall" is one piece of
+   * lettering, the way it would be painted on a door. Translating the second
+   * half leaves the two halves in different languages, which reads as a
+   * half-finished translation rather than as a name.
+   *
+   * The key is called `dimension` because it used to hold "Three dimensions".
+   * Left as is: renaming it would touch every locale for no gain.
+   */
+  'title.wordmark': 'After Hours',
+  'title.dimension': 'Pool Hall',
   'title.enter': 'Tap to enter',
 
   // -------------------------------------------------------------------- menu
-  'menu.subtitle': 'Three dimensions',
+  'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'New game',
   'menu.newGameSub': 'Free play or puzzles',
   'menu.continue': 'Continue',

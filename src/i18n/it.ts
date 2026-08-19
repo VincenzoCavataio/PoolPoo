@@ -19,12 +19,24 @@ export const it = {
   'common.menu': 'Menu',
 
   // ------------------------------------------------------------------- title
-  'title.wordmark': 'Biliardo',
-  'title.dimension': 'Tre dimensioni',
+  /**
+   * The name, and it is the same in every language.
+   *
+   * `title.dimension` and `menu.subtitle` are the second half of the wordmark,
+   * not a description of the game: "After Hours — Pool Hall" is one piece of
+   * lettering, the way it would be painted on a door. Translating the second
+   * half leaves the two halves in different languages, which reads as a
+   * half-finished translation rather than as a name.
+   *
+   * The key is called `dimension` because it used to hold "Three dimensions".
+   * Left as is: renaming it would touch every locale for no gain.
+   */
+  'title.wordmark': 'After Hours',
+  'title.dimension': 'Pool Hall',
   'title.enter': 'Tocca per entrare',
 
   // -------------------------------------------------------------------- menu
-  'menu.subtitle': 'Tre dimensioni',
+  'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'Nuova partita',
   'menu.newGameSub': 'Partita libera oppure puzzle',
   'menu.continue': 'Continua',
