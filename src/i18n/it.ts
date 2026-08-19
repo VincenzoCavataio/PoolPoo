@@ -12,6 +12,7 @@ import type { Entry } from './catalogue';
 
 export const it = {
   // ------------------------------------------------------------------ common
+  'common.back': 'Indietro',
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',
   'common.checking': 'Controllo…',
@@ -74,8 +75,6 @@ export const it = {
   'options.collisionHaptics': 'Vibrazione sulle collisioni',
   'options.collisionHapticsBody':
     'Un tocco leggero a ogni contatto fra palline. Su uno spacco se ne sentono parecchi.',
-  'options.mixerHint':
-    'I volumi di musica ed effetti stanno sull’apparecchio nella stanza: in partita, tocca il giradischi sulla mensola quando lo inquadri, ruotando la mira verso la parete.',
   'options.language': 'Lingua',
   'options.languageAuto': 'Automatica',
   'options.languageBody': 'Automatica segue la lingua del telefono.',

@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { GameButton } from '@/components/ui/button';
+import { CueIcon, DiscsIcon, GlobeIcon, SlidersIcon, SoundIcon } from '@/components/ui/icons';
 import { Card, Screen, SectionLabel } from '@/components/ui/screen';
+import { VolumeRow } from '@/components/ui/volume-row';
 import {
   Luxe,
   MenuPalette as Palette,
@@ -14,6 +16,8 @@ import { Spacing } from '@/constants/theme';
 import { LOCATIONS } from '@/game/render/locations';
 import { LOCALE_LABEL, LOCALES } from '@/i18n';
 import { useT } from '@/i18n/use-t';
+import { setMenuMusicVolume } from '@/game/audio/menu-music';
+import { setSfxVolume as setSfxLevel } from '@/game/audio/sfx';
 import { clearSavedGame } from '@/store/persistence';
 import { useSettings } from '@/store/settings';
 
@@ -72,6 +76,10 @@ export default function OptionsScreen() {
     setAimSensitivity,
     resetSettings,
   } = useSettings();
+  const musicVolume = useSettings((s) => s.musicVolume);
+  const sfxVolume = useSettings((s) => s.sfxVolume);
+  const setMusicVolume = useSettings((s) => s.setMusicVolume);
+  const setSfxVolume = useSettings((s) => s.setSfxVolume);
   const quality = useSettings((s) => s.quality);
   const setQuality = useSettings((s) => s.setQuality);
   const [savedCleared, setSavedCleared] = useState(false);
@@ -96,7 +104,7 @@ export default function OptionsScreen() {
 
   return (
     <Screen title={t('options.title')} onBack={() => router.back()}>
-      <SectionLabel>{t('options.language')}</SectionLabel>
+      <SectionLabel icon={<GlobeIcon size={15} color={Luxe.gold} />}>{t('options.language')}</SectionLabel>
       <Card>
         <Text style={styles.rowDescription}>{t('options.languageBody')}</Text>
         <View style={styles.pillRow}>
@@ -122,7 +130,7 @@ export default function OptionsScreen() {
         </View>
       </Card>
 
-      <SectionLabel>{t('quality.section')}</SectionLabel>
+      <SectionLabel icon={<SlidersIcon size={15} color={Luxe.gold} />}>{t('quality.section')}</SectionLabel>
       <Card>
         <View style={styles.pillRow}>
           {QUALITY_PRESETS.map((preset) => {
@@ -148,7 +156,7 @@ export default function OptionsScreen() {
         <Text style={styles.rowDescription}>{t(qualityById(quality).feelKey)}</Text>
       </Card>
 
-      <SectionLabel>{t('options.aimHelpers')}</SectionLabel>
+      <SectionLabel icon={<CueIcon size={15} color={Luxe.gold} />}>{t('options.aimHelpers')}</SectionLabel>
       <Card>
         <ToggleRow
           label={t('options.aimLine')}
@@ -189,7 +197,7 @@ export default function OptionsScreen() {
         </View>
       </Card>
 
-      <SectionLabel>{t('options.audio')}</SectionLabel>
+      <SectionLabel icon={<SoundIcon size={15} color={Luxe.gold} />}>{t('options.audio')}</SectionLabel>
       <Card>
         <ToggleRow
           label={t('options.haptics')}
@@ -203,10 +211,34 @@ export default function OptionsScreen() {
           value={collisionHaptics}
           onChange={setCollisionHaptics}
         />
-        <Text style={styles.rowDescription}>{t('options.mixerHint')}</Text>
+        {/*
+          The same two faders as the record player's panel, and the same values.
+
+          They were only reachable from the turntable in game, which meant the
+          menu music had no volume control at all — you could hear it before you
+          had any way to turn it down. Setting them here writes to the store and
+          pushes the level to whichever player is actually running: the game's
+          playlist is not loaded on this screen, and the menu theme is.
+        */}
+        <VolumeRow
+          label={t('music.musicVolume')}
+          value={musicVolume}
+          onChange={(value) => {
+            setMusicVolume(value);
+            setMenuMusicVolume(value);
+          }}
+        />
+        <VolumeRow
+          label={t('music.sfxVolume')}
+          value={sfxVolume}
+          onChange={(value) => {
+            setSfxVolume(value);
+            setSfxLevel(value);
+          }}
+        />
       </Card>
 
-      <SectionLabel>{t('options.data')}</SectionLabel>
+      <SectionLabel icon={<DiscsIcon size={15} color={Luxe.gold} />}>{t('options.data')}</SectionLabel>
       <Card>
         <GameButton label={t('options.resetSettings')} onPress={resetSettings} />
         <GameButton

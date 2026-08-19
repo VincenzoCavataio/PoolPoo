@@ -11,6 +11,7 @@ import type { it } from './it';
 
 export const en: Record<keyof typeof it, Entry> = {
   // ------------------------------------------------------------------ common
+  'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.checking': 'Checking…',
@@ -73,8 +74,6 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.collisionHaptics': 'Vibration on collisions',
   'options.collisionHapticsBody':
     'A light tap on every ball contact. On a break you will feel a good many.',
-  'options.mixerHint':
-    'Music and effect volumes live on the player in the room: during a game, tap the record player on its shelf when it is in view — turn your aim towards the wall to bring it into frame.',
   'options.language': 'Language',
   'options.languageAuto': 'Automatic',
   'options.languageBody': 'Automatic follows the phone’s language.',

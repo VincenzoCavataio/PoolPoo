@@ -1,72 +1,149 @@
 /**
  * Dressing the table, between choosing the players and breaking.
  *
- * Room, cloth and balls used to live in Options, which is the wrong place for
- * them: they are not preferences you set once and forget, they are part of
- * setting up a game — and burying them three taps deep under a settings screen
- * meant most players would never find out the cloth changes how the table plays.
+ * Built around a preview rather than a form. The three choices — room, cloth,
+ * balls — all change how the table looks, so the table is drawn at the top and
+ * the pickers underneath change it live. You choose by looking at the result,
+ * not by reading a list of names and imagining it.
  *
- * Everything here is a swatch rather than a row of text. These are choices about
- * how something looks, so the control shows what it will look like and the words
- * only name it.
+ * The pickers themselves are tabs: one row at a time, so a small screen shows
+ * the preview large instead of three shrunken carousels stacked up.
  */
 
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GameButton } from '@/components/ui/button';
-import { Screen } from '@/components/ui/screen';
-import { GlowRule, LuxeFonts } from '@/components/ui/luxe';
+import { BackButton, BallsIcon, ClothIcon, PocketIcon } from '@/components/ui/icons';
+import { Heading, LuxeFonts } from '@/components/ui/luxe';
 import { BALL_SETS, ballSetById, colorForBallIn } from '@/constants/ball-sets';
-import { CLOTH_OPTIONS, Luxe } from '@/constants/game-theme';
-import { Spacing } from '@/constants/theme';
-import { LOCATIONS } from '@/game/render/locations';
+import { CLOTH_OPTIONS, clothById, Luxe } from '@/constants/game-theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { LOCATIONS, locationById } from '@/game/render/locations';
+import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
-/** A labelled group with a lit rule under its heading. */
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+type Tab = 'place' | 'cloth' | 'balls';
+
+/**
+ * The table as it will be, drawn flat.
+ *
+ * A plan view: the room's floor behind it, the chosen cloth, six pockets, and a
+ * rack of the chosen balls. Every choice on this screen changes something you
+ * can see here, which is the entire reason the screen is laid out this way.
+ */
+function TablePreview({
+  locationId,
+  clothId,
+  ballSetId,
+}: {
+  locationId: string;
+  clothId: string;
+  ballSetId: string;
+}) {
+  const room = locationById(locationId);
+  const cloth = clothById(clothId);
+  const set = ballSetById(ballSetId);
+
+  // A short rack, enough to show the set's colours and whether it stripes.
+  const rack = [
+    [1],
+    [2, 3],
+    [4, 5, 6],
+  ];
+
   return (
-    <View style={styles.group}>
-      <Text style={styles.groupLabel}>{label}</Text>
-      <GlowRule width={24} align="flex-start" />
-      {children}
+    <View style={[styles.preview, { backgroundColor: room.floorColor }]}>
+      <View style={[styles.previewRail, { borderColor: cloth.cushion }]}>
+        <View style={[styles.previewBed, { backgroundColor: cloth.cloth }]}>
+          {/* Pockets, at the corners and the middle of the long sides. */}
+          {[
+            [0, 0],
+            [0, 1],
+            [1, 0],
+            [1, 1],
+          ].map(([x, y]) => (
+            <View
+              key={`${x}-${y}`}
+              style={[
+                styles.previewPocket,
+                { left: x ? undefined : -6, right: x ? -6 : undefined, top: y ? undefined : -6, bottom: y ? -6 : undefined },
+              ]}
+            />
+          ))}
+          <View style={[styles.previewPocket, styles.previewPocketMidTop]} />
+          <View style={[styles.previewPocket, styles.previewPocketMidBottom]} />
+
+          <View style={styles.previewRack}>
+            {rack.map((row, rowIndex) => (
+              <View key={rowIndex} style={styles.previewRow}>
+                {row.map((n) => {
+                  const striped = set.striped && n > 8;
+                  return (
+                    <View
+                      key={n}
+                      style={[styles.previewBall, { backgroundColor: colorForBallIn(set, n) }]}>
+                      {striped ? <View style={styles.previewStripe} /> : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          {/* The cue ball, out on its own the way it is at the break. */}
+          <View style={[styles.previewCue, { backgroundColor: set.cue }]} />
+        </View>
+      </View>
     </View>
   );
 }
 
-/**
- * Five balls from a set, drawn flat.
- *
- * Enough of the set to judge it: two solids, the eight, and two that are striped
- * where the set has stripes. A set without them shows five solids instead, which
- * is exactly the difference the player is choosing between.
- */
-function BallSetPreview({ setId }: { setId: string }) {
-  const set = ballSetById(setId);
-  const sample = [1, 3, 8, 11, 14];
-
+/** A round swatch: the control is the colour, with the name underneath. */
+function Swatch({
+  colour,
+  label,
+  selected,
+  onPress,
+}: {
+  colour: string;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.swatchRow}>
-      {sample.map((n) => {
-        const striped = set.striped && n > 8;
-        return (
-          <View
-            key={n}
-            style={[styles.ball, { backgroundColor: colorForBallIn(set, n) }]}>
-            {striped ? <View style={styles.ballStripe} /> : null}
-            <View style={styles.ballSheen} />
-          </View>
-        );
-      })}
-    </View>
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      onPress={() => {
+        playTap();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.swatchWrap, pressed && styles.pressed]}>
+      <View
+        style={[
+          styles.swatch,
+          { backgroundColor: colour },
+          selected && styles.swatchSelected,
+        ]}
+      />
+      <Text style={[styles.swatchLabel, selected && styles.swatchLabelSelected]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
 export default function SetupScreen() {
   const router = useRouter();
   const t = useT();
+  const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState<Tab>('place');
 
   const locationId = useSettings((s) => s.locationId);
   const setLocation = useSettings((s) => s.setLocation);
@@ -79,6 +156,7 @@ export default function SetupScreen() {
   const startFree = useSession((s) => s.startFree);
 
   const begin = () => {
+    playTap('confirm');
     const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
     // Restarted here rather than on the previous screen, so the table is built
     // with the cloth and room chosen on this one.
@@ -86,244 +164,294 @@ export default function SetupScreen() {
     router.replace('/game');
   };
 
-  const cloth = CLOTH_OPTIONS.find((c) => c.id === clothId) ?? CLOTH_OPTIONS[0];
-  const balls = ballSetById(ballSetId);
-  const room = LOCATIONS.find((l) => l.id === locationId) ?? LOCATIONS[0];
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'place', label: t('setup.place'), icon: <PocketIcon size={20} /> },
+    { id: 'cloth', label: t('setup.cloth'), icon: <ClothIcon size={20} /> },
+    { id: 'balls', label: t('setup.balls'), icon: <BallsIcon size={20} /> },
+  ];
+
+  const description =
+    tab === 'place'
+      ? t(locationById(locationId).descriptionKey)
+      : tab === 'cloth'
+        ? t(clothById(clothId).feelKey)
+        : t(ballSetById(ballSetId).feelKey);
 
   return (
-    <Screen
-      title={t('setup.title')}
-      subtitle={t('setup.subtitle')}
-      onBack={() => router.back()}
-      footer={<GameButton label={t('setup.start')} variant="primary" onPress={begin} />}>
-      <Group label={t('setup.place')}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.tileRow}>
-            {LOCATIONS.map((location) => {
-              const selected = location.id === locationId;
-              return (
-                <Pressable
-                  key={location.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  onPress={() => setLocation(location.id)}
-                  style={({ pressed }) => [
-                    styles.tile,
-                    selected && styles.tileSelected,
-                    pressed && styles.pressed,
-                  ]}>
-                  {/* The room's own floor and wall, which is more use than its
-                      name for telling one from another at a glance. */}
-                  <View style={[styles.tileArt, { backgroundColor: location.floorColor }]}>
-                    <View
-                      style={[
-                        styles.tileWall,
-                        { backgroundColor: location.walls?.color ?? location.background },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.tileLabel, selected && styles.tileLabelSelected]}>
-                    {t(location.labelKey)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-        <Text style={styles.note}>{t(room.descriptionKey)}</Text>
-      </Group>
-
-      <Group label={t('setup.cloth')}>
-        <View style={styles.swatchRow}>
-          {CLOTH_OPTIONS.map((option) => {
-            const selected = option.id === clothId;
-            return (
-              <Pressable
-                key={option.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={t(option.labelKey)}
-                onPress={() => setCloth(option.id)}
-                style={({ pressed }) => [
-                  styles.swatch,
-                  { backgroundColor: option.cloth },
-                  selected && styles.swatchSelected,
-                  pressed && styles.pressed,
-                ]}
-              />
-            );
-          })}
+    <View style={styles.root}>
+      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
+        <View style={styles.header}>
+          <BackButton label={t('common.back')} onPress={() => router.back()} />
+          <Heading size={26}>{t('setup.title')}</Heading>
         </View>
-        <Text style={styles.chosen}>{t(cloth.labelKey)}</Text>
-        <Text style={styles.note}>{t(cloth.feelKey)}</Text>
-      </Group>
 
-      <Group label={t('setup.balls')}>
-        <View style={styles.setColumn}>
-          {BALL_SETS.map((set) => {
-            const selected = set.id === ballSetId;
+        <Animated.View entering={FadeIn.duration(260)} style={styles.stage}>
+          <TablePreview locationId={locationId} clothId={clothId} ballSetId={ballSetId} />
+        </Animated.View>
+
+        {/* Which set of choices is showing. */}
+        <View style={styles.tabRow}>
+          {tabs.map((entry) => {
+            const active = entry.id === tab;
             return (
               <Pressable
-                key={set.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                onPress={() => setBallSet(set.id)}
+                key={entry.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => {
+                  playTap();
+                  setTab(entry.id);
+                }}
                 style={({ pressed }) => [
-                  styles.setRow,
-                  selected && styles.setRowSelected,
+                  styles.tab,
+                  active && styles.tabActive,
                   pressed && styles.pressed,
                 ]}>
-                <BallSetPreview setId={set.id} />
-                <Text style={[styles.setLabel, selected && styles.setLabelSelected]}>
-                  {t(set.labelKey)}
+                <View style={active ? undefined : styles.tabIconIdle}>{entry.icon}</View>
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                  {entry.label}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-        <Text style={styles.note}>{t(balls.feelKey)}</Text>
-      </Group>
-    </Screen>
+
+        <View style={styles.choices}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.choiceRow}>
+              {tab === 'place'
+                ? LOCATIONS.map((location) => (
+                    <Swatch
+                      key={location.id}
+                      colour={location.floorColor}
+                      label={t(location.labelKey)}
+                      selected={location.id === locationId}
+                      onPress={() => setLocation(location.id)}
+                    />
+                  ))
+                : null}
+
+              {tab === 'cloth'
+                ? CLOTH_OPTIONS.map((option) => (
+                    <Swatch
+                      key={option.id}
+                      colour={option.cloth}
+                      label={t(option.labelKey)}
+                      selected={option.id === clothId}
+                      onPress={() => setCloth(option.id)}
+                    />
+                  ))
+                : null}
+
+              {tab === 'balls'
+                ? BALL_SETS.map((option) => (
+                    <Swatch
+                      key={option.id}
+                      colour={colorForBallIn(option, 3)}
+                      label={t(option.labelKey)}
+                      selected={option.id === ballSetId}
+                      onPress={() => setBallSet(option.id)}
+                    />
+                  ))
+                : null}
+            </View>
+          </ScrollView>
+
+          <Text style={styles.description} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={begin}
+          style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
+          <Text style={styles.goLabel}>{t('setup.start')}</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
-const BALL = 22;
-
 const styles = StyleSheet.create({
-  group: {
-    gap: Spacing.two,
-  },
-  groupLabel: {
-    color: Luxe.gold,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2.4,
-    textTransform: 'uppercase',
-  },
-  note: {
-    color: Luxe.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  chosen: {
-    color: Luxe.text,
-    fontSize: 15,
-    fontFamily: LuxeFonts.serif,
-  },
-
-  // ------------------------------------------------------------------- rooms
-  tileRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
-  tile: {
-    width: 92,
-    gap: Spacing.one,
-    padding: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    borderRadius: 4,
-    backgroundColor: 'rgba(8, 12, 10, 0.7)',
-  },
-  tileSelected: {
-    borderColor: Luxe.gold,
-    backgroundColor: 'rgba(28, 23, 12, 0.86)',
-  },
-  tileArt: {
-    height: 46,
-    borderRadius: 2,
-    overflow: 'hidden',
-    justifyContent: 'flex-start',
-  },
-  tileWall: {
-    height: 18,
-  },
-  tileLabel: {
-    color: Luxe.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
-  tileLabelSelected: {
-    color: Luxe.gold,
-  },
-
-  // ------------------------------------------------------------------ cloth
-  swatchRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
+  root: {
+    flex: 1,
     alignItems: 'center',
   },
+  inner: {
+    flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.five,
+    gap: Spacing.three,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+
+  // ---------------------------------------------------------------- preview
+  stage: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  preview: {
+    borderRadius: 8,
+    padding: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+  },
+  previewRail: {
+    borderWidth: 8,
+    borderRadius: 6,
+  },
+  previewBed: {
+    aspectRatio: 2,
+    borderRadius: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewPocket: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#05080699',
+  },
+  previewPocketMidTop: {
+    top: -6,
+    alignSelf: 'center',
+  },
+  previewPocketMidBottom: {
+    bottom: -6,
+    alignSelf: 'center',
+  },
+  previewRack: {
+    position: 'absolute',
+    right: '18%',
+    gap: 2,
+    alignItems: 'center',
+  },
+  previewRow: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  previewBall: {
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  previewStripe: {
+    height: 4,
+    backgroundColor: '#f2ede0',
+  },
+  previewCue: {
+    position: 'absolute',
+    left: '22%',
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+  },
+
+  // ------------------------------------------------------------------- tabs
+  tabRow: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: Spacing.two,
+    borderRadius: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+  },
+  tabActive: {
+    borderColor: 'rgba(201, 169, 98, 0.4)',
+    backgroundColor: '#161208',
+  },
+  tabIconIdle: {
+    opacity: 0.45,
+  },
+  tabLabel: {
+    color: Luxe.textMuted,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  tabLabelActive: {
+    color: Luxe.gold,
+  },
+
+  // ---------------------------------------------------------------- choices
+  choices: {
+    gap: Spacing.two,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  swatchWrap: {
+    alignItems: 'center',
+    gap: 6,
+    width: 62,
+  },
   swatch: {
-    width: 46,
-    height: 46,
-    borderRadius: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   swatchSelected: {
     borderColor: Luxe.gold,
   },
-
-  // ------------------------------------------------------------------ balls
-  setColumn: {
-    gap: Spacing.two,
-  },
-  setRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    borderRadius: 4,
-    backgroundColor: 'rgba(8, 12, 10, 0.7)',
-  },
-  setRowSelected: {
-    borderColor: Luxe.gold,
-    backgroundColor: 'rgba(28, 23, 12, 0.86)',
-  },
-  setLabel: {
+  swatchLabel: {
     color: Luxe.textMuted,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 1.4,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
-  setLabelSelected: {
+  swatchLabelSelected: {
     color: Luxe.gold,
   },
-  ball: {
-    width: BALL,
-    height: BALL,
-    borderRadius: BALL / 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ballStripe: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: BALL * 0.36,
-    backgroundColor: '#f2ede0',
-  },
-  ballSheen: {
-    position: 'absolute',
-    top: BALL * 0.12,
-    left: BALL * 0.16,
-    width: BALL * 0.36,
-    height: BALL * 0.36,
-    borderRadius: BALL * 0.18,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+  description: {
+    color: Luxe.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    minHeight: 36,
   },
 
-  pressed: {
-    opacity: 0.65,
+  go: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.three,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(201, 169, 98, 0.5)',
+    backgroundColor: '#161208',
+  },
+  goPressed: {
+    backgroundColor: '#241d0f',
+  },
+  goLabel: {
+    color: Luxe.gold,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2.6,
+    textTransform: 'uppercase',
+    fontFamily: LuxeFonts.sans,
   },
 });

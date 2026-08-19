@@ -56,12 +56,16 @@ export function CameraControls() {
 
 const styles = StyleSheet.create({
   /**
-   * Bottom-left of the stage: the corner furthest from the shooting hand, and
-   * the one the cue is least often pointing into.
+   * Bottom-right of the stage.
+   *
+   * It was on the left, on the reasoning that the shooting hand comes from the
+   * right and the control should stay clear of it. In practice the opposite is
+   * what matters: the thumb that reaches this is the one already holding the
+   * phone, and on the right it is a short reach rather than a stretch across.
    */
   corner: {
     position: 'absolute',
-    left: Spacing.two,
+    right: Spacing.two,
     bottom: Spacing.two,
   },
   /**

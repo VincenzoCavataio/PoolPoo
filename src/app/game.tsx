@@ -28,7 +28,6 @@ import { MusicHud } from '@/components/game/music-hud';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { releaseMusic, useMusic } from '@/game/audio/music';
-import { initSfx, releaseSfx, setSfxVolume } from '@/game/audio/sfx';
 import { useTableGestures } from '@/game/input/gestures';
 import { GameScene } from '@/game/render/scene';
 import { useSession } from '@/store/session';
@@ -52,20 +51,14 @@ export default function GameScreen() {
    * other.
    */
   useEffect(() => {
-    const settings = useSettings.getState();
-    setSfxVolume(settings.sfxVolume);
-    useMusic.getState().setVolume(settings.musicVolume);
-
-    let cancelled = false;
-    void initSfx().then(() => {
-      if (!cancelled) useMusic.getState().start();
-    });
+    // Effects are loaded once at the root — the menus use them too — so this
+    // only has to start the music, which does belong to a game in progress.
+    useMusic.getState().setVolume(useSettings.getState().musicVolume);
+    useMusic.getState().start();
 
     return () => {
-      cancelled = true;
       useMusic.getState().stop();
       releaseMusic();
-      releaseSfx();
     };
   }, []);
 

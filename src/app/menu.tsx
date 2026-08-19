@@ -1,23 +1,34 @@
 /**
  * The menu.
  *
- * Three choices and nothing else. It used to carry a star ledger along the
- * bottom — earned against a total, with a lit rule showing the fraction — which
- * measured progress through the puzzle levels. With those gone the ledger had
- * nothing to count, and a menu that reports a number nobody can change is worse
- * than one that reports nothing.
+ * The actions sit at the foot of the screen, where a thumb rests, and the title
+ * holds the top. Between them is nothing — which is the point: that gap is where
+ * the table behind is seen, and it is the largest uninterrupted view of it
+ * anywhere in the app.
  *
- * Continue leads the list when there is a game to come back to, because that is
- * what someone opening the app mid-frame is reaching for. When there is not, it
- * stays in place but reads as unavailable rather than vanishing — a list that
- * reorders itself between visits is a list you have to read every time.
+ * The three choices are three different kinds of thing, and they are built
+ * differently to say so:
+ *
+ *  - **New game** is a panel. It is what the screen is for.
+ *  - **Continue** is a row, because what it has to show is a sentence about a
+ *    game in progress, and a sentence needs a line.
+ *  - **Options** is neither. It leads away from playing, so it is a quiet strip
+ *    under the others rather than a third thing of equal weight — making it the
+ *    same size as Continue implied a choice between them that nobody makes.
  */
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GameButton } from '@/components/ui/button';
-import { Screen } from '@/components/ui/screen';
+import { Floating } from '@/components/ui/floating';
+import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
+import { GlowRule, Heading } from '@/components/ui/luxe';
+import { Luxe } from '@/constants/game-theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
 import type { Translator } from '@/i18n';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
@@ -32,6 +43,7 @@ function describeSavedGame(save: SavedGame, t: Translator): string {
 export default function MenuScreen() {
   const router = useRouter();
   const t = useT();
+  const insets = useSafeAreaInsets();
   const resume = useSession((s) => s.resume);
 
   const [save, setSave] = useState<SavedGame | null>(null);
@@ -54,28 +66,264 @@ export default function MenuScreen() {
 
   const onContinue = () => {
     if (!save) return;
+    playTap('confirm');
     if (resume(save)) router.push('/game');
   };
 
   return (
-    <Screen title={t('title.wordmark')} subtitle={t('menu.subtitle')}>
-      <GameButton
-        label={t('menu.newGame')}
-        variant="primary"
-        sublabel={t('menu.newGameSub')}
-        onPress={() => router.push('/new-game')}
-      />
+    <View style={styles.root}>
+      <View
+        style={[
+          styles.inner,
+          { paddingTop: insets.top + Spacing.five, paddingBottom: insets.bottom + Spacing.four },
+        ]}>
+        <Animated.View entering={FadeIn.duration(260)} style={styles.header}>
+          <Heading size={46}>{t('title.wordmark')}</Heading>
+          <GlowRule width={52} align="flex-start" color={Luxe.gold} />
+          <Text style={styles.subtitle}>{t('menu.subtitle')}</Text>
+        </Animated.View>
 
-      <GameButton
-        label={t('menu.continue')}
-        onPress={onContinue}
-        disabled={!save}
-        sublabel={
-          save ? describeSavedGame(save, t) : checked ? t('menu.noSave') : t('common.checking')
-        }
-      />
+        {/* The view of the table. Nothing is drawn here on purpose. */}
+        <View style={styles.window} />
 
-      <GameButton label={t('menu.options')} onPress={() => router.push('/options')} />
-    </Screen>
+        <View style={styles.actions}>
+          {/*
+            The primary action.
+
+            A gold bar with the rack standing in it, not a tall panel with serif
+            text — the panel repeated what the title above already does, at a
+            smaller size, and two serif blocks on one screen read as a heading
+            and a subheading rather than as a title and a button.
+
+            Filled rather than outlined: it is the only solid gold surface in the
+            app, which is what marks it out without needing to be large. The
+            label is sans, in the same spaced capitals as every other control, so
+            it reads as something you press.
+          */}
+          <Animated.View entering={FadeInDown.delay(50).duration(280)}>
+            <Floating depth={1.15}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                playTap('confirm');
+                router.push('/new-game');
+              }}
+              style={({ pressed }) => [styles.main, pressed && styles.mainPressed]}>
+              <View style={styles.mainIcon}>
+                <RackIcon size={30} color={Luxe.ink} />
+              </View>
+
+              <View style={styles.mainText}>
+                <Text style={styles.mainLabel}>{t('menu.newGame')}</Text>
+                <Text style={styles.mainSub} numberOfLines={1}>
+                  {t('menu.newGameSub')}
+                </Text>
+              </View>
+
+              {/* A chevron, because this one goes somewhere. */}
+              <Text style={styles.mainGo}>{'\u203A'}</Text>
+            </Pressable>
+            </Floating>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(110).duration(280)}>
+            <Floating phase={1} depth={0.85}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !save }}
+              disabled={!save}
+              onPress={onContinue}
+              style={({ pressed }) => [
+                styles.row,
+                pressed && styles.rowPressed,
+                !save && styles.rowDisabled,
+              ]}>
+              <View style={styles.rowIcon}>
+                <CueIcon size={24} color={save ? Luxe.text : Luxe.textFaint} />
+              </View>
+
+              <View style={styles.rowText}>
+                <Text style={styles.rowLabel} numberOfLines={1}>
+                  {t('menu.continue')}
+                </Text>
+                <Text style={styles.rowDetail} numberOfLines={2}>
+                  {save
+                    ? describeSavedGame(save, t)
+                    : checked
+                      ? t('menu.noSave')
+                      : t('common.checking')}
+                </Text>
+              </View>
+            </Pressable>
+            </Floating>
+          </Animated.View>
+
+          {/* Options: a strip, not a tile. Lighter than the two above it in
+              every respect — no panel, no detail line, small type. */}
+          <Animated.View entering={FadeIn.delay(180).duration(280)}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                playTap();
+                router.push('/options');
+              }}
+              style={({ pressed }) => [styles.quiet, pressed && styles.quietPressed]}>
+              <SlidersIcon size={16} color={Luxe.textMuted} />
+              <Text style={styles.quietLabel}>{t('menu.options')}</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  inner: {
+    flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.four,
+  },
+  header: {
+    gap: Spacing.two,
+  },
+  subtitle: {
+    color: Luxe.textMuted,
+    fontSize: 12,
+    letterSpacing: 2.8,
+    textTransform: 'uppercase',
+  },
+
+  /** The gap the table is seen through. It takes whatever the rest does not. */
+  window: {
+    flex: 1,
+    minHeight: Spacing.four,
+  },
+
+  actions: {
+    gap: Spacing.two,
+  },
+
+  // ------------------------------------------------------------ main action
+  /**
+   * Filled gold, and the only thing in the app that is.
+   *
+   * Solid rather than see-through for the same reason every other panel is: the
+   * scene behind moves, and a rail sliding under a line of text changes the
+   * contrast under each letter while you are reading it.
+   */
+  main: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: 8,
+    backgroundColor: Luxe.gold,
+  },
+  mainPressed: {
+    backgroundColor: '#b8985a',
+  },
+  /** The rack in a darker inset, so it reads as set into the bar. */
+  mainIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: 'rgba(8, 9, 11, 0.14)',
+  },
+  mainText: {
+    flex: 1,
+    gap: 2,
+  },
+  mainLabel: {
+    color: Luxe.ink,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+  mainSub: {
+    color: 'rgba(8, 9, 11, 0.68)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  mainGo: {
+    // 0.7 rather than 0.55: at 3.4:1 the lighter value was under what a small
+    // graphic needs to stay crisp against the gold.
+    color: 'rgba(8, 9, 11, 0.7)',
+    fontSize: 26,
+    lineHeight: 28,
+    marginTop: -3,
+  },
+
+  // -------------------------------------------------------------- continue
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: '#0d1210',
+  },
+  rowPressed: {
+    backgroundColor: '#1b201d',
+  },
+  rowDisabled: {
+    opacity: 0.45,
+  },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  rowText: {
+    flex: 1,
+    gap: 3,
+  },
+  rowLabel: {
+    color: Luxe.text,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  /** 12pt, not 10: this line carries a sentence and has to be readable. */
+  rowDetail: {
+    color: Luxe.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  // --------------------------------------------------------------- options
+  quiet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    marginTop: 2,
+  },
+  quietPressed: {
+    opacity: 0.55,
+  },
+  quietLabel: {
+    color: Luxe.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+});

@@ -133,6 +133,21 @@ export function playEffect(name: EffectName, gain = 1): void {
   }
 }
 
+/**
+ * The sound a menu control makes.
+ *
+ * One ball touching another, played softly. The game already owns that sound and
+ * it is the right one: a menu for a billiards game should click like billiards
+ * rather than like a generic interface. Quieter than the same sound in play —
+ * a tap on a button is not a shot.
+ *
+ * `confirm` is for the control that ends a screen. Same sound, fuller, so the
+ * decision lands differently from the adjustments leading up to it.
+ */
+export function playTap(kind: 'select' | 'confirm' = 'select'): void {
+  playEffect('ball-hit', kind === 'confirm' ? 0.5 : 0.28);
+}
+
 /** Maps an impact speed in m/s onto a sensible loudness. */
 export function gainForImpact(speed: number, reference = 2.5): number {
   const normalised = Math.sqrt(Math.max(0, speed) / reference);

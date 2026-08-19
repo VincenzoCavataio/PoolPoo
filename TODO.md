@@ -1,8 +1,8 @@
 Cose da fare:
 ---> WAVE 1
 
-1. multi localizzazione
-2. musica giradischi più visibile/vistoso
+1. multi localizzazione (fatto)
+2. musica giradischi più visibile/vistoso (fatto)
 3. in caso di doppio evento (doppia pallina, una pallina e un fallo) gestirlo. replay ecc...
 4. Inserire nome giocatore (se single player usa il mio, se multi inserisci i nomi di tutti)
 5. rendi più realistici le fornitures per gli stages
@@ -25,7 +25,6 @@ Cose da fare:
 22. pensare a roba strana, tipo un percorso da seguire con carte da poker fatte a "galleria", percorsi "obbligati" per "allenarsi" ad andare in buca (anche birilli piccoli da non fare cadere, da capire)
 
 ---
-
 ---> WAVE 2
 
 1. fare la build vera per iOS.

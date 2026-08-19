@@ -277,20 +277,20 @@ const styles = StyleSheet.create({
     // Darker and more opaque than before: it now has to hold its own over the
     // felt behind it, where the old near-transparent surface would have let the
     // backdrop show straight through the label.
-    backgroundColor: 'rgba(8, 12, 10, 0.82)',
+    backgroundColor: '#0d1210',
     borderRadius: 4,
     overflow: 'hidden',
   },
   buttonPrimary: {
     borderColor: 'rgba(201, 169, 98, 0.45)',
-    backgroundColor: 'rgba(28, 23, 12, 0.86)',
+    backgroundColor: '#1d1810',
   },
   buttonDanger: {
     borderColor: 'rgba(217, 117, 107, 0.35)',
-    backgroundColor: 'rgba(8, 12, 10, 0.7)',
+    backgroundColor: '#0d1210',
   },
   buttonPressed: {
-    backgroundColor: 'rgba(40, 46, 42, 0.9)',
+    backgroundColor: '#252b28',
   },
   buttonDisabled: {
     opacity: 0.32,

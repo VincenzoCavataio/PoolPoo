@@ -24,6 +24,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useMemo, useState } from 'react';
 
 import { Palette, Radius } from '@/constants/game-theme';
+import { VolumeRow } from '@/components/ui/volume-row';
 import { Spacing } from '@/constants/theme';
 import { CHANGE_LIFT_MS, CHANGE_TOTAL_MS, useMusic } from '@/game/audio/music';
 import { setSfxVolume } from '@/game/audio/sfx';
@@ -74,40 +75,6 @@ function Record({ color }: { color: string }) {
       <View style={[styles.discLabel, { backgroundColor: color }]} />
       <View style={styles.discHole} />
     </Animated.View>
-  );
-}
-
-function VolumeRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (next: number) => void;
-}) {
-  const [width, setWidth] = useState(0);
-
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .minDistance(0)
-        .onBegin((event) => width > 0 && onChange(event.x / width))
-        .onChange((event) => width > 0 && onChange(event.x / width)),
-    [width, onChange],
-  );
-
-  return (
-    <View style={styles.volumeRow}>
-      <Text style={styles.volumeLabel}>{label}</Text>
-      <GestureDetector gesture={gesture}>
-        <View style={styles.volumeTrack} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-          <View style={[styles.volumeFill, { width: `${Math.round(value * 100)}%` }]} />
-        </View>
-      </GestureDetector>
-      <Text style={styles.volumeValue}>{Math.round(value * 100)}</Text>
-    </View>
   );
 }
 
@@ -426,41 +393,5 @@ const styles = StyleSheet.create({
     color: Palette.textMuted,
     fontSize: 11,
     lineHeight: 16,
-  },
-  volumeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  volumeLabel: {
-    color: Palette.textMuted,
-    fontSize: 12,
-    width: 56,
-  },
-  volumeTrack: {
-    flex: 1,
-    height: 26,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.background,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  volumeFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: Palette.accent,
-    opacity: 0.7,
-  },
-  volumeValue: {
-    color: Palette.text,
-    fontSize: 12,
-    fontWeight: '700',
-    width: 26,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
   },
 });

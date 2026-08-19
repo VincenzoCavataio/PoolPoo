@@ -14,8 +14,8 @@ import { type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FeltBackdrop } from '@/components/ui/felt';
-import { GlowRule, Heading, Overline } from '@/components/ui/luxe';
+import { BackButton } from '@/components/ui/icons';
+import { Heading, Overline } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
@@ -33,28 +33,18 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
 
   return (
     <View style={styles.root}>
-      <FeltBackdrop />
-
       <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
+        {/* Same header as every other screen: a drawn chevron and a serif
+            title, with no rule under it. The rule was there to separate the
+            title from a list; there is no list any more. */}
         <View style={styles.header}>
-          {onBack ? (
-            <Pressable
-              accessibilityLabel="Indietro"
-              onPress={onBack}
-              style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
-              <Text style={styles.backLabel}>‹</Text>
-            </Pressable>
-          ) : null}
+          {onBack ? <BackButton label="Indietro" onPress={onBack} /> : null}
 
           <View style={styles.headerText}>
+            <Heading size={26}>{title}</Heading>
             {subtitle ? <Overline>{subtitle}</Overline> : null}
-            <Heading size={30} style={styles.title}>
-              {title}
-            </Heading>
           </View>
         </View>
-
-        <GlowRule width={56} align="flex-start" />
 
         <ScrollView
           contentContainerStyle={styles.content}
@@ -73,9 +63,17 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
   );
 }
 
-export function SectionLabel({ children }: { children: ReactNode }) {
+/**
+ * A section heading, optionally with an icon.
+ *
+ * The icon sits in a lit square rather than loose beside the text: at label size
+ * a bare glyph next to spaced capitals reads as a bullet point, whereas a filled
+ * tile reads as a marker for the block beneath it.
+ */
+export function SectionLabel({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
     <View style={styles.section}>
+      {icon ? <View style={styles.sectionIcon}>{icon}</View> : null}
       <Overline color={Luxe.gold}>{children}</Overline>
     </View>
   );
@@ -88,7 +86,6 @@ export function Card({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Luxe.ink,
     alignItems: 'center',
   },
   inner: {
@@ -110,26 +107,6 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: 2,
   },
-  back: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    borderRadius: 4,
-    backgroundColor: 'rgba(8, 12, 10, 0.6)',
-  },
-  backPressed: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  backLabel: {
-    color: Luxe.textMuted,
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: '300',
-    marginTop: -3,
-  },
   content: {
     gap: Spacing.three,
     paddingTop: Spacing.five,
@@ -140,16 +117,34 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
   },
   section: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     marginTop: Spacing.three,
     marginBottom: -Spacing.one,
+  },
+  sectionIcon: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(201, 169, 98, 0.3)',
+    backgroundColor: '#161208',
   },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Luxe.hairline,
-    // Opaque enough to sit on the felt. The old surface was near-transparent,
-    // which was fine over flat ink and would let the backdrop print straight
-    // through the text now.
-    backgroundColor: 'rgba(8, 12, 10, 0.82)',
+    /**
+     * Denser than the tiles elsewhere, on purpose.
+     *
+     * A card holds paragraphs rather than a label and a line, and a moving scene
+     * showing through a block of body text is a different proposition from one
+     * showing through a heading. Still lighter than it was, so the table is
+     * visible at the edges.
+     */
+    backgroundColor: '#0d1210',
     borderRadius: 4,
     padding: Spacing.four,
     gap: Spacing.four,
