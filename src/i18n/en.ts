@@ -58,6 +58,15 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.sensitivitySlow': 'Slow',
   'options.sensitivityMedium': 'Medium',
   'options.sensitivityFast': 'Fast',
+  // --------------------------------------------------------------------- graphics
+  'quality.section': 'Graphics',
+  'quality.low': 'Low',
+  'quality.lowFeel': 'A steady 30fps. One lamp, no reflections.',
+  'quality.medium': 'Medium',
+  'quality.mediumFeel': '60fps. Two lamps and reflections, without the cloth’s nap.',
+  'quality.high': 'High',
+  'quality.highFeel': '60fps. Every light, reflections, and cloth with its sheen.',
+
   'options.audio': 'Audio',
   'options.haptics': 'Vibration',
   'options.hapticsBody': 'A tap when you shoot, a different one when you pot.',

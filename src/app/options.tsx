@@ -9,6 +9,7 @@ import {
   MenuPalette as Palette,
   Radius,
 } from '@/constants/game-theme';
+import { QUALITY_PRESETS, qualityById } from '@/constants/quality';
 import { Spacing } from '@/constants/theme';
 import { LOCATIONS } from '@/game/render/locations';
 import { LOCALE_LABEL, LOCALES } from '@/i18n';
@@ -71,6 +72,8 @@ export default function OptionsScreen() {
     setAimSensitivity,
     resetSettings,
   } = useSettings();
+  const quality = useSettings((s) => s.quality);
+  const setQuality = useSettings((s) => s.setQuality);
   const [savedCleared, setSavedCleared] = useState(false);
 
   const activeStep = SENSITIVITY_STEPS.reduce((best, step) =>
@@ -117,6 +120,32 @@ export default function OptionsScreen() {
             );
           })}
         </View>
+      </Card>
+
+      <SectionLabel>{t('quality.section')}</SectionLabel>
+      <Card>
+        <View style={styles.pillRow}>
+          {QUALITY_PRESETS.map((preset) => {
+            const selected = preset.id === quality;
+            return (
+              <Pressable
+                key={preset.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => setQuality(preset.id)}
+                style={({ pressed }) => [
+                  styles.pill,
+                  selected && styles.pillSelected,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
+                  {t(preset.labelKey)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.rowDescription}>{t(qualityById(quality).feelKey)}</Text>
       </Card>
 
       <SectionLabel>{t('options.aimHelpers')}</SectionLabel>

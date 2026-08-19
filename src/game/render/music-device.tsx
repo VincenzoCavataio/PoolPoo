@@ -14,13 +14,14 @@
  */
 
 import { useFrame, useThree } from '@react-three/fiber/native';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { CHANGE_TOTAL_MS, useMusic } from '@/game/audio/music';
 import { trackAt } from '@/game/audio/tracks';
 
 import { FLOOR_Y, type MusicDevice } from './locations';
+import { mergeShapes } from './merge';
 
 /** Where the device currently is on screen, for the tap gesture to compare. */
 export const musicDeviceScreen = { x: -1, y: -1, onScreen: false };
@@ -194,40 +195,143 @@ const SHELF_MATERIAL = {
 const BRACKET_X = [-0.33, 0.33];
 const LEG_X = [-0.36, 0.36];
 
-function WallShelf({ freestanding }: { freestanding: boolean }) {
+/**
+ * The unit's fixed parts, as data.
+ *
+ * Everything that never moves in the device's own space is described here and
+ * welded into one geometry per material. As separate meshes the shelf, the
+ * cabinets and the sign came to fifty-four draw calls — forty percent of the
+ * whole scene's, for one object that is usually off screen — and on expo-gl a
+ * draw call is a trip across the JS bridge. Merged, the lot costs six.
+ *
+ * The record and the tone arm are not in here: they animate, and a merged buffer
+ * has no parts left to move.
+ */
+type Shape = {
+  key: string;
+  geometry: THREE.BufferGeometry;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+};
+
+/** Materials the merged parts are drawn with, built once and shared. */
+const DEVICE_MATERIALS: Record<string, THREE.Material> = {
+  board: new THREE.MeshPhysicalMaterial({ color: '#6b4a2f', roughness: 0.4, clearcoat: 0.45 }),
+  backing: new THREE.MeshPhysicalMaterial({ color: '#3a2718', roughness: 0.6, clearcoat: 0.25 }),
+  steel: new THREE.MeshPhysicalMaterial({ color: '#b9bfc6', roughness: 0.24, metalness: 0.92 }),
+  dark: new THREE.MeshPhysicalMaterial({ color: '#1b1d20', roughness: 0.35, clearcoat: 0.55 }),
+  cabinet: new THREE.MeshPhysicalMaterial({ color: '#4a1f2e', roughness: 0.35, clearcoat: 0.7 }),
+  case: new THREE.MeshPhysicalMaterial({ color: '#2b2723', roughness: 0.4, clearcoat: 0.5 }),
+  grille: new THREE.MeshStandardMaterial({ color: '#2a2c2f', roughness: 0.92 }),
+  neonPink: new THREE.MeshBasicMaterial({ color: '#ff53d8' }),
+  neonCyan: new THREE.MeshBasicMaterial({ color: '#5cf0ff' }),
+  dial: new THREE.MeshBasicMaterial({ color: '#ffa63c' }),
+};
+
+const G = {
+  shelfBacking: new THREE.BoxGeometry(0.92, 0.72, 0.03),
+  shelfBoard: new THREE.BoxGeometry(0.86, 0.045, 0.32),
+  bracket: new THREE.BoxGeometry(0.03, 0.14, 0.22),
+  leg: new THREE.BoxGeometry(0.045, LEG_DROP, 0.045),
+
+  deck: new THREE.BoxGeometry(0.44, 0.09, 0.34),
+  platter: new THREE.CylinderGeometry(0.138, 0.138, 0.014, 24),
+  spindle: new THREE.CylinderGeometry(0.006, 0.006, 0.03, 8),
+  foot: new THREE.CylinderGeometry(0.018, 0.018, 0.016, 12),
+
+  cabinet: new THREE.BoxGeometry(0.82, 1.36, 0.52),
+  dome: new THREE.CylinderGeometry(0.41, 0.41, 0.52, 18, 1, false, 0, Math.PI),
+  tube: new THREE.BoxGeometry(0.04, 1.2, 0.06),
+  speakerPanel: new THREE.BoxGeometry(0.5, 0.3, 0.02),
+  marquee: new THREE.BoxGeometry(0.4, 0.06, 0.02),
+
+  radioCase: new THREE.BoxGeometry(0.38, 0.2, 0.17),
+  radioGrille: new THREE.CylinderGeometry(0.06, 0.06, 0.012, 16),
+  radioDial: new THREE.BoxGeometry(0.13, 0.045, 0.012),
+  knob: new THREE.CylinderGeometry(0.014, 0.014, 0.012, 10),
+  handle: new THREE.TorusGeometry(0.075, 0.008, 6, 16, Math.PI),
+};
+
+function shelfShapes(freestanding: boolean): Shape[] {
+  const shapes: Shape[] = [
+    { key: 'backing', geometry: G.shelfBacking, position: [0, 0.22, -0.03] },
+    { key: 'board', geometry: G.shelfBoard, position: [0, 0, 0.14] },
+  ];
+  for (const x of [-0.33, 0.33]) {
+    shapes.push({ key: 'steel', geometry: G.bracket, position: [x, -0.09, 0.09] });
+  }
+  if (freestanding) {
+    for (const x of [-0.36, 0.36]) {
+      shapes.push({ key: 'steel', geometry: G.leg, position: [x, -0.06 + LEG_DROP / 2, 0.02] });
+    }
+  }
+  return shapes;
+}
+
+function turntableShapes(): Shape[] {
+  const shapes: Shape[] = [
+    { key: 'dark', geometry: G.deck, position: [0, 0.045, 0] },
+    { key: 'steel', geometry: G.platter, position: [0, 0.096, 0] },
+    { key: 'steel', geometry: G.spindle, position: [0, 0.115, 0] },
+  ];
+  for (const x of [-0.16, 0.16]) {
+    shapes.push({ key: 'steel', geometry: G.foot, position: [x, 0.096, 0.13] });
+  }
+  return shapes;
+}
+
+function jukeboxShapes(): Shape[] {
+  const shapes: Shape[] = [
+    { key: 'cabinet', geometry: G.cabinet, position: [0, 0.68, 0] },
+    { key: 'cabinet', geometry: G.dome, position: [0, 1.36, 0], rotation: [Math.PI / 2, 0, 0] },
+    { key: 'grille', geometry: G.speakerPanel, position: [0, 0.5, 0.27] },
+    { key: 'neonCyan', geometry: G.marquee, position: [0, 0.2, 0.27] },
+  ];
+  for (const x of [-0.42, 0.42]) {
+    shapes.push({ key: 'neonPink', geometry: G.tube, position: [x, 0.78, 0] });
+  }
+  return shapes;
+}
+
+function radioShapes(): Shape[] {
+  const shapes: Shape[] = [
+    { key: 'case', geometry: G.radioCase, position: [0, 0.1, 0] },
+    {
+      key: 'grille',
+      geometry: G.radioGrille,
+      position: [-0.1, 0.1, 0.088],
+      rotation: [Math.PI / 2, 0, 0],
+    },
+    { key: 'dial', geometry: G.radioDial, position: [0.09, 0.14, 0.088] },
+    { key: 'dark', geometry: G.handle, position: [0, 0.215, 0] },
+  ];
+  for (const x of [0.05, 0.13]) {
+    shapes.push({
+      key: 'steel',
+      geometry: G.knob,
+      position: [x, 0.05, 0.088],
+      rotation: [Math.PI / 2, 0, 0],
+    });
+  }
+  return shapes;
+}
+
+/** Draws a set of merged shapes: one mesh per material rather than per part. */
+function MergedParts({ shapes }: { shapes: Shape[] }) {
+  const merged = useMemo(() => Array.from(mergeShapes(shapes).entries()), [shapes]);
+
+  useEffect(
+    () => () => {
+      for (const [, geometry] of merged) geometry.dispose();
+    },
+    [merged],
+  );
+
   return (
     <group>
-      {/* A backing board, so the unit reads as one piece and works outdoors too,
-          where there is no wall behind it. */}
-      <mesh
-        position={[0, 0.22, -0.03]}
-        geometry={SHELF_GEOMETRY.backing}
-        material={SHELF_MATERIAL.backing}
-      />
-      <mesh
-        position={[0, 0, 0.14]}
-        geometry={SHELF_GEOMETRY.board}
-        material={SHELF_MATERIAL.board}
-      />
-      {BRACKET_X.map((x) => (
-        <mesh
-          key={x}
-          position={[x, -0.09, 0.09]}
-          geometry={SHELF_GEOMETRY.bracket}
-          material={SHELF_MATERIAL.steel}
-        />
+      {merged.map(([key, geometry]) => (
+        <mesh key={key} geometry={geometry} material={DEVICE_MATERIALS[key]} />
       ))}
-
-      {freestanding
-        ? LEG_X.map((x) => (
-            <mesh
-              key={`leg-${x}`}
-              position={[x, -0.06 + LEG_DROP / 2, 0.02]}
-              geometry={SHELF_GEOMETRY.leg}
-              material={SHELF_MATERIAL.steel}
-            />
-          ))
-        : null}
     </group>
   );
 }
@@ -280,8 +384,23 @@ function Disc({ radius }: { radius: number }) {
   );
 }
 
+/** The shelf the unit stands on, merged like everything else that never moves. */
+function WallShelf({ freestanding }: { freestanding: boolean }) {
+  const shapes = useMemo(() => shelfShapes(freestanding), [freestanding]);
+  return <MergedParts shapes={shapes} />;
+}
+
+/**
+ * The three devices.
+ *
+ * Each is a merged block of fixed parts plus whatever actually moves — the
+ * record on all of them, and the tone arm on the turntable. That split is the
+ * whole optimisation: the parts that never move cost one draw call per material
+ * instead of one apiece.
+ */
 function Turntable() {
   const arm = useRef<THREE.Group>(null);
+  const shapes = useMemo(turntableShapes, []);
 
   useFrame(() => {
     const { changing, playing } = useMusic.getState();
@@ -293,65 +412,33 @@ function Turntable() {
 
   return (
     <group>
-      <mesh position={[0, 0.045, 0]}>
-        <boxGeometry args={[0.44, 0.09, 0.34]} />
-        <meshPhysicalMaterial color="#1b1d20" roughness={0.35} clearcoat={0.55} />
-      </mesh>
-      <mesh position={[0, 0.096, 0]}>
-        <cylinderGeometry args={[0.138, 0.138, 0.014, 32]} />
-        <meshPhysicalMaterial color="#b9bfc6" roughness={0.22} metalness={0.95} />
-      </mesh>
+      <MergedParts shapes={shapes} />
 
       <group position={[0, 0.107, 0]}>
         <Disc radius={0.128} />
       </group>
 
-      <mesh position={[0, 0.115, 0]}>
-        <cylinderGeometry args={[0.006, 0.006, 0.03, 8]} />
-        <meshPhysicalMaterial color="#b9bfc6" roughness={0.2} metalness={0.95} />
-      </mesh>
-
       <group ref={arm} position={[0.17, 0.1, -0.12]}>
-        <mesh position={[-0.1, 0.02, 0.06]} rotation={[0, -0.6, 0]}>
+        <mesh position={[-0.1, 0.02, 0.06]} rotation={[0, -0.6, 0]} material={DEVICE_MATERIALS.steel}>
           <boxGeometry args={[0.23, 0.012, 0.016]} />
-          <meshPhysicalMaterial color="#b9bfc6" roughness={0.25} metalness={0.9} />
         </mesh>
-        <mesh>
-          <cylinderGeometry args={[0.026, 0.026, 0.022, 16]} />
-          <meshPhysicalMaterial color="#1b1d20" roughness={0.3} clearcoat={0.6} />
+        <mesh material={DEVICE_MATERIALS.dark}>
+          <cylinderGeometry args={[0.026, 0.026, 0.022, 12]} />
         </mesh>
       </group>
-
-      {[-0.16, 0.16].map((x) => (
-        <mesh key={x} position={[x, 0.096, 0.13]}>
-          <cylinderGeometry args={[0.018, 0.018, 0.016, 16]} />
-          <meshPhysicalMaterial color="#b9bfc6" roughness={0.25} metalness={0.9} />
-        </mesh>
-      ))}
     </group>
   );
 }
 
 function Jukebox() {
+  const shapes = useMemo(jukeboxShapes, []);
+
   return (
     <group>
-      <mesh position={[0, 0.68, 0]}>
-        <boxGeometry args={[0.82, 1.36, 0.52]} />
-        <meshPhysicalMaterial color="#4a1f2e" roughness={0.35} clearcoat={0.7} />
-      </mesh>
-      {/* Domed top, the shape everyone recognises. */}
-      <mesh position={[0, 1.36, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.41, 0.41, 0.52, 24, 1, false, 0, Math.PI]} />
-        <meshPhysicalMaterial color="#4a1f2e" roughness={0.35} clearcoat={0.7} side={THREE.DoubleSide} />
-      </mesh>
+      <MergedParts shapes={shapes} />
 
-      {[-0.42, 0.42].map((x) => (
-        <mesh key={x} position={[x, 0.78, 0]}>
-          <boxGeometry args={[0.04, 1.2, 0.06]} />
-          <meshBasicMaterial color="#ff53d8" />
-        </mesh>
-      ))}
-
+      {/* Glass over the deck. Kept out of the merge: it is transparent, and a
+          transparent surface has to be drawn after the opaque ones behind it. */}
       <mesh position={[0, 1.18, 0.24]}>
         <boxGeometry args={[0.56, 0.42, 0.03]} />
         <meshPhysicalMaterial
@@ -366,45 +453,16 @@ function Jukebox() {
       <group position={[0, 1.18, 0.12]} rotation={[Math.PI / 2, 0, 0]}>
         <Disc radius={0.15} />
       </group>
-
-      <mesh position={[0, 0.5, 0.27]}>
-        <boxGeometry args={[0.5, 0.3, 0.02]} />
-        <meshStandardMaterial color="#2a2c2f" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 0.2, 0.27]}>
-        <boxGeometry args={[0.4, 0.06, 0.02]} />
-        <meshBasicMaterial color="#5cf0ff" />
-      </mesh>
     </group>
   );
 }
 
 function Radio() {
+  const shapes = useMemo(radioShapes, []);
+
   return (
     <group>
-      <mesh position={[0, 0.1, 0]}>
-        <boxGeometry args={[0.38, 0.2, 0.17]} />
-        <meshPhysicalMaterial color="#2b2723" roughness={0.4} clearcoat={0.5} />
-      </mesh>
-      <mesh position={[-0.1, 0.1, 0.088]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.06, 0.06, 0.012, 20]} />
-        <meshStandardMaterial color="#2a2c2f" roughness={0.95} />
-      </mesh>
-      <mesh position={[0.09, 0.14, 0.088]}>
-        <boxGeometry args={[0.13, 0.045, 0.012]} />
-        <meshBasicMaterial color="#ffa63c" />
-      </mesh>
-      {[0.05, 0.13].map((x) => (
-        <mesh key={x} position={[x, 0.05, 0.088]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.014, 0.014, 0.012, 12]} />
-          <meshPhysicalMaterial color="#b9bfc6" roughness={0.25} metalness={0.9} />
-        </mesh>
-      ))}
-      {/* Handle, so it reads as portable. */}
-      <mesh position={[0, 0.215, 0]} rotation={[0, 0, 0]}>
-        <torusGeometry args={[0.075, 0.008, 8, 20, Math.PI]} />
-        <meshPhysicalMaterial color="#1b1d20" roughness={0.5} />
-      </mesh>
+      <MergedParts shapes={shapes} />
 
       <group position={[0, 0.1, 0.095]} rotation={[Math.PI / 2, 0, 0]}>
         <Disc radius={0.055} />

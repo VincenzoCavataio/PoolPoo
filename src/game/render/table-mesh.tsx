@@ -11,12 +11,15 @@
  * themselves away the moment the camera drops to cue height, which it now can.
  */
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { clothById, Palette } from '@/constants/game-theme';
 import { footSpot, headSpot, type Table } from '@/game/core/table';
 import { add, dist, dot, normalize, perp, scale, sub } from '@/game/core/vec';
+import { qualityById } from '@/constants/quality';
+
+import { mergeShapes, type MergeShape } from './merge';
 import { useSettings } from '@/store/settings';
 
 import { POCKET_DEPTH, sceneX, sceneZ } from './coords';
@@ -163,6 +166,7 @@ function RailDiamonds({ table }: { table: Table }) {
 export function TableMesh({ table }: { table: Table }) {
   const clothId = useSettings((s) => s.clothId);
   const cloth = clothById(clothId);
+  const quality = qualityById(useSettings((s) => s.quality));
 
   const bedWidth = table.halfWidth * 2;
   const bedLength = table.halfLength * 2;
@@ -178,6 +182,111 @@ export function TableMesh({ table }: { table: Table }) {
   const railHeight = RAIL_TOP - BODY_TOP;
   const railCentreY = BODY_TOP + railHeight / 2;
 
+  /**
+   * Cushions, rails and inlays as one geometry each.
+   *
+   * Rebuilt only when the table's dimensions change, which is never during play.
+   * The source geometries are temporary: they exist to be baked into the merged
+   * buffers and are released immediately.
+   */
+  const merged = useMemo(() => {
+    const shapes: MergeShape[] = [];
+
+    for (const box of cushions) {
+      shapes.push({
+        key: 'cushions',
+        geometry: new THREE.BoxGeometry(CUSHION_WIDTH, CUSHION_HEIGHT, box.length),
+        position: box.position,
+        rotation: box.rotation,
+      });
+    }
+
+    for (const pocket of table.pockets) {
+      const x = sceneX(pocket.center);
+      const z = sceneZ(pocket.center);
+      shapes.push({
+        key: 'pocketWalls',
+        geometry: new THREE.CylinderGeometry(
+          pocket.radius,
+          pocket.radius * 0.86,
+          POCKET_DEPTH + 0.004,
+          16,
+          1,
+          true,
+        ),
+        position: [x, (0.004 - POCKET_DEPTH) / 2, z],
+      });
+      shapes.push({
+        key: 'pocketFloors',
+        geometry: new THREE.CircleGeometry(pocket.radius, 16),
+        position: [x, -POCKET_DEPTH, z],
+        rotation: [-Math.PI / 2, 0, 0],
+      });
+      shapes.push({
+        key: 'pocketRings',
+        geometry: new THREE.RingGeometry(pocket.radius, pocket.radius + 0.014, 16),
+        position: [x, 0.0015, z],
+        rotation: [-Math.PI / 2, 0, 0],
+      });
+    }
+
+    for (const side of [-1, 1] as const) {
+      shapes.push({
+        key: 'rails',
+        geometry: new THREE.BoxGeometry(RAIL_WIDTH, railHeight, railSpanZ),
+        position: [side * railOffsetX, railCentreY, 0],
+      });
+      shapes.push({
+        key: 'rails',
+        geometry: new THREE.BoxGeometry(bedWidth + 2 * CUSHION_WIDTH, railHeight, RAIL_WIDTH),
+        position: [0, railCentreY, side * railOffsetZ],
+      });
+      shapes.push({
+        key: 'inlays',
+        geometry: new THREE.BoxGeometry(RAIL_WIDTH * 0.42, 0.004, railSpanZ * 0.94),
+        position: [side * railOffsetX, RAIL_TOP + 0.001, 0],
+      });
+      shapes.push({
+        key: 'inlays',
+        geometry: new THREE.BoxGeometry(
+          (bedWidth + 2 * CUSHION_WIDTH) * 0.9,
+          0.004,
+          RAIL_WIDTH * 0.42,
+        ),
+        position: [0, RAIL_TOP + 0.001, side * railOffsetZ],
+      });
+    }
+
+    const result = mergeShapes(shapes);
+    for (const shape of shapes) shape.geometry.dispose();
+
+    return {
+      cushions: result.get('cushions')!,
+      rails: result.get('rails')!,
+      inlays: result.get('inlays')!,
+      pocketWalls: result.get('pocketWalls')!,
+      pocketFloors: result.get('pocketFloors')!,
+      pocketRings: result.get('pocketRings')!,
+    };
+  }, [
+    table,
+    cushions,
+    bedWidth,
+    railHeight,
+    railSpanZ,
+    railOffsetX,
+    railOffsetZ,
+    railCentreY,
+  ]);
+
+  // Merged buffers are ours, not React's, so a new table has to hand them back.
+  useEffect(
+    () => () => {
+      for (const geometry of Object.values(merged)) geometry.dispose();
+    },
+    [merged],
+  );
+
   const legInsetX = railOffsetX + RAIL_WIDTH / 2 - LEG_SIZE / 2 - 0.02;
   const legInsetZ = railOffsetZ + RAIL_WIDTH / 2 - LEG_SIZE / 2 - 0.02;
   const legHeight = BODY_BOTTOM - FLOOR_Y;
@@ -189,11 +298,16 @@ export function TableMesh({ table }: { table: Table }) {
         {/* Sheen is what makes this read as cloth. Billiard baize is a mat of
             short fibres that catches light at grazing angles, and without that
             rim it renders as flat green paint. */}
+        {/* Sheen is a third specular lobe evaluated per light, over the largest
+            surface on screen — which makes it the single most expensive material
+            feature in the scene, and the one a preset turns off first. Without it
+            the baize still reads as cloth from its colour and roughness; it just
+            loses the pale rim at grazing angles. */}
         <meshPhysicalMaterial
           color={cloth.cloth}
           roughness={1}
           metalness={0}
-          sheen={1}
+          sheen={quality.clothSheen ? 1 : 0}
           sheenRoughness={0.85}
           sheenColor={cloth.sheen}
         />
@@ -207,33 +321,31 @@ export function TableMesh({ table }: { table: Table }) {
         it. The liner is BackSide because it is only ever seen from within, and
         it starts a hair above the cloth so no seam opens at the rim.
       */}
-      {table.pockets.map((pocket) => (
-        <group key={pocket.id} position={[sceneX(pocket.center), 0, sceneZ(pocket.center)]}>
-          <mesh position={[0, (0.004 - POCKET_DEPTH) / 2, 0]}>
-            <cylinderGeometry
-              args={[pocket.radius, pocket.radius * 0.86, POCKET_DEPTH + 0.004, 24, 1, true]}
-            />
-            <meshBasicMaterial color="#0a0f0c" side={THREE.BackSide} />
-          </mesh>
+      {/*
+        Six pockets, three meshes each, as three meshes total.
 
-          <mesh position={[0, -POCKET_DEPTH, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[pocket.radius, 24]} />
-            <meshBasicMaterial color="#050806" />
-          </mesh>
+        They cannot be instanced — a corner pocket and a middle one are different
+        sizes — but nothing about them moves, so merging does the same job. This
+        was the largest remaining group of draw calls on the table by some way.
+      */}
+      <mesh geometry={merged.pocketWalls}>
+        <meshBasicMaterial color="#0a0f0c" side={THREE.BackSide} />
+      </mesh>
 
-          {/* A dark ring on the cloth, so the mouth has an edge instead of the
-              paper-thin cut left by the hole in the ShapeGeometry. */}
-          <mesh position={[0, 0.0015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[pocket.radius, pocket.radius + 0.014, 24]} />
-            <meshBasicMaterial
-              color={Palette.pocket}
-              polygonOffset
-              polygonOffsetFactor={-3}
-              polygonOffsetUnits={-3}
-            />
-          </mesh>
-        </group>
-      ))}
+      <mesh geometry={merged.pocketFloors}>
+        <meshBasicMaterial color="#050806" />
+      </mesh>
+
+      {/* A dark ring on the cloth, so the mouth has an edge instead of the
+          paper-thin cut left by the hole in the ShapeGeometry. */}
+      <mesh geometry={merged.pocketRings}>
+        <meshBasicMaterial
+          color={Palette.pocket}
+          polygonOffset
+          polygonOffsetFactor={-3}
+          polygonOffsetUnits={-3}
+        />
+      </mesh>
 
       {/* Slate body. */}
       <mesh position={[0, (BODY_TOP + BODY_BOTTOM) / 2, 0]}>
@@ -241,76 +353,47 @@ export function TableMesh({ table }: { table: Table }) {
         <meshPhysicalMaterial color={Palette.railDark} roughness={0.6} clearcoat={0.2} />
       </mesh>
 
-      {/* Cushions, one per solver segment. */}
-      {cushions.map((box, index) => (
-        <mesh key={`cushion-${index}`} position={box.position} rotation={box.rotation}>
-          <boxGeometry args={[CUSHION_WIDTH, CUSHION_HEIGHT, box.length]} />
-          <meshPhysicalMaterial
-            color={cloth.cushion}
-            roughness={1}
-            sheen={0.8}
-            sheenRoughness={0.8}
-            sheenColor={cloth.sheen}
-          />
-        </mesh>
-      ))}
+      {/*
+        Cushions, rails and inlays, welded into one geometry apiece.
 
-      {/* Wooden rails, outboard of the cushions and continuous across pockets. */}
-      {([-1, 1] as const).map((side) => (
-        <mesh key={`rail-x-${side}`} position={[side * railOffsetX, railCentreY, 0]}>
-          <boxGeometry args={[RAIL_WIDTH, railHeight, railSpanZ]} />
-          {/* Varnished rail: a clearcoat over the wood, so the lamps leave a
-              proper reflection along the edge instead of a dull smear. */}
-          <meshPhysicalMaterial
-            color={Palette.rail}
-            roughness={0.4}
-            clearcoat={0.6}
-            clearcoatRoughness={0.18}
-          />
-        </mesh>
-      ))}
-      {([-1, 1] as const).map((side) => (
-        <mesh key={`rail-z-${side}`} position={[0, railCentreY, side * railOffsetZ]}>
-          <boxGeometry args={[bedWidth + 2 * CUSHION_WIDTH, railHeight, RAIL_WIDTH]} />
-          {/* Varnished rail: a clearcoat over the wood, so the lamps leave a
-              proper reflection along the edge instead of a dull smear. */}
-          <meshPhysicalMaterial
-            color={Palette.rail}
-            roughness={0.4}
-            clearcoat={0.6}
-            clearcoatRoughness={0.18}
-          />
-        </mesh>
-      ))}
+        Fourteen meshes became three. None of them ever moves relative to the
+        table, and every group already shared a single material — so as separate
+        meshes they were fourteen trips across the JS bridge per frame buying
+        nothing that one trip does not.
+      */}
+      <mesh geometry={merged.cushions}>
+        <meshPhysicalMaterial
+          color={cloth.cushion}
+          roughness={1}
+          sheen={quality.clothSheen ? 0.8 : 0}
+          sheenRoughness={0.8}
+          sheenColor={cloth.sheen}
+        />
+      </mesh>
+
+      <mesh geometry={merged.rails}>
+        {/* Varnished rail: a clearcoat over the wood, so the lamps leave a
+            proper reflection along the edge instead of a dull smear. */}
+        <meshPhysicalMaterial
+          color={Palette.rail}
+          roughness={0.4}
+          clearcoat={quality.propClearcoat ? 0.6 : 0}
+          clearcoatRoughness={0.18}
+        />
+      </mesh>
 
       {/* Inlay strip down the middle of each rail: one line of lighter wood is
           what stops a rail from reading as a plain brown bar. */}
-      {([-1, 1] as const).map((side) => (
-        <mesh key={`inlay-x-${side}`} position={[side * railOffsetX, RAIL_TOP + 0.001, 0]}>
-          <boxGeometry args={[RAIL_WIDTH * 0.42, 0.004, railSpanZ * 0.94]} />
-          <meshPhysicalMaterial
-            color="#c8a06a"
-            roughness={0.3}
-            clearcoat={0.7}
-            polygonOffset
-            polygonOffsetFactor={-2}
-            polygonOffsetUnits={-2}
-          />
-        </mesh>
-      ))}
-      {([-1, 1] as const).map((side) => (
-        <mesh key={`inlay-z-${side}`} position={[0, RAIL_TOP + 0.001, side * railOffsetZ]}>
-          <boxGeometry args={[(bedWidth + 2 * CUSHION_WIDTH) * 0.9, 0.004, RAIL_WIDTH * 0.42]} />
-          <meshPhysicalMaterial
-            color="#c8a06a"
-            roughness={0.3}
-            clearcoat={0.7}
-            polygonOffset
-            polygonOffsetFactor={-2}
-            polygonOffsetUnits={-2}
-          />
-        </mesh>
-      ))}
+      <mesh geometry={merged.inlays}>
+        <meshPhysicalMaterial
+          color="#c8a06a"
+          roughness={0.3}
+          clearcoat={quality.propClearcoat ? 0.7 : 0}
+          polygonOffset
+          polygonOffsetFactor={-2}
+          polygonOffsetUnits={-2}
+        />
+      </mesh>
 
       {/* Nothing rings the pocket mouths. A ball has to be able to reach the
           hole from any angle along the rail, and anything sitting proud of the

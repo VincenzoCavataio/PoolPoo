@@ -59,6 +59,15 @@ export const it = {
   'options.sensitivitySlow': 'Lenta',
   'options.sensitivityMedium': 'Media',
   'options.sensitivityFast': 'Rapida',
+  // ------------------------------------------------------------------ grafica
+  'quality.section': 'Grafica',
+  'quality.low': 'Bassa',
+  'quality.lowFeel': '30 fps stabili. Una lampada, niente riflessi.',
+  'quality.medium': 'Media',
+  'quality.mediumFeel': '60 fps. Due lampade e riflessi, senza il velo del panno.',
+  'quality.high': 'Alta',
+  'quality.highFeel': '60 fps. Tutte le luci, riflessi e panno con la sua peluria.',
+
   'options.audio': 'Audio',
   'options.haptics': 'Vibrazione',
   'options.hapticsBody': 'Un colpetto quando tiri, uno diverso quando imbuchi.',

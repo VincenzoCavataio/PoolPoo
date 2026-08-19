@@ -16,6 +16,9 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
+import { qualityById } from '@/constants/quality';
+import { useSettings } from '@/store/settings';
+
 import { FLOOR_Y, ROOM } from './locations';
 
 export type PropGroup =
@@ -957,6 +960,7 @@ function mergeByMaterial(parts: Part[]): Map<MaterialKey, THREE.BufferGeometry> 
 }
 
 export function Props({ groups }: { groups: PropGroup[] }) {
+  const quality = qualityById(useSettings((s) => s.quality));
   const key = groups.join(',');
 
   const merged = useMemo(() => {
@@ -987,13 +991,17 @@ export function Props({ groups }: { groups: PropGroup[] }) {
             {spec.basic ? (
               <meshBasicMaterial color={spec.color} />
             ) : (
+              // Varnish and gloss on the furniture is a second specular lobe per
+              // light across every surface in the room, and the room is most of
+              // what fills the screen behind the table — so a preset drops it
+              // here, while the balls keep theirs.
               <meshPhysicalMaterial
                 color={spec.color}
                 roughness={spec.roughness ?? 0.6}
                 metalness={spec.metalness ?? 0}
-                clearcoat={spec.clearcoat ?? 0}
+                clearcoat={quality.propClearcoat ? (spec.clearcoat ?? 0) : 0}
                 clearcoatRoughness={spec.clearcoatRoughness ?? 0.2}
-                sheen={spec.sheen ?? 0}
+                sheen={quality.propClearcoat ? (spec.sheen ?? 0) : 0}
                 sheenColor={spec.sheenColor ?? '#ffffff'}
                 emissive={spec.emissive ?? '#000000'}
                 emissiveIntensity={spec.emissiveIntensity ?? 1}

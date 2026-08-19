@@ -12,6 +12,9 @@ import { useFrame, useThree } from '@react-three/fiber/native';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
+import { qualityById } from '@/constants/quality';
+import { useSettings } from '@/store/settings';
+
 import { FLOOR_Y, ROOM, type GameLocation, type LocationLamp } from './locations';
 import { Props } from './props';
 
@@ -148,9 +151,30 @@ const SPILL_RANGE = 7;
 const LAMP_RANGE = 8;
 
 export function Environment({ location }: { location: GameLocation }) {
+  const quality = qualityById(useSettings((s) => s.quality));
+
   const hasNeon = location.props.includes('neon');
   const hasFloorLamp = location.props.includes('floorLamp');
   const hasArcade = location.props.includes('arcade');
+
+  /**
+   * The lamps this preset can afford.
+   *
+   * When only one is allowed it is moved onto the centre line rather than being
+   * the first of the pair: two lamps hang either side of the middle, so keeping
+   * one where it was would light half the table and leave the rest dim.
+   */
+  const lamps = useMemo(() => {
+    if (quality.tableLamps >= location.lamps.length) return location.lamps;
+    const [first] = location.lamps;
+    if (!first) return location.lamps;
+    return [
+      {
+        ...first,
+        position: [first.position[0], first.position[1], 0] as [number, number, number],
+      },
+    ];
+  }, [location.lamps, quality.tableLamps]);
 
   return (
     <group>
@@ -177,7 +201,15 @@ export function Environment({ location }: { location: GameLocation }) {
 
       {location.walls ? <Walls color={location.walls.color} height={location.walls.height} /> : null}
 
-      {location.lamps.map((lamp, index) => (
+      {/*
+        The lamps that light the game.
+
+        A preset can cut this to one, which halves the most expensive light in
+        the scene. Never to zero: these are what the table is lit by, and the
+        single remaining lamp is moved to the middle so a shortened rack does not
+        leave one end in the dark.
+      */}
+      {lamps.map((lamp, index) => (
         <Lamp key={index} lamp={lamp} />
       ))}
 
@@ -192,7 +224,7 @@ export function Environment({ location }: { location: GameLocation }) {
           two orders of magnitude dimmer than the table lamps by the time they
           reach the cloth, so bounding them changes nothing that can be seen and
           takes them out of the loop for most of the scene. */}
-      {hasNeon ? (
+      {quality.spillLights && hasNeon ? (
         <pointLight
           position={[0, 0.95, -ROOM.depth / 2 + 0.45]}
           color="#ff53d8"
@@ -202,7 +234,7 @@ export function Environment({ location }: { location: GameLocation }) {
         />
       ) : null}
 
-      {hasFloorLamp ? (
+      {quality.spillLights && hasFloorLamp ? (
         <pointLight
           position={[ROOM.width / 2 - 0.5, FLOOR_Y + 1.5, -ROOM.depth / 2 + 1.0]}
           color="#ffcf9a"
@@ -212,7 +244,7 @@ export function Environment({ location }: { location: GameLocation }) {
         />
       ) : null}
 
-      {hasArcade ? (
+      {quality.spillLights && hasArcade ? (
         <>
           <pointLight
             position={[-1.25, FLOOR_Y + 1.2, -ROOM.depth / 2 + 1.1]}

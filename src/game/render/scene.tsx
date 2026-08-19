@@ -14,6 +14,7 @@ import { ShotAudio } from '@/game/audio/shot-audio';
 import type { Table } from '@/game/core/table';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
+import { qualityById } from '@/constants/quality';
 import { useSettings } from '@/store/settings';
 
 import { AimGuide } from './aim-guide';
@@ -35,6 +36,20 @@ const DAMPING = 11;
 const REPLAY_DAMPING = 5;
 /** How far ahead of the cue ball the cue view looks. */
 const CUE_LOOK_AHEAD = 1.0;
+
+/**
+ * How often the scene is redrawn, in frames per second.
+ *
+ * A mutable box rather than React state: the only place a limit can be applied
+ * is inside the renderer's own draw call, which is installed once when the GL
+ * context is created and never rebuilt. A value captured from a render would be
+ * the one from mount and would never change again.
+ */
+const frameLimit = { fps: 60 };
+
+/** A hair of slack, so a panel running a shade under its nominal rate is not
+ *  halved by a threshold it keeps missing by a microsecond. */
+const FRAME_SLACK_MS = 1.5;
 
 /**
  * There is no pixel-ratio dial on this platform.
@@ -236,6 +251,10 @@ export function GameScene() {
   const replay = useSession((state) => state.replay);
   const gameId = useSession((state) => state.gameId);
   const locationId = useSettings((state) => state.locationId);
+  const quality = qualityById(useSettings((state) => state.quality));
+
+  // Pushed into the box the draw call reads, which cannot see React state.
+  frameLimit.fps = quality.fps;
 
   const location = effectiveLocation(locationId);
 
@@ -247,14 +266,46 @@ export function GameScene() {
 
   return (
     <Canvas
-      gl={{ antialias: true }}
-      onCreated={({ gl }) => {
+      /**
+       * Building the renderer here, rather than letting the canvas build one, so
+       * the frame limiter can sit *inside* it.
+       *
+       * That position is the whole point. react-three-fiber's native canvas
+       * wraps `gl.render` to append expo-gl's `endFrameEXP`, which is what hands
+       * the finished buffer to the display — and it wraps whatever it is given.
+       * A limiter installed afterwards, in `onCreated`, ends up wrapping *that*,
+       * so skipping a frame also skips `endFrameEXP`: the native loop is left
+       * waiting for a buffer that never arrives, and the result is exactly the
+       * intermittent hitch this was meant to prevent.
+       *
+       * Installed here, the limiter is underneath. Skipping means the scene is
+       * not re-rendered but the previous buffer is still presented, which is
+       * precisely what running at 30 on a 60 Hz panel looks like — every image
+       * held for two refreshes, and the display never left waiting.
+       */
+      gl={(defaults) => {
+        const renderer = new THREE.WebGLRenderer({
+          ...defaults,
+          antialias: quality.antialias,
+        });
+
         // Filmic tone mapping rather than raw clamping. Point lights close to a
         // glossy ball blow straight past white otherwise, and the highlights
         // turn into flat discs instead of reading as reflections.
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.15;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
 
+        const draw = renderer.render.bind(renderer);
+        let lastDrawn = 0;
+        renderer.render = (scene: THREE.Scene, camera: THREE.Camera) => {
+          const minimum = 1000 / frameLimit.fps - FRAME_SLACK_MS;
+          const now = Date.now();
+          if (now - lastDrawn < minimum) return;
+          lastDrawn = now;
+          draw(scene, camera);
+        };
+
+        return renderer;
       }}>
       {/* Both attach to the scene itself, so they belong at the top level. */}
       <color attach="background" args={[location.background]} />
@@ -262,7 +313,10 @@ export function GameScene() {
         <fog attach="fog" args={[location.fog.color, location.fog.near, location.fog.far]} />
       ) : null}
 
-      <EnvironmentReflections location={location} />
+      {/* Reflections of the room in the balls and rails. Generated once into a
+          cube map, so the cost is in memory and setup rather than per frame —
+          which is why only the lowest preset gives it up. */}
+      {quality.environmentMap ? <EnvironmentReflections location={location} /> : null}
       <Environment location={location} />
 
       <CameraRig table={world.table} />

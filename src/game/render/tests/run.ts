@@ -9,10 +9,14 @@
  */
 
 import { assert, assertClose, assertEqual, report, suite, test } from '../../core/tests/harness';
+import * as THREE from 'three';
+
 import { createTable } from '../../core/table';
 import { BALL_RADIUS, PHYSICS } from '../../core/constants';
 import { spinAxis, spinRate, SPOT_RADIUS } from '../coords';
 import { BALL_SETS, colorForBallIn } from '../../../constants/ball-sets';
+import { QUALITY_PRESETS, relativeShadingCost } from '../../../constants/quality';
+import { mergeShapes } from '../merge';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
 import { propFootprints, propParts } from '../props';
@@ -700,6 +704,178 @@ suite('ball sets', () => {
     // If every surface were identical the sets would be palettes, not sets.
     const finishes = new Set(BALL_SETS.map((s) => s.surface.roughness));
     assert(finishes.size === BALL_SETS.length, 'two sets share the same finish');
+  });
+});
+
+suite('graphics presets', () => {
+  const byId = Object.fromEntries(QUALITY_PRESETS.map((q) => [q.id, q]));
+
+  /**
+   * Three settings that cost the same are one setting with three names.
+   *
+   * The presets were built from `relativeShadingCost`, which counts lights
+   * weighted by how expensive the materials they fall on are — the arithmetic
+   * that decides what a frame costs on a phone. This holds them apart.
+   */
+  test('each level costs meaningfully less than the one above', () => {
+    const high = relativeShadingCost(byId.high);
+    const medium = relativeShadingCost(byId.medium);
+    const low = relativeShadingCost(byId.low);
+
+    assert(medium < high * 0.85, `medium is ${((medium / high) * 100).toFixed(0)}% of high`);
+    assert(low < medium * 0.7, `low is ${((low / medium) * 100).toFixed(0)}% of medium`);
+  });
+
+  test('low costs less than half of high', () => {
+    const ratio = relativeShadingCost(byId.low) / relativeShadingCost(byId.high);
+    assert(ratio < 0.5, `low is ${(ratio * 100).toFixed(0)}% of high, which is not worth a setting`);
+  });
+
+  /**
+   * The table always has to be lit. Every other light in the room is decoration
+   * a preset may drop, but a preset that turns the lamps off has made the game
+   * unplayable rather than cheaper.
+   */
+  test('every preset keeps a light over the table', () => {
+    for (const preset of QUALITY_PRESETS) {
+      assert(preset.tableLamps >= 1, `${preset.id} leaves the table unlit`);
+    }
+  });
+
+  test('nothing above low gives up the reflections', () => {
+    assert(byId.medium.environmentMap, 'medium should still reflect the room');
+    assert(byId.high.environmentMap, 'high should still reflect the room');
+  });
+
+  test('high gives up nothing', () => {
+    const high = byId.high;
+    assert(
+      high.spillLights && high.propClearcoat && high.clothSheen && high.environmentMap &&
+        high.antialias && high.ballShadows,
+      'high is meant to be the full scene',
+    );
+  });
+
+  /** A preset that turns a feature back on at a lower level is a mistake. */
+  test('features only ever come off going down', () => {
+    const order = [byId.low, byId.medium, byId.high];
+    const flags = ['spillLights', 'propClearcoat', 'clothSheen', 'environmentMap', 'antialias'] as const;
+
+    for (const flag of flags) {
+      let seenOn = false;
+      for (const preset of order) {
+        if (preset[flag]) seenOn = true;
+        else
+          assert(
+            !seenOn,
+            `${flag} is on at a lower level than ${preset.id} but off at ${preset.id}`,
+          );
+      }
+    }
+  });
+});
+
+suite('geometry merging', () => {
+  /**
+   * Welding shapes together is what keeps the draw call count down, and a draw
+   * call on expo-gl is a trip across the JS bridge — the thing that was actually
+   * causing stutter. But a merge that quietly loses or misplaces vertices would
+   * be invisible in code and obvious on screen, so this checks the arithmetic.
+   */
+  test('a merge keeps every vertex', () => {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const perBox = box.toNonIndexed().getAttribute('position').count;
+
+    const merged = mergeShapes([
+      { key: 'a', geometry: box, position: [0, 0, 0] },
+      { key: 'a', geometry: box, position: [3, 0, 0] },
+      { key: 'b', geometry: box, position: [0, 5, 0] },
+    ]);
+
+    assertEqual(merged.get('a')!.getAttribute('position').count, perBox * 2, 'bucket a');
+    assertEqual(merged.get('b')!.getAttribute('position').count, perBox, 'bucket b');
+  });
+
+  test('a merge puts the shapes where they were asked for', () => {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const merged = mergeShapes([
+      { key: 'a', geometry: box, position: [0, 0, 0] },
+      { key: 'a', geometry: box, position: [3, 0, 0] },
+    ]);
+
+    const geometry = merged.get('a')!;
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox!;
+    assertClose(bounds.min.x, -0.5, 1e-6, 'left edge');
+    assertClose(bounds.max.x, 3.5, 1e-6, 'right edge');
+  });
+
+  test('a merge carries rotation into the vertices', () => {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const merged = mergeShapes([
+      { key: 'a', geometry: box, position: [0, 0, 0], rotation: [0, Math.PI / 4, 0] },
+    ]);
+
+    const geometry = merged.get('a')!;
+    geometry.computeBoundingBox();
+    // A unit cube turned 45 degrees about y is sqrt(2) across.
+    assertClose(geometry.boundingBox!.max.x, Math.SQRT1_2, 1e-6, 'turned width');
+  });
+
+  test('a merge keeps normals, or the result renders unlit', () => {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const merged = mergeShapes([{ key: 'a', geometry: box, position: [0, 0, 0] }]);
+    const normals = merged.get('a')!.getAttribute('normal');
+    assert(normals !== undefined, 'the merged geometry has no normals');
+    // Rotation must leave them unit length, or the lighting goes wrong.
+    const x = normals.getX(0);
+    const y = normals.getY(0);
+    const z = normals.getZ(0);
+    assertClose(Math.hypot(x, y, z), 1, 1e-5, 'normal length');
+  });
+
+  test('a merge does not consume the geometry it was given', () => {
+    // The sources are shared between shapes, so consuming one would empty the
+    // rest of the object it belongs to.
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const before = box.getAttribute('position').count;
+    mergeShapes([{ key: 'a', geometry: box, position: [0, 0, 0] }]);
+    assertEqual(box.getAttribute('position').count, before, 'source was modified');
+  });
+});
+
+suite('frame rate', () => {
+  /**
+   * Every preset has to name a rate the display can actually hold.
+   *
+   * A limiter can only ever *skip* frames a panel is already offering, so the
+   * useful values are whole divisions of a refresh rate — 60 and 30 on a 60 Hz
+   * screen. Anything between the two produces an uneven cadence, where some
+   * images are held for one refresh and some for two, and that reads as worse
+   * than the lower rate held steadily.
+   */
+  test('every preset draws at a whole division of 60', () => {
+    for (const preset of QUALITY_PRESETS) {
+      assert(
+        60 % preset.fps === 0,
+        `${preset.id} asks for ${preset.fps}fps, which does not divide a 60Hz panel evenly`,
+      );
+    }
+  });
+
+  test('no preset asks for more than a display can give', () => {
+    for (const preset of QUALITY_PRESETS) {
+      assert(preset.fps <= 60, `${preset.id} asks for ${preset.fps}fps`);
+      assert(preset.fps >= 30, `${preset.id} asks for ${preset.fps}fps, below playable`);
+    }
+  });
+
+  /** The cheapest preset is the one that should be trading frames for headroom. */
+  test('the low preset is the one that halves the rate', () => {
+    const byId = Object.fromEntries(QUALITY_PRESETS.map((q) => [q.id, q]));
+    assertEqual(byId.low.fps, 30, 'low should run at 30');
+    assertEqual(byId.medium.fps, 60, 'medium should run at 60');
+    assertEqual(byId.high.fps, 60, 'high should run at 60');
   });
 });
 
