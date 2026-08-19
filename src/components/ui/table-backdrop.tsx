@@ -695,10 +695,24 @@ function CeilingLamp({ armed }: { armed: boolean }) {
       perspective and starts losing more than the angle wins back.
     */
     <group position={[0, 0.95, 0]} rotation={[0, 0.35, 0]}>
-      {/* Two drops, because a strip light hangs from both ends. */}
+      {/*
+        Two drops, because a strip light hangs from both ends.
+
+        They are the same wire, and they have to *look* the same. The fitting is
+        turned across the room, so one end is up to two thirds nearer the camera
+        than the other and perspective alone made the near drop read as a rope
+        beside a thread. Two things were making that worse than it had to be: at
+        6 sides a cylinder shows its flats once it is close enough, and 3mm of
+        radius is thick enough for those flats to have area.
+
+        Thinner and rounder fixes both. 2mm reads as wire at the near end instead
+        of as cord, and the extra sides keep the silhouette curved rather than
+        faceted where it is largest — so what is left is the honest foreshortening
+        of a fitting hung at an angle.
+      */}
       {[-0.52, 0.52].map((z) => (
         <mesh key={z} position={[0, 0.3, z]}>
-          <cylinderGeometry args={[0.003, 0.003, 0.6, 6]} />
+          <cylinderGeometry args={[0.002, 0.002, 0.6, 10]} />
           <meshStandardMaterial color="#14161a" roughness={0.9} />
         </mesh>
       ))}

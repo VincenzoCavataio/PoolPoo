@@ -191,77 +191,86 @@ export default function SetupScreen() {
           <TablePreview locationId={locationId} clothId={clothId} ballSetId={ballSetId} />
         </Animated.View>
 
-        {/* Which set of choices is showing. */}
-        <View style={styles.tabRow}>
-          {tabs.map((entry) => {
-            const active = entry.id === tab;
-            return (
-              <Pressable
-                key={entry.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                onPress={() => {
-                  playTap();
-                  setTab(entry.id);
-                }}
-                style={({ pressed }) => [
-                  styles.tab,
-                  active && styles.tabActive,
-                  pressed && styles.pressed,
-                ]}>
-                <View style={active ? undefined : styles.tabIconIdle}>{entry.icon}</View>
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                  {entry.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/*
+          Tabs and choices, on one surface.
 
-        <View style={styles.choices}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.choiceRow}>
-              {tab === 'place'
-                ? LOCATIONS.map((location) => (
-                    <Swatch
-                      key={location.id}
-                      colour={location.floorColor}
-                      label={t(location.labelKey)}
-                      selected={location.id === locationId}
-                      onPress={() => setLocation(location.id)}
-                    />
-                  ))
-                : null}
+          They were separate slabs with a gap between them, which read as two
+          unrelated controls — but a tab means nothing apart from the thing it
+          reveals. Sharing a panel makes the tabs the heading of the row they
+          switch, which is what they actually are.
+        */}
+        <View style={styles.picker}>
+          <View style={styles.tabRow}>
+            {tabs.map((entry) => {
+              const active = entry.id === tab;
+              return (
+                <Pressable
+                  key={entry.id}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    playTap();
+                    setTab(entry.id);
+                  }}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    active && styles.tabActive,
+                    pressed && styles.pressed,
+                  ]}>
+                  <View style={active ? undefined : styles.tabIconIdle}>{entry.icon}</View>
+                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                    {entry.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-              {tab === 'cloth'
-                ? CLOTH_OPTIONS.map((option) => (
-                    <Swatch
-                      key={option.id}
-                      colour={option.cloth}
-                      label={t(option.labelKey)}
-                      selected={option.id === clothId}
-                      onPress={() => setCloth(option.id)}
-                    />
-                  ))
-                : null}
+          <View style={styles.choices}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.choiceRow}>
+                {tab === 'place'
+                  ? LOCATIONS.map((location) => (
+                      <Swatch
+                        key={location.id}
+                        colour={location.floorColor}
+                        label={t(location.labelKey)}
+                        selected={location.id === locationId}
+                        onPress={() => setLocation(location.id)}
+                      />
+                    ))
+                  : null}
 
-              {tab === 'balls'
-                ? BALL_SETS.map((option) => (
-                    <Swatch
-                      key={option.id}
-                      colour={colorForBallIn(option, 3)}
-                      label={t(option.labelKey)}
-                      selected={option.id === ballSetId}
-                      onPress={() => setBallSet(option.id)}
-                    />
-                  ))
-                : null}
-            </View>
-          </ScrollView>
+                {tab === 'cloth'
+                  ? CLOTH_OPTIONS.map((option) => (
+                      <Swatch
+                        key={option.id}
+                        colour={option.cloth}
+                        label={t(option.labelKey)}
+                        selected={option.id === clothId}
+                        onPress={() => setCloth(option.id)}
+                      />
+                    ))
+                  : null}
 
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
-          </Text>
+                {tab === 'balls'
+                  ? BALL_SETS.map((option) => (
+                      <Swatch
+                        key={option.id}
+                        colour={colorForBallIn(option, 3)}
+                        label={t(option.labelKey)}
+                        selected={option.id === ballSetId}
+                        onPress={() => setBallSet(option.id)}
+                      />
+                    ))
+                  : null}
+              </View>
+            </ScrollView>
+
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
+            </Text>
+          </View>
         </View>
 
         <Pressable
@@ -269,6 +278,7 @@ export default function SetupScreen() {
           onPress={begin}
           style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
           <Text style={styles.goLabel}>{t('setup.start')}</Text>
+          <Text style={styles.goChevron}>{'›'}</Text>
         </Pressable>
       </View>
     </View>
@@ -333,14 +343,35 @@ const styles = StyleSheet.create({
     bottom: -6,
     alignSelf: 'center',
   },
+  /**
+   * The rack, turned to match the table.
+   *
+   * This plan view is twice as wide as it is deep, so the long axis runs left to
+   * right — the cue ball sits at one end and the pack at the other. The triangle
+   * has to point along that axis, at the cue ball, the way it does on a real
+   * table.
+   *
+   * It used to stack its rows downwards, which aimed the apex at a side cushion:
+   * the rack was square to the table rather than in line with it, and the whole
+   * layout read as a rack from some other table dropped onto this one. Laying
+   * the rows out as columns turns it the ninety degrees it was out by.
+   */
   previewRack: {
     position: 'absolute',
     right: '18%',
+    flexDirection: 'row',
     gap: 2,
     alignItems: 'center',
   },
+  /**
+   * One row of the triangle — drawn as a column, since the rack is on its side.
+   *
+   * The rows are listed apex first and a plain `row` lays them left to right, so
+   * the single ball ends up on the side the cue ball is on and the pack widens
+   * away from it.
+   */
   previewRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 2,
   },
   previewBall: {
@@ -363,22 +394,58 @@ const styles = StyleSheet.create({
   },
 
   // ------------------------------------------------------------------- tabs
+  /**
+   * The panel holding the tabs and whatever they open.
+   *
+   * Solid, like every other panel in the app, and for the reason the menus
+   * settled on: the scene behind this screen moves, and a rail sliding under a
+   * line of type changes the contrast under each letter *while it is being
+   * read*. Swatch labels and a two-line description over bare cloth were the
+   * worst case for that.
+   */
+  picker: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: '#0d1210',
+    overflow: 'hidden',
+  },
+  /**
+   * The tabs, along the top of that panel.
+   *
+   * Divided from the content by a hairline rather than boxed off from it: they
+   * are the panel's heading, not a separate control floating above it.
+   */
   tabRow: {
     flexDirection: 'row',
     gap: Spacing.one,
+    padding: Spacing.one,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Luxe.hairline,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     gap: 4,
     paddingVertical: Spacing.two,
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent',
   },
+  /**
+   * The selected tab, in the same family as the panel it sits in.
+   *
+   * It used to be `#161208`, the app's near-black gold — hue 43, all but
+   * identical to the gold itself. That works where gold is the theme, but this
+   * screen is green: against a panel at hue 156 the only warm thing on it read
+   * as brown rather than as lit. This is the panel's own colour raised a couple
+   * of stops, so the selected tab is marked by being brighter than its
+   * neighbours instead of by being a different temperature. The gold edge and
+   * label still carry the accent.
+   */
   tabActive: {
     borderColor: 'rgba(201, 169, 98, 0.4)',
-    backgroundColor: '#161208',
+    backgroundColor: '#1c2b26',
   },
   tabIconIdle: {
     opacity: 0.45,
@@ -395,8 +462,17 @@ const styles = StyleSheet.create({
   },
 
   // ---------------------------------------------------------------- choices
+  /**
+   * The lower half of the picker panel.
+   *
+   * It carries the padding rather than the panel, so the tab strip above can run
+   * edge to edge under its own divider — a heading that stops short of the sides
+   * reads as a floating control again, which is the thing merging the two was
+   * meant to fix.
+   */
   choices: {
     gap: Spacing.two,
+    padding: Spacing.three,
   },
   choiceRow: {
     flexDirection: 'row',
@@ -436,24 +512,48 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
 
+  /**
+   * The one thing this screen exists to do, and now it looks like it.
+   *
+   * It was an outlined dark rectangle with gold small caps — the same weight as
+   * a tab or a swatch, for the action that ends the screen. Filled gold is how
+   * the main menu already marks *its* primary action, so this is the app's own
+   * language rather than merely a louder button: the only solid gold surface on
+   * the screen, and the obvious place to go next.
+   */
   go: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.two,
     paddingVertical: Spacing.three,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: '#161208',
+    borderRadius: 8,
+    backgroundColor: Luxe.gold,
   },
   goPressed: {
-    backgroundColor: '#241d0f',
+    backgroundColor: '#b8985a',
   },
   goLabel: {
-    color: Luxe.gold,
+    // Ink on gold, not gold on black: a filled button carries dark type.
+    color: Luxe.ink,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 2.6,
     textTransform: 'uppercase',
     fontFamily: LuxeFonts.sans,
+  },
+  /**
+   * A chevron, because this one goes somewhere.
+   *
+   * Darker than a decorative mark would need to be: at 55% of ink on gold it
+   * measured 2.9:1, and while nothing depends on reading it, a glyph that faint
+   * beside 800-weight capitals looks like a rendering fault rather than a
+   * deliberately quiet flourish.
+   */
+  goChevron: {
+    color: 'rgba(8, 9, 11, 0.75)',
+    fontSize: 20,
+    lineHeight: 22,
+    marginTop: -2,
   },
 });
