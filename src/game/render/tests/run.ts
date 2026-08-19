@@ -138,6 +138,52 @@ suite('ball number atlas', () => {
     }
   });
 
+  /**
+   * Two digits have to be two digits, not one wide smudge.
+   *
+   * The gap used to be measured between the digits' *centre lines*, while the
+   * strokes are drawn as round-capped lines with real thickness — so each digit
+   * spilled a stroke radius past its measured edge and the neighbouring ink
+   * overlapped. Total width looked right, which is why the test above passed
+   * while 11 and 12 ran together on the table.
+   *
+   * This looks for daylight: a column, somewhere in the middle of the number,
+   * with no ink in it at all.
+   */
+  test('two-digit numbers have a clear gap between the digits', () => {
+    const data = atlasPixels();
+
+    for (const ball of [10, 11, 12, 13, 14, 15]) {
+      const [originX, originY] = cellOrigin(ball);
+
+      // Which columns carry ink, and where the number starts and ends.
+      const inked: boolean[] = [];
+      let first = CELL;
+      let last = -1;
+      for (let x = 0; x < CELL; x++) {
+        let any = false;
+        for (let y = 0; y < CELL; y++) {
+          if (alphaAt(data, originX + x, originY + y) >= INSIDE) {
+            any = true;
+            break;
+          }
+        }
+        inked[x] = any;
+        if (any) {
+          if (x < first) first = x;
+          last = x;
+        }
+      }
+
+      assert(last > first, `ball ${ball} drew nothing`);
+
+      let clear = 0;
+      for (let x = first + 1; x < last; x++) if (!inked[x]) clear++;
+
+      assert(clear > 0, `ball ${ball} has no gap between its digits`);
+    }
+  });
+
   test('two-digit numbers are wider than single digits', () => {
     const data = atlasPixels();
 

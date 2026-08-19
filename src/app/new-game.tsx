@@ -34,10 +34,25 @@ const PLAYER_OPTIONS = [1, 2, 3, 4];
  * Coloured from the set the player has actually chosen, so the control is made
  * of the same balls the game will be played with rather than a generic swatch.
  */
+/**
+ * One ball in the picker, drawn the way the table draws it.
+ *
+ * It carries its colour from the chosen set, its number, and — for a set that
+ * has stripes — the white band. Without those last two it was a coloured disc:
+ * the colour alone reads as a swatch, while a number on a band reads as a ball,
+ * and this screen is picking players out of a rack.
+ *
+ * The band is drawn behind the number and inside the circle, so the number sits
+ * on the white the way it does on a real stripe.
+ */
 function PlayerBall({ index, active, size }: { index: number; active: boolean; size: number }) {
   const setId = useSettings((s) => s.ballSetId);
   const set = ballSetById(setId);
-  const colour = colorForBallIn(set, index + 1);
+  const number = index + 1;
+  const colour = colorForBallIn(set, number);
+
+  // Stripes only exist above the eight, and only in a set that has them.
+  const striped = set.striped && number > 8;
 
   return (
     <View
@@ -47,23 +62,49 @@ function PlayerBall({ index, active, size }: { index: number; active: boolean; s
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: active ? colour : 'transparent',
+          backgroundColor: active ? (striped ? '#f2efe6' : colour) : 'transparent',
           borderColor: active ? 'transparent' : Luxe.hairlineStrong,
         },
       ]}>
-      {active ? (
+      {/* The stripe: a band across the middle, with the pale ball showing above
+          and below it. */}
+      {active && striped ? (
         <View
           style={[
-            styles.ballSheen,
-            {
-              width: size * 0.38,
-              height: size * 0.38,
-              borderRadius: size * 0.19,
-              top: size * 0.14,
-              left: size * 0.16,
-            },
+            styles.ballStripe,
+            { height: size * 0.56, backgroundColor: colour },
           ]}
         />
+      ) : null}
+
+      {active ? (
+        <>
+          <View
+            style={[
+              styles.ballSheen,
+              {
+                width: size * 0.38,
+                height: size * 0.38,
+                borderRadius: size * 0.19,
+                top: size * 0.14,
+                left: size * 0.16,
+              },
+            ]}
+          />
+
+          {/* The number, on the white disc every numbered ball carries. */}
+          <View
+            style={[
+              styles.ballDisc,
+              {
+                width: size * 0.52,
+                height: size * 0.52,
+                borderRadius: size * 0.26,
+              },
+            ]}>
+            <Text style={[styles.ballNumber, { fontSize: size * 0.3 }]}>{number}</Text>
+          </View>
+        </>
       ) : null}
     </View>
   );
@@ -221,10 +262,36 @@ const styles = StyleSheet.create({
   ball: {
     borderWidth: 1.5,
     overflow: 'hidden',
+    // The number disc is a child in normal flow, so without these it settles
+    // into the top-left corner instead of the middle of the circle.
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ballSheen: {
     position: 'absolute',
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  ballStripe: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    // Centred by hand: an absolute child ignores the parent's justification, and
+    // the band has to sit across the middle of the ball.
+    top: '22%',
+  },
+  /** The white disc the number is printed on. */
+  ballDisc: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f7f5ef',
+  },
+  ballNumber: {
+    color: '#14161a',
+    fontWeight: '800',
+    // The same gap the table's own numbers use, so a two-digit ball does not
+    // run its characters together.
+    letterSpacing: 0.5,
+    includeFontPadding: false,
   },
   countRow: {
     alignItems: 'center',

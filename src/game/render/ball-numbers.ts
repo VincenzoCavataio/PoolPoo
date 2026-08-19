@@ -164,7 +164,23 @@ function segmentsFor(value: number): { segments: Segment[]; strokeRadius: number
   const digits = String(value).split('');
   const glyphHeight = digits.length === 1 ? 42 : 34;
   const unitToTexels = glyphHeight * 0.62;
-  const gap = glyphHeight * 0.1;
+
+  /**
+   * The gap between digits, measured between their *ink* rather than their
+   * centre lines.
+   *
+   * `inkBounds` reports where the strokes' centre lines run, but each stroke is
+   * drawn as a round-capped line of radius `STROKE * glyphHeight` — so every
+   * digit spills that far past its measured edge on both sides. The old gap was
+   * a tenth of the glyph height, which at two digits is 3.4 texels against a
+   * stroke 7.3 texels thick: the neighbouring ink overlapped by about four
+   * texels, and 11 and 12 ran their characters together.
+   *
+   * Budgeting one full stroke width for the overlap plus a real space of its own
+   * leaves daylight between them at the size a ball is actually drawn.
+   */
+  const strokeRadius = STROKE * glyphHeight;
+  const gap = strokeRadius * 2 + glyphHeight * 0.09;
 
   const placed = digits.map((digit) => {
     const strokes = GLYPHS[digit] ?? [];
@@ -194,7 +210,7 @@ function segmentsFor(value: number): { segments: Segment[]; strokeRadius: number
     cursor += entry.width + gap;
   }
 
-  return { segments, strokeRadius: STROKE * glyphHeight };
+  return { segments, strokeRadius };
 }
 
 /**

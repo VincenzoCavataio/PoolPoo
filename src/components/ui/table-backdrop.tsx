@@ -34,6 +34,8 @@ import * as THREE from 'three';
 import { currentTilt, useTilt } from '@/components/ui/floating';
 import { playBallast, playSwitch } from '@/game/audio/sfx';
 import { createTable } from '@/game/core/table';
+import { createNumberAtlas, NUMBER_ATLAS_GRID } from '@/game/render/ball-numbers';
+import { SPOT_RADIUS } from '@/game/render/coords';
 import { TableMesh } from '@/game/render/table-mesh';
 
 interface Shot {
@@ -245,7 +247,22 @@ function RestingCue() {
       // proud of the wood, the way a real one does.
       [1.415, 0.0134],
       [1.448, 0.0134],
-      [1.45, 0.0126],
+      /**
+       * The face of the bumper, closed over three rings rather than two.
+       *
+       * The end used to be written as two points at the same distance — the rim
+       * and the centre — which is how a lathe is normally told to cap itself.
+       * That cannot survive the resampling below: every ring is keyed by its
+       * distance from the tip in a `Set`, so two entries at 1.45 collapse into
+       * one, and `radiusAt` then answers with the first match it finds, the rim.
+       * The centre point was silently dropped and the butt was left open — a
+       * tube you could see down, which is exactly the missing bumper.
+       *
+       * Giving each ring its own distance keeps all three, and the last two
+       * millimetres round the plug over instead of leaving a hole.
+       */
+      [1.4495, 0.0126],
+      [1.4498, 0.0072],
       [1.45, 0.0],
     ];
 
@@ -320,24 +337,169 @@ function RestingCue() {
  * frames. Scattered near the far end so they catch the warm light without
  * sitting where the menu's text goes.
  */
+/**
+ * How far from the pole the white badge reaches, and how wide it is.
+ *
+ * The same numbers the table's own balls use, so a ball left on the cloth here
+ * carries the marking it would carry in play.
+ */
+const BADGE_LATITUDE = 0.86;
+const BADGE_EXTENT = Math.sqrt(1 - BADGE_LATITUDE * BADGE_LATITUDE);
+
+/**
+ * A ball with its number on it, for the backdrop.
+ *
+ * The game draws these through a much larger shader — one that also handles ball
+ * sets, stripes and the cue ball's spots — and none of that applies to three
+ * balls sitting still on a dark table. This is the same badge and the same
+ * number atlas with everything else left out.
+ *
+ * The atlas is a distance field rather than a bitmap, which is what lets one
+ * small texture stay sharp on a ball a few pixels across and on the same ball
+ * filling half the frame: a `smoothstep` across the 0.5 contour recovers a clean
+ * edge at any size.
+ */
+/**
+ * The cue ball's markings, matching the table's.
+ *
+ * The red spots at the cardinal points are how the cue ball shows what it is
+ * doing in play — without them a spinning white sphere looks perfectly still.
+ * Here nothing is moving, but they are what makes the white ball read as *the*
+ * cue ball rather than as an unnumbered one somebody forgot to paint.
+ */
+const SPOT_COLOR = 'vec3(0.95, 0.035, 0.03)';
+
+/**
+ * Builds a ball for the backdrop: numbered, or the cue ball with its spots.
+ *
+ * `number` of zero means the cue ball, the same convention the solver uses.
+ */
+function createBackdropBallMaterial(atlas: THREE.Texture, colour: string, number: number) {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: colour,
+    roughness: 0.26,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+  });
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uNumbers = { value: atlas };
+    shader.uniforms.uNumber = { value: number };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vBallNormal;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vBallNormal = normalize(position);`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vBallNormal;
+        uniform sampler2D uNumbers;
+        uniform float uNumber;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+
+        vec3 ballNormal = normalize(vBallNormal);
+        float latitude = abs(ballNormal.y);
+
+        // The cue ball: red spots at the six cardinal points, and no badge.
+        //
+        // How close this fragment is to one of the axes, taken from the
+        // normalised normal — the interpolated one varies in length around the
+        // equator, which stretched the spots into ovals there.
+        if (uNumber < 0.5) {
+          float onAxis = max(max(abs(ballNormal.x), abs(ballNormal.y)), abs(ballNormal.z));
+          float spot = smoothstep(
+            ${(1 - SPOT_RADIUS * 1.35).toFixed(5)},
+            ${(1 - SPOT_RADIUS * 0.65).toFixed(5)},
+            onAxis
+          );
+          diffuseColor.rgb = mix(diffuseColor.rgb, ${SPOT_COLOR}, spot);
+        }
+
+        // The white badge at both poles, with the number inside it. Flipping x
+        // by the sign of y keeps the digits from reading mirrored underneath.
+        if (uNumber > 0.5 && latitude > ${BADGE_LATITUDE.toFixed(3)}) {
+          diffuseColor.rgb = vec3(0.96, 0.95, 0.92);
+
+          vec2 capPosition = vec2(ballNormal.x * sign(ballNormal.y), ballNormal.z);
+          vec2 cellUv = capPosition / ${BADGE_EXTENT.toFixed(4)} * 0.5 + 0.5;
+
+          if (cellUv.x > 0.0 && cellUv.x < 1.0 && cellUv.y > 0.0 && cellUv.y < 1.0) {
+            float column = mod(uNumber, ${NUMBER_ATLAS_GRID.toFixed(1)});
+            float row = floor(uNumber / ${NUMBER_ATLAS_GRID.toFixed(1)});
+            vec2 atlasUv = (cellUv + vec2(column, row)) / ${NUMBER_ATLAS_GRID.toFixed(1)};
+
+            float field = texture2D(uNumbers, atlasUv).a;
+            float coverage = smoothstep(0.46, 0.56, field);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.05, 0.06), coverage);
+          }
+        }`,
+      );
+  };
+
+  return material;
+}
+
+/**
+ * The balls left on the cloth: three numbered, and the cue ball with them.
+ *
+ * The cue ball is what makes the group read as a table someone was playing on
+ * rather than a few balls put out for decoration — it is the one that has to be
+ * there, and its red spots are the brightest small thing in a dark room.
+ *
+ * Numbered, because an unnumbered coloured sphere is a marble. They are tipped
+ * off the vertical so a badge comes into view: a ball resting squarely on a
+ * table keeps both of its numbers at the poles, which is to say out of sight
+ * from every angle this scene is filmed from. Each leans by a different amount,
+ * so they do not look stamped from one mould.
+ */
 function StrayBalls() {
+  const atlas = useMemo(createNumberAtlas, []);
+
+  const balls = useMemo(
+    () =>
+      (
+        [
+          [-0.42, -0.62, '#c81919', 3, 0.6],
+          [-0.28, -0.48, '#c8a519', 1, -1.1],
+          [0.36, -0.71, '#141414', 8, 0.25],
+          // The cue ball, set apart from the other three the way it ends up
+          // after a shot rather than tucked in with them.
+          [0.12, -0.28, '#f4f1e8', 0, 0.9],
+        ] as const
+      ).map(([x, z, colour, number, lean]) => ({
+        x,
+        z,
+        number,
+        lean,
+        material: createBackdropBallMaterial(atlas, colour, number),
+      })),
+    [atlas],
+  );
+
   return (
     <group>
-      {(
-        [
-          [-0.42, -0.62, '#c81919'],
-          [-0.28, -0.48, '#c8a519'],
-          [0.36, -0.71, '#141414'],
-        ] as const
-      ).map(([x, z, colour]) => (
-        <mesh key={`${x}-${z}`} position={[x, 0.0286, z]}>
-          <sphereGeometry args={[0.0286, 14, 10]} />
-          <meshPhysicalMaterial
-            color={colour}
-            roughness={0.26}
-            clearcoat={1}
-            clearcoatRoughness={0.04}
-          />
+      {balls.map((ball) => (
+        <mesh
+          key={ball.number}
+          position={[ball.x, 0.0286, ball.z]}
+          rotation={[0.5, ball.lean, 0]}
+          material={ball.material}>
+          {/* More segments than before: the badge is a shape read off the
+              surface, and a coarse sphere gives it a visibly polygonal edge. */}
+          <sphereGeometry args={[0.0286, 20, 14]} />
         </mesh>
       ))}
     </group>
