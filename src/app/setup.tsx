@@ -21,8 +21,8 @@ import { Heading, LuxeFonts } from '@/components/ui/luxe';
 import { BALL_SETS, ballSetById, colorForBallIn } from '@/constants/ball-sets';
 import { CLOTH_OPTIONS, clothById, Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { LOCATIONS, locationById } from '@/game/render/locations';
 import { playTap } from '@/game/audio/sfx';
+import { locationById, LOCATIONS } from '@/game/render/locations';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -161,7 +161,9 @@ export default function SetupScreen() {
     // Restarted here rather than on the previous screen, so the table is built
     // with the cloth and room chosen on this one.
     startFree(players, names);
-    router.replace('/game');
+    // Through the pause rather than straight to the table: the world is built
+    // here, so the loading screen has a game to hold while it holds the quiet.
+    router.replace('/loading');
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [

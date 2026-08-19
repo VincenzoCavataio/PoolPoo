@@ -197,7 +197,7 @@ const CUE_BANDS: [number, string][] = [
   [0.88, '#c2a273'], // forearm, a shade deeper than the shaft
   [1.03, '#5b3a1e'], // the wrap: brown, and the only dark stretch
   [1.36, '#c2a273'], // a hand's width of wood below the wrap
-  [1.43, '#241d17'], // the bumper
+  [1.415, '#241d17'], // the bumper
 ];
 
 function RestingCue() {
@@ -235,7 +235,16 @@ function RestingCue() {
       [0.82, 0.0101],
       [1.1, 0.0115],
       [1.38, 0.0128],
-      [1.44, 0.013],
+      [1.41, 0.013],
+      // The bumper: a rubber plug with a flat face, not a taper to a point.
+      //
+      // The profile used to run 13mm to 12.6mm and then straight to zero over
+      // the last centimetre, which closes the butt off as a cone. From the side
+      // that reads as a cue with its bumper missing — the end has to be blunt,
+      // because that is the part that gets stood on the floor. It sits a shade
+      // proud of the wood, the way a real one does.
+      [1.415, 0.0134],
+      [1.448, 0.0134],
       [1.45, 0.0126],
       [1.45, 0.0],
     ];
@@ -408,7 +417,25 @@ const LAMP_INTENSITY = 4.6;
 function CeilingLamp({ armed }: { armed: boolean }) {
   // Every lamp along the tube, so none is left dark when the arc takes.
   const lights = useRef<(THREE.PointLight | null)[]>([null, null, null]);
-  const tube = useRef<THREE.Mesh>(null);
+
+  /**
+   * One material shared by both tubes.
+   *
+   * They are two meshes but a single lamp — the starter fires the pair together,
+   * so they brighten as one. Sharing the material means the frame loop writes
+   * one number instead of keeping two refs in step, and it cannot end up with
+   * one tube lit and the other dark.
+   */
+  const glass = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: '#dfeaf2',
+        emissive: new THREE.Color('#eaf4ff'),
+        emissiveIntensity: 0,
+        roughness: 0.35,
+      }),
+    [],
+  );
   const clock = useRef(0);
   const heard = useRef(0);
 
@@ -430,9 +457,7 @@ function CeilingLamp({ armed }: { armed: boolean }) {
     // on, not a tube that strikes itself again every time.
     if (lit) {
       for (const lamp of lights.current) if (lamp) lamp.intensity = LAMP_INTENSITY;
-      if (tube.current) {
-        (tube.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 3.4;
-      }
+      glass.emissiveIntensity = 3.4;
       return;
     }
 
@@ -465,27 +490,29 @@ function CeilingLamp({ armed }: { armed: boolean }) {
     for (let i = heard.current; i < strikes.flashes.length; i++) {
       const flash = strikes.flashes[i];
       if (flash.at > before && flash.at <= now) {
-        playSwitch(flash.until === Number.POSITIVE_INFINITY ? 'settle' : 'strike');
+        const settled = flash.until === Number.POSITIVE_INFINITY;
+        playSwitch(settled ? 'settle' : 'strike');
+
         /**
-         * The ballast starts buzzing with the first strike, not the last.
+         * The buzz belongs to the tube that stayed lit, not to the misfires.
          *
-         * It is the ballast that is *doing* the striking — the buzz and the
-         * stutter are one event, so starting it when the tube finally catches
-         * would put the sound after its cause. Its own two-second fade then
-         * runs out under the settled light, which is why it is fired once here
-         * rather than held and stopped later.
+         * It used to start on the first strike, on the reasoning that the
+         * ballast is what does the striking. But that is not what a fluorescent
+         * sounds like: while it is stuttering there are only the hard clacks of
+         * the starter, and the steady hum arrives with the arc — it is the
+         * sound of the tube *running*, so it cannot precede the tube running.
+         *
+         * Fired on the last flash, the one with no end, which is the moment the
+         * light comes up and stays.
          */
-        if (i === 0) playBallast();
+        if (settled) playBallast();
         heard.current = i + 1;
       }
     }
 
     for (const lamp of lights.current) if (lamp) lamp.intensity = glow * LAMP_INTENSITY;
-    if (tube.current) {
-      const material = tube.current.material as THREE.MeshStandardMaterial;
-      // The tube itself reads far brighter than the light it casts.
-      material.emissiveIntensity = glow * 3.4;
-    }
+    // The glass itself reads far brighter than the light it casts.
+    glass.emissiveIntensity = glow * 3.4;
   });
 
   return (
@@ -521,26 +548,31 @@ function CeilingLamp({ armed }: { armed: boolean }) {
       </mesh>
 
       {/*
-        The tube. Lying along the table, which is how these are always hung over
-        one — the light is even down its length rather than pooling in the middle.
+        Two tubes, side by side — which is what one of these fittings holds.
+        
+        A single fat tube was wrong for the era: a twin batten is the shape these
+        came in, and the pair reads as a fitting where one cylinder reads as a
+        glowing rod. Thinner than the one they replace, so the two together are
+        not wider than the channel that carries them.
+        
+        Lying along the table, which is how they are always hung over one: the
+        light is even down the length rather than pooling in the middle.
       */}
-      <mesh ref={tube} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.026, 0.026, 1.4, 12]} />
-        <meshStandardMaterial
-          color="#dfeaf2"
-          emissive="#eaf4ff"
-          emissiveIntensity={0}
-          roughness={0.35}
-        />
-      </mesh>
-
-      {/* End caps, so the tube stops rather than just ending. */}
-      {[-0.71, 0.71].map((z) => (
-        <mesh key={z} position={[0, 0, z]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.028, 0.028, 0.03, 12]} />
-          <meshStandardMaterial color="#3a3f46" roughness={0.6} metalness={0.4} />
+      {[-0.032, 0.032].map((x) => (
+        <mesh key={x} position={[x, 0, 0]} rotation={[Math.PI / 2, 0, 0]} material={glass}>
+          <cylinderGeometry args={[0.018, 0.018, 1.4, 10]} />
         </mesh>
       ))}
+
+      {/* End caps, so each tube stops rather than just ending. */}
+      {[-0.032, 0.032].map((x) =>
+        [-0.71, 0.71].map((z) => (
+          <mesh key={`${x}:${z}`} position={[x, 0, z]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.03, 10]} />
+            <meshStandardMaterial color="#3a3f46" roughness={0.6} metalness={0.4} />
+          </mesh>
+        )),
+      )}
 
       {/*
         Three lights along the tube rather than one at its centre.
@@ -671,7 +703,15 @@ export function TableBackdrop() {
    * never cleared now, so the first launch gets the switch-on and every visit
    * after it finds the room already lit.
    */
-  const armed = pathname !== '/' && pathname !== '/game';
+  /**
+   * Armed only where the backdrop is actually seen.
+   *
+   * The splash covers it, the game draws its own table, and the loading pause
+   * covers it with an opaque screen. This holds the lamp's clock on those three
+   * — it does not stop the canvas drawing — so the strike sequence cannot run
+   * out of sight and arrive already finished.
+   */
+  const armed = pathname !== '/' && pathname !== '/game' && pathname !== '/loading';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

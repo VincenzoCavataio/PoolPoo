@@ -34,6 +34,10 @@ export const en: Record<keyof typeof it, Entry> = {
   'title.dimension': 'Pool Hall',
   'title.enter': 'Tap to enter',
 
+  // ----------------------------------------------------------------- loading
+  'loading.title': 'Setting the table',
+  'loading.subtitle': 'Loading',
+
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'New game',

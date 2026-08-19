@@ -16,6 +16,7 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+  seven: 128,
 } as const;
 
 export const MaxContentWidth = 800;

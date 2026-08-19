@@ -46,7 +46,14 @@ export default function RootLayout() {
    * would.
    */
   const pathname = usePathname();
-  const inGame = pathname === '/game';
+  /**
+   * The loading pause counts as being in the game.
+   *
+   * It is where the theme is meant to stop — the whole point of the pause is the
+   * silence, and treating it as a menu would keep the music playing over it and
+   * then cut it a couple of seconds later at the table.
+   */
+  const inGame = pathname === '/game' || pathname === '/loading';
 
   useEffect(() => {
     setMenuMusicVolume(useSettings.getState().musicVolume);

@@ -35,6 +35,10 @@ export const it = {
   'title.dimension': 'Pool Hall',
   'title.enter': 'Tocca per entrare',
 
+  // ----------------------------------------------------------------- loading
+  'loading.title': 'Si prepara il tavolo',
+  'loading.subtitle': 'Caricamento',
+
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',
   'menu.newGame': 'Nuova partita',

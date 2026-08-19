@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingTop: Spacing.five,
     gap: Spacing.three,
+    top: Spacing.seven
   },
   /** Brighter and a shade larger: this names the only choice on the screen. */
   prompt: {
@@ -245,13 +246,14 @@ const styles = StyleSheet.create({
   },
 
   go: {
-    gap: Spacing.two,
+    gap: Spacing.three,
     padding: Spacing.four,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(201, 169, 98, 0.55)',
     backgroundColor: '#1d1809',
     overflow: 'hidden',
+    top: -Spacing.six
   },
   goPressed: {
     backgroundColor: '#2b2410',

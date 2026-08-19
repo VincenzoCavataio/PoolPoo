@@ -67,7 +67,10 @@ export default function MenuScreen() {
   const onContinue = () => {
     if (!save) return;
     playTap('confirm');
-    if (resume(save)) router.push('/game');
+    // Through the same pause a new game takes. Resuming is just as much an
+    // arrival at the table, and cutting straight there from the menu would put
+    // the theme against the cloth with no gap at all.
+    if (resume(save)) router.push('/loading');
   };
 
   return (
