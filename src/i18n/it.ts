@@ -12,14 +12,12 @@ import type { Entry } from './catalogue';
 
 export const it = {
   // ------------------------------------------------------------------ common
-  'common.back': 'Indietro',
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',
   'common.checking': 'Controllo…',
   'common.menu': 'Menu',
 
   // ------------------------------------------------------------------- title
-  'title.kicker': 'Sala da biliardo',
   'title.wordmark': 'Biliardo',
   'title.dimension': 'Tre dimensioni',
   'title.enter': 'Tocca per entrare',
@@ -31,12 +29,10 @@ export const it = {
   'menu.continue': 'Continua',
   'menu.noSave': 'Nessuna partita salvata',
   'menu.options': 'Opzioni',
-  'menu.stars': 'Stelle raccolte',
   'menu.savedFree': {
     one: 'Partita libera · {count} giocatore',
     other: 'Partita libera · {count} giocatori',
   },
-  'menu.savedPuzzle': 'Puzzle · {name}',
 
   // ---------------------------------------------------------------- new game
   'newGame.title': 'Nuova partita',
@@ -48,25 +44,10 @@ export const it = {
   'newGame.soloHint': 'Con un solo giocatore è una sfida al punteggio.',
   'newGame.multiHint': '{count} giocatori a turno sullo stesso dispositivo.',
   'newGame.startFree': 'Inizia partita libera',
-  'newGame.puzzleSection': 'Puzzle',
-  'newGame.puzzleBody':
-    '{count} livelli con un numero limitato di colpi e un obiettivo preciso: imbucare certe palline, in un certo ordine, o in una certa buca. Meno colpi usi, più stelle prendi.',
-  'newGame.chooseLevel': 'Scegli un livello',
 
-  // ------------------------------------------------------------------ levels
-  'levels.title': 'Livelli',
-  'levels.subtitle': '{earned} di {total} stelle',
-  'levels.locked': 'Prendi una stella nel livello precedente',
-  'levels.budget': '{shots} colpi · {three} per tre stelle',
 
   // ----------------------------------------------------------------- options
   'options.title': 'Opzioni',
-  'options.environment': 'Ambiente',
-  'options.environmentAll': 'Tutti e {count} disponibili. Stelle raccolte: {earned} su {total}.',
-  'options.environmentLocked': 'Servono {count} stelle per sbloccarlo',
-  'options.cloth': 'Panno',
-  'options.clothBody':
-    'Il panno non è solo un colore: cambia attrito, scorrimento e resa delle sponde.',
   'options.aimHelpers': 'Aiuti di mira',
   'options.aimLine': 'Linea di mira',
   'options.aimLineBody': 'Mostra dove arriva la bianca prima di toccare qualcosa.',
@@ -96,15 +77,9 @@ export const it = {
   'options.clearSaveTitle': 'Cancellare la partita salvata?',
   'options.clearSaveBody': 'La partita in corso non sarà più recuperabile.',
   'options.clearSaveConfirm': 'Cancella',
-  'options.resetProgress': 'Azzera i progressi puzzle',
-  'options.resetProgressTitle': 'Azzerare i progressi?',
-  'options.resetProgressBody':
-    'Perderai tutte le stelle, i livelli sbloccati e gli ambienti sbloccati.',
-  'options.resetProgressConfirm': 'Azzera',
 
   // -------------------------------------------------------------------- game
   'game.backToMenu': 'Torna al menu',
-  'game.power': 'Potenza',
   'game.aim': 'mira',
   'game.aimStrip': 'Trascina per ruotare la stecca, tieni ai bordi per continuare',
   'game.aimLeft': 'Ruota la mira a sinistra',
@@ -118,13 +93,6 @@ export const it = {
   'game.spinLabel': 'Punto di impatto sulla bianca',
   'game.switchView': 'Cambia vista',
   'game.resetCamera': 'Tieni premuto per reimpostare la camera',
-  'game.viewCue': 'Mira',
-  'game.viewTable': 'Tavolo',
-  'game.viewLabel': 'Vista {name}',
-  'game.shotsLeft': {
-    one: '{count} colpo',
-    other: '{count} colpi',
-  },
 
   // ------------------------------------------------------------ celebrations
   'celebration.potOne': 'Palla {number} in buca!',
@@ -145,13 +113,6 @@ export const it = {
     other: '{count} punti',
   },
   'result.newGame': 'Nuova partita',
-  'result.solved': 'Risolto',
-  'result.failed': 'Non ci siamo',
-  'result.shotsUsed': '{used} su {total}',
-  'result.nextLevel': 'Livello successivo',
-  'result.replay': 'Rigioca',
-  'result.retry': 'Riprova',
-  'result.allLevels': 'Hai finito tutti i livelli: {count} stelle in totale.',
 
   // ------------------------------------------------------------------- rules
   'rules.player': 'Giocatore {number}',
@@ -172,28 +133,7 @@ export const it = {
   'rules.drawAt': 'Pareggio a {count} punti',
   'rules.resumed': 'Partita ripresa',
 
-  // ------------------------------------------------------------ puzzle rules
-  'puzzle.potted': 'Imbucata la {number}',
-  'puzzle.pottedMany': 'Imbucate {count} palline',
-  'puzzle.solvedIn': {
-    one: 'Risolto in {count} colpo',
-    other: 'Risolto in {count} colpi',
-  },
-  'puzzle.failed': 'Puzzle fallito',
-  'puzzle.failForbidden': 'La {number} non doveva entrare',
-  'puzzle.failWrongFirst': 'Dovevi colpire prima la {number}',
-  'puzzle.failNoContact': 'Non hai colpito nessuna pallina',
-  'puzzle.failOutOfOrder': 'Fuori ordine: toccava alla {number}',
-  'puzzle.failWrongPocket': 'Buca sbagliata',
-  'puzzle.failOutOfShots': 'Colpi esauriti',
-  'puzzle.failOneCushion': 'Serve almeno una sponda prima di imbucare',
-  'puzzle.failCushions': 'Servono almeno {count} sponde prima di imbucare',
 
-  // ------------------------------------------------------------ puzzle goals
-  'goal.pocketAll': 'Imbuca tutte le palline',
-  'goal.pocketSet': 'Imbuca la {numbers}',
-  'goal.pocketInOrder': 'Imbuca in ordine: {numbers}',
-  'goal.pocketInto': 'Imbuca la {number} nella buca indicata',
 
   // ------------------------------------------------------------------- music
   'music.title': 'Giradischi',
@@ -203,6 +143,24 @@ export const it = {
   'music.musicVolume': 'Musica',
   'music.sfxVolume': 'Effetti',
   'music.onlyOne': 'Una sola traccia per ora. Aggiungine altre in assets/bgm/ e nel manifest.',
+
+  // --------------------------------------------------------- set di palline
+  'ballSet.classic': 'Classiche',
+  'ballSet.classicFeel': 'Resina fenolica lucida. Il riferimento.',
+  'ballSet.night': 'Notte',
+  'ballSet.nightFeel': 'Colori accesi e lucidatura estrema: riflettono forte.',
+  'ballSet.ivory': 'Avorio',
+  'ballSet.ivoryFeel': 'Argilla d’epoca, quasi opaca. Luce morbida, poca stanza riflessa.',
+  'ballSet.solid': 'Tinta unita',
+  'ballSet.solidFeel': 'Niente righe: riconosci le palline solo dal colore.',
+
+  // ---------------------------------------------------------------- allestimento
+  'setup.title': 'Allestimento',
+  'setup.subtitle': 'Prepara il tavolo',
+  'setup.place': 'Sala',
+  'setup.cloth': 'Panno',
+  'setup.balls': 'Palline',
+  'setup.start': 'Inizia',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Verde',
@@ -235,21 +193,4 @@ export const it = {
   'device.monitor': 'Monitor da studio',
 
   // ------------------------------------------------------------- level names
-  'level.primo-colpo': 'Primo colpo',
-  'level.primo-colpoHint': 'La 3 è già in linea con la buca. Mira al centro e dai poca potenza.',
-  'level.doppietta': 'Doppietta',
-  'level.doppiettaHint':
-    'Due palline, due angoli. La prima è servita, per la seconda pensa a dove lasci la bianca.',
-  'level.in-ordine': 'Uno, due, tre',
-  'level.in-ordineHint': 'Rispetta l’ordine: se ne entra una fuori sequenza il puzzle è perso.',
-  'level.niente-nera': 'Niente nera',
-  'level.niente-neraHint': 'Imbuca la 4 e la 5. Se cade la 8, hai perso.',
-  'level.prima-la-5': 'Prima la 5',
-  'level.prima-la-5Hint': 'La bianca deve toccare la 5 prima di ogni altra pallina.',
-  'level.di-sponda': 'Di sponda',
-  'level.di-spondaHint': 'Prima che una pallina entri, qualcosa deve aver toccato una sponda.',
-  'level.buca-scelta': 'Buca scelta',
-  'level.buca-sceltaHint': 'La 9 deve entrare nella buca centrale in alto. In un angolo non vale.',
-  'level.ripulisci': 'Ripulisci il tavolo',
-  'level.ripulisciHint': 'Cinque palline, sette colpi. Ogni pallina ha la sua buca: trovala.',
 } as const satisfies Record<string, Entry>;

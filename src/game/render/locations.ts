@@ -37,7 +37,6 @@ export interface GameLocation {
    * Puzzle stars needed to unlock. All five are currently open from the start;
    * the gate is kept because turning it back on is one number per location.
    */
-  unlockStars: number;
   /** Clear colour behind everything. */
   background: string;
   floorColor: string;
@@ -164,7 +163,6 @@ export const LOCATIONS: GameLocation[] = [
     id: 'sala',
     labelKey: 'location.sala',
     descriptionKey: 'location.salaBody',
-    unlockStars: 0,
     background: '#0a0d0b',
     floorColor: '#4a3221',
     floorRoughness: 0.85,
@@ -217,7 +215,6 @@ export const LOCATIONS: GameLocation[] = [
     id: 'garage',
     labelKey: 'location.garage',
     descriptionKey: 'location.garageBody',
-    unlockStars: 0,
     background: '#14171a',
     floorColor: '#4c4f52',
     floorRoughness: 0.95,
@@ -246,7 +243,6 @@ export const LOCATIONS: GameLocation[] = [
     id: 'arcade',
     labelKey: 'location.arcade',
     descriptionKey: 'location.arcadeBody',
-    unlockStars: 0,
     background: '#0a0714',
     floorColor: '#2a1f38',
     floorRoughness: 0.9,
@@ -276,7 +272,6 @@ export const LOCATIONS: GameLocation[] = [
     id: 'terrazza',
     labelKey: 'location.terrazza',
     descriptionKey: 'location.terrazzaBody',
-    unlockStars: 0,
     background: '#070b14',
     floorColor: '#2b2a2c',
     floorRoughness: 0.8,
@@ -313,7 +308,6 @@ export const LOCATIONS: GameLocation[] = [
     id: 'studio',
     labelKey: 'location.studio',
     descriptionKey: 'location.studioBody',
-    unlockStars: 0,
     background: '#c9ccd0',
     floorColor: '#b9bdc2',
     floorRoughness: 0.7,
@@ -336,19 +330,15 @@ export function locationById(id: string): GameLocation {
   return LOCATIONS.find((l) => l.id === id) ?? LOCATIONS[0];
 }
 
-export function isLocationUnlocked(location: GameLocation, earnedStars: number): boolean {
-  return earnedStars >= location.unlockStars;
-}
-
 /**
  * The location actually rendered.
  *
- * Guards against a stored choice the player no longer has. Nothing is gated
- * today, but the check costs a line and stops a stale setting from rendering a
- * room the player cannot pick.
+ * Guards against a stored id that no longer names a room, which is all it has to
+ * do: this used to take the player's star count and gate rooms behind it, but
+ * the stars came from the puzzle levels and every room's requirement was already
+ * zero. Carrying a parameter that could not change the answer only made the
+ * caller look up something it did not need.
  */
-export function effectiveLocation(id: string, stars: Record<string, number>): GameLocation {
-  const earned = Object.values(stars).reduce((sum, value) => sum + value, 0);
-  const chosen = locationById(id);
-  return isLocationUnlocked(chosen, earned) ? chosen : LOCATIONS[0];
+export function effectiveLocation(id: string): GameLocation {
+  return locationById(id);
 }

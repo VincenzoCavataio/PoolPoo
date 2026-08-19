@@ -5,18 +5,15 @@ import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { GameButton } from '@/components/ui/button';
 import { Card, Screen, SectionLabel } from '@/components/ui/screen';
 import {
-  CLOTH_OPTIONS,
-  clothById,
-  MENU_SELECTED,
+  Luxe,
   MenuPalette as Palette,
   Radius,
 } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { isLocationUnlocked, LOCATIONS } from '@/game/render/locations';
+import { LOCATIONS } from '@/game/render/locations';
 import { LOCALE_LABEL, LOCALES } from '@/i18n';
 import { useT } from '@/i18n/use-t';
 import { clearSavedGame } from '@/store/persistence';
-import { MAX_STARS, totalStars, useProgress } from '@/store/progress';
 import { useSettings } from '@/store/settings';
 
 const SENSITIVITY_STEPS = [
@@ -74,11 +71,7 @@ export default function OptionsScreen() {
     setAimSensitivity,
     resetSettings,
   } = useSettings();
-  const stars = useProgress((s) => s.stars);
-  const resetProgress = useProgress((s) => s.resetProgress);
   const [savedCleared, setSavedCleared] = useState(false);
-
-  const earned = totalStars(stars);
 
   const activeStep = SENSITIVITY_STEPS.reduce((best, step) =>
     Math.abs(step.value - aimSensitivity) < Math.abs(best.value - aimSensitivity) ? step : best,
@@ -95,13 +88,6 @@ export default function OptionsScreen() {
           setSavedCleared(true);
         },
       },
-    ]);
-  };
-
-  const confirmResetProgress = () => {
-    Alert.alert(t('options.resetProgressTitle'), t('options.resetProgressBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('options.resetProgressConfirm'), style: 'destructive', onPress: resetProgress },
     ]);
   };
 
@@ -131,73 +117,6 @@ export default function OptionsScreen() {
             );
           })}
         </View>
-      </Card>
-
-      <SectionLabel>{t('options.environment')}</SectionLabel>
-      <Card>
-        <Text style={styles.rowDescription}>
-          {t('options.environmentAll', { count: LOCATIONS.length, earned, total: MAX_STARS })}
-        </Text>
-        {LOCATIONS.map((location) => {
-          const unlocked = isLocationUnlocked(location, earned);
-          const selected = location.id === locationId && unlocked;
-          return (
-            <Pressable
-              key={location.id}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, disabled: !unlocked }}
-              disabled={!unlocked}
-              onPress={() => setLocation(location.id)}
-              style={({ pressed }) => [
-                styles.locationRow,
-                selected && styles.locationRowSelected,
-                !unlocked && styles.locationRowLocked,
-                pressed && styles.pressed,
-              ]}>
-              <View style={styles.locationText}>
-                <Text style={[styles.rowLabel, selected && styles.locationLabelSelected]}>
-                  {unlocked ? t(location.labelKey) : `🔒 ${t(location.labelKey)}`}
-                </Text>
-                <Text style={styles.rowDescription}>
-                  {unlocked
-                    ? t(location.descriptionKey)
-                    : t('options.environmentLocked', { count: location.unlockStars })}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </Card>
-
-      <SectionLabel>{t('options.cloth')}</SectionLabel>
-      <Card>
-        <Text style={styles.rowDescription}>{t('options.clothBody')}</Text>
-        <View style={styles.swatchRow}>
-          {CLOTH_OPTIONS.map((option) => {
-            const selected = option.id === clothId;
-            return (
-              <Pressable
-                key={option.id}
-                accessibilityRole="radio"
-                accessibilityLabel={t(option.labelKey)}
-                accessibilityState={{ selected }}
-                onPress={() => setCloth(option.id)}
-                style={({ pressed }) => [styles.swatchWrap, pressed && styles.pressed]}>
-                <View
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: option.cloth },
-                    selected && styles.swatchSelected,
-                  ]}
-                />
-                <Text style={[styles.swatchLabel, selected && styles.swatchLabelSelected]}>
-                  {t(option.labelKey)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <Text style={styles.clothFeel}>{t(clothById(clothId).feelKey)}</Text>
       </Card>
 
       <SectionLabel>{t('options.aimHelpers')}</SectionLabel>
@@ -267,36 +186,16 @@ export default function OptionsScreen() {
           sublabel={savedCleared ? t('options.cleared') : undefined}
           onPress={confirmClearSave}
         />
-        <GameButton label={t('options.resetProgress')} variant="danger" onPress={confirmResetProgress} />
       </Card>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  swatchRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
   swatchWrap: {
     flex: 1,
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  swatch: {
-    width: '100%',
-    height: 54,
-    borderRadius: Radius.small,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  swatchSelected: {
-    borderColor: Palette.accent,
-  },
-  swatchLabel: {
-    color: Palette.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
   },
   swatchLabelSelected: {
     color: Palette.accent,
@@ -307,27 +206,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontStyle: 'italic',
   },
-  locationRow: {
-    borderRadius: Radius.small,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    backgroundColor: Palette.surfaceRaised,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
-  locationRowSelected: {
-    borderColor: Palette.accent,
-    backgroundColor: MENU_SELECTED,
-  },
-  locationRowLocked: {
-    opacity: 0.45,
-  },
-  locationText: {
-    gap: 2,
-  },
-  locationLabelSelected: {
-    color: Palette.accent,
-  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -337,15 +215,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  /**
+   * A setting's name, in the menus' voice rather than a form's.
+   *
+   * Spaced capitals at label size, with the explanation beneath in sentence
+   * case. The two were 15pt bold and 12pt regular — the difference between a
+   * heading and its body in a document, which is what made the screen read as a
+   * form. Capitals separate them by texture instead of by weight.
+   */
   rowLabel: {
-    color: Palette.text,
-    fontSize: 15,
+    color: Luxe.text,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
   },
   rowDescription: {
-    color: Palette.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
+    color: Luxe.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   pillRow: {
     flexDirection: 'row',
@@ -355,24 +243,26 @@ const styles = StyleSheet.create({
   pill: {
     flex: 1,
     height: 44,
-    borderRadius: Radius.small,
-    backgroundColor: Palette.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Palette.border,
+    borderRadius: 4,
+    backgroundColor: 'rgba(8, 12, 10, 0.7)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillSelected: {
-    backgroundColor: MENU_SELECTED,
-    borderColor: Palette.accent,
+    backgroundColor: 'rgba(28, 23, 12, 0.86)',
+    borderColor: Luxe.gold,
   },
   pillLabel: {
-    color: Palette.textMuted,
-    fontSize: 14,
+    color: Luxe.textMuted,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
   pillLabelSelected: {
-    color: Palette.accent,
+    color: Luxe.gold,
   },
   pressed: {
     opacity: 0.7,

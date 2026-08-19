@@ -17,7 +17,9 @@ import { useFrame } from '@react-three/fiber/native';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
-import { BallKind, colorForBall } from '@/game/core/ball';
+import { BallKind } from '@/game/core/ball';
+import { ballSetById, colorForBallIn, type BallSet } from '@/constants/ball-sets';
+import { useSettings } from '@/store/settings';
 import { BALL_RADIUS, PHYSICS } from '@/game/core/constants';
 import type { World } from '@/game/core/world';
 
@@ -81,16 +83,20 @@ const SPOT_COLOR = 'vec3(0.95, 0.035, 0.03)';
  */
 const BADGE_EXTENT = Math.sqrt(1 - BADGE_LATITUDE * BADGE_LATITUDE);
 
-function createBallMaterial(numbers: THREE.Texture): THREE.MeshPhysicalMaterial {
+function createBallMaterial(numbers: THREE.Texture, set: BallSet): THREE.MeshPhysicalMaterial {
   // A pool ball is pigment under a thick polished lacquer, which is exactly what
   // a clearcoat layer models: a second, much sharper specular response sitting on
   // top of the base colour. It is also what makes the ball pick up the room.
+  //
+  // The numbers come from the chosen set, so a glassy phenolic ball and an old
+  // clay one answer the lamps differently rather than being the same object in
+  // different colours.
   const material = new THREE.MeshPhysicalMaterial({
-    roughness: 0.28,
+    roughness: set.surface.roughness,
     metalness: 0,
-    clearcoat: 1,
-    clearcoatRoughness: 0.035,
-    envMapIntensity: 1.1,
+    clearcoat: set.surface.clearcoat,
+    clearcoatRoughness: set.surface.clearcoatRoughness,
+    envMapIntensity: set.surface.envMapIntensity,
   });
 
   material.onBeforeCompile = (shader) => {
@@ -224,8 +230,13 @@ export function Balls({ world }: { world: World }) {
   const ballsRef = useRef<THREE.InstancedMesh>(null);
   const shadowsRef = useRef<THREE.InstancedMesh>(null);
 
+  const ballSetId = useSettings((s) => s.ballSetId);
+  const set = useMemo(() => ballSetById(ballSetId), [ballSetId]);
+
   const numbers = useMemo(createNumberAtlas, []);
-  const material = useMemo(() => createBallMaterial(numbers), [numbers]);
+  // Rebuilt when the set changes: the surface is baked into the material, so a
+  // new set is a new material rather than a uniform to poke.
+  const material = useMemo(() => createBallMaterial(numbers, set), [numbers, set]);
   const shadowGeometry = useMemo(createShadowGeometry, []);
 
   useEffect(() => () => numbers.dispose(), [numbers]);
@@ -295,15 +306,19 @@ export function Balls({ world }: { world: World }) {
     const styles = new Float32Array(count);
     const numberIds = new Float32Array(count);
     world.balls.forEach((ball, index) => {
-      styles[index] = styleFor(ball.kind);
+      // A set without stripes draws every object ball as a solid, which is the
+      // one change here that alters how the table reads rather than how it looks.
+      const kind =
+        !set.striped && ball.kind === BallKind.STRIPE ? BallKind.SOLID : ball.kind;
+      styles[index] = styleFor(kind);
       numberIds[index] = ball.number;
-      mesh.setColorAt(index, scratch.color.set(colorForBall(ball.number)));
+      mesh.setColorAt(index, scratch.color.set(colorForBallIn(set, ball.number)));
     });
 
     mesh.geometry.setAttribute('aStyle', new THREE.InstancedBufferAttribute(styles, 1));
     mesh.geometry.setAttribute('aNumber', new THREE.InstancedBufferAttribute(numberIds, 1));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [world, count, scratch]);
+  }, [world, count, scratch, set]);
 
   useFrame((_, delta) => {
     const mesh = ballsRef.current;

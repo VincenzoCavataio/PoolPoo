@@ -12,6 +12,7 @@ import { assert, assertClose, assertEqual, report, suite, test } from '../../cor
 import { createTable } from '../../core/table';
 import { BALL_RADIUS, PHYSICS } from '../../core/constants';
 import { spinAxis, spinRate, SPOT_RADIUS } from '../coords';
+import { BALL_SETS, colorForBallIn } from '../../../constants/ball-sets';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
 import { propFootprints, propParts } from '../props';
@@ -620,6 +621,85 @@ suite('cue ball spots', () => {
   test('a spot is a small fraction of the ball', () => {
     const share = spotDiameter / (BALL_RADIUS * 2);
     assert(share < 0.2, `a spot covers ${(share * 100).toFixed(0)}% of the ball's width`);
+  });
+});
+
+suite('ball sets', () => {
+  /** Straight RGB distance. Crude, but it is the axis a player judges on. */
+  function apart(a: string, b: string): number {
+    const parse = (hex: string) => hex.match(/\w\w/g)!.map((h) => parseInt(h, 16));
+    const [r1, g1, b1] = parse(a);
+    const [r2, g2, b2] = parse(b);
+    return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
+  }
+
+  function closestPair(set: (typeof BALL_SETS)[number]) {
+    const colours = [1, 2, 3, 4, 5, 6, 7].map((n) => colorForBallIn(set, n));
+    let nearest = Infinity;
+    let which = '';
+    for (let i = 0; i < colours.length; i++) {
+      for (let j = i + 1; j < colours.length; j++) {
+        const d = apart(colours[i], colours[j]);
+        if (d < nearest) {
+          nearest = d;
+          which = `${i + 1} and ${j + 1}`;
+        }
+      }
+    }
+    return { nearest, which };
+  }
+
+  /**
+   * A set whose colours are the only way to tell balls apart has to keep them
+   * far apart.
+   *
+   * Picking these by eye did not work: every hand-chosen palette ended up with a
+   * pair a player could confuse across a table, and separating that pair moved
+   * the collision somewhere else. Spreading the hues evenly is what fixed it,
+   * and this is the check that keeps it fixed.
+   */
+  test('a set without stripes keeps its colours well apart', () => {
+    for (const set of BALL_SETS) {
+      if (set.striped) continue;
+      const { nearest, which } = closestPair(set);
+      assert(
+        nearest > 60,
+        `${set.id}: balls ${which} are only ${nearest.toFixed(0)} apart, and there ` +
+          'are no stripes to tell them apart by',
+      );
+    }
+  });
+
+  /** Striped sets have a second cue, so they can afford a tighter palette. */
+  test('every set stays usable', () => {
+    for (const set of BALL_SETS) {
+      const { nearest, which } = closestPair(set);
+      assert(nearest > 30, `${set.id}: balls ${which} are ${nearest.toFixed(0)} apart`);
+    }
+  });
+
+  test('a cue ball is never mistakable for an object ball', () => {
+    for (const set of BALL_SETS) {
+      for (let n = 1; n <= 8; n++) {
+        const d = apart(set.cue, colorForBallIn(set, n));
+        assert(d > 60, `${set.id}: ball ${n} is only ${d.toFixed(0)} from the cue ball`);
+      }
+    }
+  });
+
+  test('every set describes a real surface', () => {
+    for (const set of BALL_SETS) {
+      const s = set.surface;
+      assert(s.roughness > 0 && s.roughness <= 1, `${set.id}: roughness out of range`);
+      assert(s.clearcoat >= 0 && s.clearcoat <= 1, `${set.id}: clearcoat out of range`);
+      assert(s.envMapIntensity >= 0, `${set.id}: negative reflection`);
+    }
+  });
+
+  test('the sets differ by more than their colours', () => {
+    // If every surface were identical the sets would be palettes, not sets.
+    const finishes = new Set(BALL_SETS.map((s) => s.surface.roughness));
+    assert(finishes.size === BALL_SETS.length, 'two sets share the same finish');
   });
 });
 

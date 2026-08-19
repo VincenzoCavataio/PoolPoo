@@ -1,12 +1,27 @@
+/**
+ * Starting a game: how many people are playing.
+ *
+ * That is the whole screen now. It used to be two cards — free play in one,
+ * puzzles in the other — with a paragraph of prose explaining each, because the
+ * player had to choose between two modes before choosing anything else. With one
+ * mode left, the player count is the only decision, so it gets the screen rather
+ * than a field inside a card.
+ *
+ * The count is picked as a row of large numerals with a hairline under the
+ * chosen one. A number is the shortest possible label for a number, and
+ * underlining the selection reads at a glance from further away than a filled
+ * pill does.
+ */
+
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GameButton } from '@/components/ui/button';
-import { Card, Screen, SectionLabel } from '@/components/ui/screen';
-import { MENU_SELECTED, MenuPalette as Palette, Radius } from '@/constants/game-theme';
+import { Screen } from '@/components/ui/screen';
+import { GlowRule, LuxeFonts } from '@/components/ui/luxe';
+import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { LEVELS } from '@/game/rules/levels';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
@@ -18,12 +33,18 @@ export default function NewGameScreen() {
   const startFree = useSession((s) => s.startFree);
   const [players, setPlayers] = useState(2);
 
-  const beginFree = () => {
-    // Default names are translated, so they are built here and handed to the
-    // rules rather than invented inside them.
+  /**
+   * On to dressing the table.
+   *
+   * The game is started here rather than there only so the next screen knows how
+   * many people are playing; it starts it again once the room and cloth are
+   * chosen, because the table is built with the cloth's physics and has to be
+   * rebuilt if that changes.
+   */
+  const next = () => {
     const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
     startFree(players, names);
-    router.replace('/game');
+    router.push('/setup');
   };
 
   return (
@@ -31,94 +52,87 @@ export default function NewGameScreen() {
       title={t('newGame.title')}
       subtitle={t('newGame.subtitle')}
       onBack={() => router.back()}>
-      <SectionLabel>{t('newGame.freeSection')}</SectionLabel>
-      <Card>
-        <Text style={styles.body}>{t('newGame.freeBody')}</Text>
+      <View style={styles.block}>
+        <Text style={styles.fieldLabel}>{t('newGame.players')}</Text>
 
-        <View>
-          <Text style={styles.fieldLabel}>{t('newGame.players')}</Text>
-          <View style={styles.pillRow}>
-            {PLAYER_OPTIONS.map((count) => {
-              const selected = count === players;
-              return (
-                <Pressable
-                  key={count}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  onPress={() => setPlayers(count)}
-                  style={({ pressed }) => [
-                    styles.pill,
-                    selected && styles.pillSelected,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
-                    {count}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.helper}>
-            {players === 1 ? t('newGame.soloHint') : t('newGame.multiHint', { count: players })}
-          </Text>
+        <View style={styles.row}>
+          {PLAYER_OPTIONS.map((count) => {
+            const selected = count === players;
+            return (
+              <Pressable
+                key={count}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => setPlayers(count)}
+                style={({ pressed }) => [styles.choice, pressed && styles.pressed]}>
+                <Text style={[styles.numeral, selected && styles.numeralSelected]}>{count}</Text>
+                {/* The lit rule marks the selection: it is the same mark the rest
+                    of the menus use for "this one", so it needs no explaining. */}
+                <View style={styles.markSlot}>
+                  {selected ? <GlowRule width={28} /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
 
-        <GameButton label={t('newGame.startFree')} variant="primary" onPress={beginFree} />
-      </Card>
+        <Text style={styles.helper}>
+          {players === 1 ? t('newGame.soloHint') : t('newGame.multiHint', { count: players })}
+        </Text>
+      </View>
 
-      <SectionLabel>{t('newGame.puzzleSection')}</SectionLabel>
-      <Card>
-        <Text style={styles.body}>{t('newGame.puzzleBody', { count: LEVELS.length })}</Text>
-        <GameButton label={t('newGame.chooseLevel')} onPress={() => router.push('/levels')} />
-      </Card>
+      <GameButton label={t('newGame.startFree')} variant="primary" onPress={next} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  body: {
-    color: Palette.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
+  block: {
+    gap: Spacing.three,
   },
   fieldLabel: {
-    color: Palette.text,
-    fontSize: 14,
+    color: Luxe.textMuted,
+    fontSize: 10,
     fontWeight: '700',
-    marginBottom: Spacing.two,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
-  pillRow: {
+  row: {
     flexDirection: 'row',
+  },
+  choice: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
     gap: Spacing.two,
   },
-  pill: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.small,
-    backgroundColor: Palette.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    alignItems: 'center',
+  /**
+   * Serif, and large. These are the only numbers on the screen, so they can
+   * carry the same face as the wordmark instead of looking like form controls.
+   */
+  numeral: {
+    // Muted rather than faint: an unchosen numeral still has to be readable
+    // against the felt, which the fainter tone is not.
+    color: Luxe.textMuted,
+    fontSize: 34,
+    lineHeight: 40,
+    fontFamily: LuxeFonts.serif,
+    fontVariant: ['tabular-nums'],
+  },
+  numeralSelected: {
+    color: Luxe.text,
+  },
+  /** Reserved height, so choosing does not shift the row by the rule's height. */
+  markSlot: {
+    height: 6,
     justifyContent: 'center',
   },
-  pillSelected: {
-    backgroundColor: MENU_SELECTED,
-    borderColor: Palette.accent,
-  },
-  pillLabel: {
-    color: Palette.textMuted,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  pillLabelSelected: {
-    color: Palette.accent,
-  },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   helper: {
-    color: Palette.textMuted,
+    color: Luxe.textMuted,
     fontSize: 12,
-    marginTop: Spacing.two,
+    lineHeight: 18,
   },
 });

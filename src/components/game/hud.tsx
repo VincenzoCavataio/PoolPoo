@@ -13,11 +13,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GameButton } from '@/components/ui/button';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { levelById, nextLevelId } from '@/game/rules/levels';
-import { describeGoal, shotsLeft } from '@/game/rules/puzzle';
 import { Phase } from '@/game/rules/types';
 import { useMessageRenderer, useT } from '@/i18n/use-t';
-import { useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
 /**
@@ -100,42 +97,13 @@ function FreeScoreboard() {
   );
 }
 
-function PuzzleStatus() {
-  const t = useT();
-  const render = useMessageRenderer();
-  const puzzle = useSession((s) => s.puzzle);
-  const levelId = useSession((s) => s.levelId);
-  const level = levelId ? levelById(levelId) : undefined;
-  if (!puzzle || !level) return null;
-
-  const remaining = shotsLeft(level, puzzle);
-
-  return (
-    <View style={styles.puzzleBox}>
-      <View style={styles.puzzleHeader}>
-        <Text style={styles.puzzleName} numberOfLines={1}>
-          {t(level.nameKey)}
-        </Text>
-        <Text style={[styles.puzzleShots, remaining <= 1 && styles.puzzleShotsLow]}>
-          {t('game.shotsLeft', { count: remaining })}
-        </Text>
-      </View>
-      <Text style={styles.puzzleGoal} numberOfLines={1}>
-        {render(describeGoal(level))}
-      </Text>
-    </View>
-  );
-}
-
 export function GameHud() {
-  const mode = useSession((s) => s.mode);
-
   return (
     <View style={styles.hud} pointerEvents="box-none">
       <View style={styles.topRow} pointerEvents="box-none">
         <BackButton />
         <View style={styles.topContent} pointerEvents="box-none">
-          {mode === 'free' ? <FreeScoreboard /> : <PuzzleStatus />}
+          <FreeScoreboard />
         </View>
       </View>
 
@@ -176,108 +144,58 @@ export function ShotNote() {
   );
 }
 
+/**
+ * The result panel.
+ *
+ * One outcome now that there is one mode: who won, what everyone scored, and the
+ * two ways out. It used to branch on whether the game was a puzzle or a frame,
+ * carrying stars, shot budgets and a next-level button through the same
+ * component — all of which existed only for a mode the game no longer has.
+ */
 export function GameOverOverlay() {
   const router = useRouter();
   const t = useT();
-  const render = useMessageRenderer();
   const phase = useSession((s) => s.phase);
-  const mode = useSession((s) => s.mode);
   const free = useSession((s) => s.free);
-  const puzzle = useSession((s) => s.puzzle);
-  const levelId = useSession((s) => s.levelId);
   const startFree = useSession((s) => s.startFree);
-  const startPuzzle = useSession((s) => s.startPuzzle);
-  const retryLevel = useSession((s) => s.retryLevel);
   const leaveGame = useSession((s) => s.leaveGame);
-  const stars = useProgress((s) => s.stars);
 
-  if (phase !== Phase.GAME_OVER) return null;
+  if (phase !== Phase.GAME_OVER || !free) return null;
 
   const goToMenu = () => {
     leaveGame();
     router.replace('/menu');
   };
 
-  const level = levelId ? levelById(levelId) : undefined;
-  const upcoming = levelId ? nextLevelId(levelId) : null;
-  const won = puzzle?.status === 'won';
+  const ranked = [...free.players].sort((a, b) => b.score - a.score);
 
   return (
     <View style={styles.overlay}>
       <View style={styles.overlayCard}>
-        {mode === 'free' && free ? (
-          <>
-            <Text style={styles.overlayTitle}>
-              {free.winners.length === 1
-                ? t('result.winner', {
-                    name: free.players.find((p) => p.id === free.winners[0])?.name ?? '',
-                  })
-                : t('result.draw')}
-            </Text>
-            <View style={styles.resultTable}>
-              {[...free.players]
-                .sort((a, b) => b.score - a.score)
-                .map((player) => (
-                  <View key={player.id} style={styles.resultRow}>
-                    <Text style={styles.resultName}>{player.name}</Text>
-                    <Text style={styles.resultScore}>
-                      {t('result.points', { count: player.score })}
-                    </Text>
-                  </View>
-                ))}
+        <Text style={styles.overlayTitle}>
+          {free.winners.length === 1
+            ? t('result.winner', {
+                name: free.players.find((p) => p.id === free.winners[0])?.name ?? '',
+              })
+            : t('result.draw')}
+        </Text>
+
+        <View style={styles.resultTable}>
+          {ranked.map((player) => (
+            <View key={player.id} style={styles.resultRow}>
+              <Text style={styles.resultName}>{player.name}</Text>
+              <Text style={styles.resultScore}>
+                {t('result.points', { count: player.score })}
+              </Text>
             </View>
-            <GameButton
-              label={t('result.newGame')}
-              variant="primary"
-              onPress={() => startFree(free.players.length, free.players.map((p) => p.name))}
-            />
-          </>
-        ) : null}
+          ))}
+        </View>
 
-        {mode === 'puzzle' && puzzle && level ? (
-          <>
-            <Text style={styles.overlayTitle}>
-              {won ? t('result.solved') : t('result.failed')}
-            </Text>
-            {won ? (
-              <>
-                <Stars value={puzzle.stars} />
-                <Text style={styles.overlayDetail}>
-                  {t('game.shotsLeft', { count: puzzle.shotsUsed })} /{' '}
-                  {t('game.shotsLeft', { count: level.maxShots })}
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.overlayDetail}>
-                {puzzle.failReason ? render(puzzle.failReason) : t('result.retry')}
-              </Text>
-            )}
-
-            {won && upcoming ? (
-              <GameButton
-                label={t('result.nextLevel')}
-                variant="primary"
-                sublabel={(() => {
-                  const next = levelById(upcoming);
-                  return next ? t(next.nameKey) : undefined;
-                })()}
-                onPress={() => startPuzzle(upcoming)}
-              />
-            ) : null}
-            <GameButton
-              label={won ? t('result.replay') : t('result.retry')}
-              onPress={retryLevel}
-            />
-            {won && !upcoming ? (
-              <Text style={styles.overlayDetail}>
-                {t('result.allLevels', {
-                  count: Object.values(stars).reduce((a, b) => a + b, 0),
-                })}
-              </Text>
-            ) : null}
-          </>
-        ) : null}
-
+        <GameButton
+          label={t('result.newGame')}
+          variant="primary"
+          onPress={() => startFree(free.players.length, free.players.map((p) => p.name))}
+        />
         <GameButton label={t('common.menu')} variant="ghost" onPress={goToMenu} />
       </View>
     </View>
@@ -360,38 +278,6 @@ const styles = StyleSheet.create({
     color: Palette.text,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  puzzleBox: {
-    backgroundColor: HUD_SURFACE,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    borderRadius: Radius.small,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
-  },
-  puzzleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  puzzleName: {
-    color: Palette.text,
-    fontSize: 13,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  puzzleShots: {
-    color: Palette.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  puzzleShotsLow: {
-    color: Palette.danger,
-  },
-  puzzleGoal: {
-    color: Palette.textMuted,
-    fontSize: 11,
   },
   noteLayer: {
     position: 'absolute',

@@ -11,7 +11,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { SerializedWorld } from '@/game/core/world';
 import type { FreeState } from '@/game/rules/free';
-import type { PuzzleState } from '@/game/rules/puzzle';
 import type { GameModeKind } from '@/game/rules/types';
 
 const SAVE_KEY = 'pool.save.v1';
@@ -23,8 +22,6 @@ export interface SavedGame {
   mode: GameModeKind;
   world: SerializedWorld;
   free: FreeState | null;
-  puzzle: PuzzleState | null;
-  levelId: string | null;
   savedAt: string;
 }
 
@@ -32,10 +29,11 @@ function isValid(value: unknown): value is SavedGame {
   if (typeof value !== 'object' || value === null) return false;
   const save = value as Partial<SavedGame>;
   if (save.version !== SAVE_VERSION) return false;
-  if (save.mode !== 'free' && save.mode !== 'puzzle') return false;
+  // A save from when the game had puzzles is not a game any more. It fails here
+  // rather than loading half of one, and the menu simply offers no Continue.
+  if (save.mode !== 'free') return false;
   if (!save.world || !Array.isArray(save.world.balls) || save.world.balls.length === 0) return false;
-  if (save.mode === 'free' && !save.free) return false;
-  if (save.mode === 'puzzle' && (!save.puzzle || !save.levelId)) return false;
+  if (!save.free) return false;
   return true;
 }
 

@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { BALL_SETS } from '@/constants/ball-sets';
 import { CLOTH_OPTIONS } from '@/constants/game-theme';
 import type { Locale } from '@/i18n';
 import { LOCATIONS } from '@/game/render/locations';
@@ -26,6 +27,7 @@ export type LanguageSetting = 'auto' | Locale;
 export interface SettingsState {
   language: LanguageSetting;
   clothId: string;
+  ballSetId: string;
   /** Which room the table stands in. */
   locationId: string;
   /** Draw the line from the cue ball to its first contact. */
@@ -53,6 +55,7 @@ export interface SettingsState {
 
   setLanguage: (value: LanguageSetting) => void;
   setCloth: (id: string) => void;
+  setBallSet: (id: string) => void;
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
   setShowGhostBall: (value: boolean) => void;
@@ -67,6 +70,7 @@ export interface SettingsState {
 const DEFAULTS = {
   language: 'auto' as LanguageSetting,
   clothId: CLOTH_OPTIONS[0].id,
+  ballSetId: BALL_SETS[0].id,
   locationId: LOCATIONS[0].id,
   showAimGuide: true,
   showGhostBall: true,
@@ -84,6 +88,7 @@ export const useSettings = create<SettingsState>()(
 
       setLanguage: (language) => set({ language }),
       setCloth: (clothId) => set({ clothId }),
+      setBallSet: (ballSetId) => set({ ballSetId }),
       setLocation: (locationId) => set({ locationId }),
       setShowAimGuide: (showAimGuide) => set({ showAimGuide }),
       setShowGhostBall: (showGhostBall) => set({ showGhostBall }),

@@ -1,35 +1,38 @@
+/**
+ * The menu.
+ *
+ * Three choices and nothing else. It used to carry a star ledger along the
+ * bottom — earned against a total, with a lit rule showing the fraction — which
+ * measured progress through the puzzle levels. With those gone the ledger had
+ * nothing to count, and a menu that reports a number nobody can change is worse
+ * than one that reports nothing.
+ *
+ * Continue leads the list when there is a game to come back to, because that is
+ * what someone opening the app mid-frame is reaching for. When there is not, it
+ * stays in place but reads as unavailable rather than vanishing — a list that
+ * reorders itself between visits is a list you have to read every time.
+ */
+
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
 
-import { Screen } from '@/components/ui/screen';
 import { GameButton } from '@/components/ui/button';
-import { GlowRule, LuxeFonts, Overline } from '@/components/ui/luxe';
-import { Luxe } from '@/constants/game-theme';
-import { Spacing } from '@/constants/theme';
-import { levelById } from '@/game/rules/levels';
+import { Screen } from '@/components/ui/screen';
 import { useT } from '@/i18n/use-t';
 import type { Translator } from '@/i18n';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
-import { MAX_STARS, totalStars, useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
 function describeSavedGame(save: SavedGame, t: Translator): string {
   const when = describeSave(save);
-  if (save.mode === 'free') {
-    const players = save.free?.players.length ?? 1;
-    return `${t('menu.savedFree', { count: players })}${when ? ` · ${when}` : ''}`;
-  }
-  const level = save.levelId ? levelById(save.levelId) : undefined;
-  const name = level ? t(level.nameKey) : '';
-  return `${t('menu.savedPuzzle', { name })}${when ? ` · ${when}` : ''}`;
+  const players = save.free?.players.length ?? 1;
+  return `${t('menu.savedFree', { count: players })}${when ? ` · ${when}` : ''}`;
 }
 
 export default function MenuScreen() {
   const router = useRouter();
   const t = useT();
   const resume = useSession((s) => s.resume);
-  const stars = useProgress((s) => s.stars);
 
   const [save, setSave] = useState<SavedGame | null>(null);
   const [checked, setChecked] = useState(false);
@@ -54,8 +57,6 @@ export default function MenuScreen() {
     if (resume(save)) router.push('/game');
   };
 
-  const earned = totalStars(stars);
-
   return (
     <Screen title={t('title.wordmark')} subtitle={t('menu.subtitle')}>
       <GameButton
@@ -70,49 +71,11 @@ export default function MenuScreen() {
         onPress={onContinue}
         disabled={!save}
         sublabel={
-          save
-            ? describeSavedGame(save, t)
-            : checked
-              ? t('menu.noSave')
-              : t('common.checking')
+          save ? describeSavedGame(save, t) : checked ? t('menu.noSave') : t('common.checking')
         }
       />
 
       <GameButton label={t('menu.options')} onPress={() => router.push('/options')} />
-
-      <View style={styles.ledger}>
-        <View style={styles.ledgerRow}>
-          <Overline>{t('menu.stars')}</Overline>
-          <Text style={styles.ledgerValue}>
-            {earned}
-            <Text style={styles.ledgerTotal}> / {MAX_STARS}</Text>
-          </Text>
-        </View>
-        <GlowRule width={`${Math.round((earned / MAX_STARS) * 100)}%`} align="flex-start" />
-      </View>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  ledger: {
-    marginTop: Spacing.five,
-    gap: Spacing.three,
-  },
-  ledgerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  ledgerValue: {
-    color: Luxe.gold,
-    fontSize: 20,
-    fontWeight: '400',
-    fontFamily: LuxeFonts.serif,
-    fontVariant: ['tabular-nums'],
-  },
-  ledgerTotal: {
-    color: Luxe.textFaint,
-    fontSize: 13,
-  },
-});

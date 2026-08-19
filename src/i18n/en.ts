@@ -11,14 +11,12 @@ import type { it } from './it';
 
 export const en: Record<keyof typeof it, Entry> = {
   // ------------------------------------------------------------------ common
-  'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.checking': 'Checking…',
   'common.menu': 'Menu',
 
   // ------------------------------------------------------------------- title
-  'title.kicker': 'Pool room',
   'title.wordmark': 'Billiards',
   'title.dimension': 'Three dimensions',
   'title.enter': 'Tap to enter',
@@ -30,12 +28,10 @@ export const en: Record<keyof typeof it, Entry> = {
   'menu.continue': 'Continue',
   'menu.noSave': 'No saved game',
   'menu.options': 'Options',
-  'menu.stars': 'Stars collected',
   'menu.savedFree': {
     one: 'Free play · {count} player',
     other: 'Free play · {count} players',
   },
-  'menu.savedPuzzle': 'Puzzle · {name}',
 
   // ---------------------------------------------------------------- new game
   'newGame.title': 'New game',
@@ -47,25 +43,10 @@ export const en: Record<keyof typeof it, Entry> = {
   'newGame.soloHint': 'On your own it is a high-score run.',
   'newGame.multiHint': '{count} players taking turns on the same device.',
   'newGame.startFree': 'Start free play',
-  'newGame.puzzleSection': 'Puzzles',
-  'newGame.puzzleBody':
-    '{count} levels with a limited number of shots and one precise goal: pot certain balls, in a certain order, or into a certain pocket. The fewer shots you take, the more stars you earn.',
-  'newGame.chooseLevel': 'Choose a level',
 
-  // ------------------------------------------------------------------ levels
-  'levels.title': 'Levels',
-  'levels.subtitle': '{earned} of {total} stars',
-  'levels.locked': 'Earn a star on the previous level',
-  'levels.budget': '{shots} shots · {three} for three stars',
 
   // ----------------------------------------------------------------- options
   'options.title': 'Options',
-  'options.environment': 'Room',
-  'options.environmentAll': 'All {count} available. Stars collected: {earned} of {total}.',
-  'options.environmentLocked': 'Needs {count} stars to unlock',
-  'options.cloth': 'Cloth',
-  'options.clothBody':
-    'The cloth is not just a colour: it changes friction, roll and how the cushions answer.',
   'options.aimHelpers': 'Aiming aids',
   'options.aimLine': 'Aim line',
   'options.aimLineBody': 'Shows where the cue ball reaches before it touches anything.',
@@ -95,14 +76,9 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.clearSaveTitle': 'Delete the saved game?',
   'options.clearSaveBody': 'The game in progress will not be recoverable.',
   'options.clearSaveConfirm': 'Delete',
-  'options.resetProgress': 'Reset puzzle progress',
-  'options.resetProgressTitle': 'Reset progress?',
-  'options.resetProgressBody': 'You will lose every star, unlocked level and unlocked room.',
-  'options.resetProgressConfirm': 'Reset',
 
   // -------------------------------------------------------------------- game
   'game.backToMenu': 'Back to menu',
-  'game.power': 'Power',
   'game.aim': 'aim',
   'game.aimStrip': 'Drag to turn the cue, hold at the ends to keep turning',
   'game.aimLeft': 'Turn the aim left',
@@ -116,13 +92,6 @@ export const en: Record<keyof typeof it, Entry> = {
   'game.spinLabel': 'Contact point on the cue ball',
   'game.switchView': 'Switch view',
   'game.resetCamera': 'Hold to reset the camera',
-  'game.viewCue': 'Cue',
-  'game.viewTable': 'Table',
-  'game.viewLabel': '{name} view',
-  'game.shotsLeft': {
-    one: '{count} shot',
-    other: '{count} shots',
-  },
 
   // ------------------------------------------------------------ celebrations
   'celebration.potOne': 'Ball {number} down!',
@@ -143,13 +112,6 @@ export const en: Record<keyof typeof it, Entry> = {
     other: '{count} points',
   },
   'result.newGame': 'New game',
-  'result.solved': 'Solved',
-  'result.failed': 'Not this time',
-  'result.shotsUsed': '{used} of {total}',
-  'result.nextLevel': 'Next level',
-  'result.replay': 'Play again',
-  'result.retry': 'Try again',
-  'result.allLevels': 'You have finished every level: {count} stars in total.',
 
   // ------------------------------------------------------------------- rules
   'rules.player': 'Player {number}',
@@ -170,28 +132,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'rules.drawAt': 'Draw at {count} points',
   'rules.resumed': 'Game resumed',
 
-  // ------------------------------------------------------------ puzzle rules
-  'puzzle.potted': 'Potted the {number}',
-  'puzzle.pottedMany': 'Potted {count} balls',
-  'puzzle.solvedIn': {
-    one: 'Solved in {count} shot',
-    other: 'Solved in {count} shots',
-  },
-  'puzzle.failed': 'Puzzle failed',
-  'puzzle.failForbidden': 'The {number} was not meant to go down',
-  'puzzle.failWrongFirst': 'You had to hit the {number} first',
-  'puzzle.failNoContact': 'You did not hit any ball',
-  'puzzle.failOutOfOrder': 'Out of order: the {number} was next',
-  'puzzle.failWrongPocket': 'Wrong pocket',
-  'puzzle.failOutOfShots': 'Out of shots',
-  'puzzle.failOneCushion': 'Something has to reach a cushion before a ball drops',
-  'puzzle.failCushions': 'At least {count} cushions are needed before a ball drops',
 
-  // ------------------------------------------------------------ puzzle goals
-  'goal.pocketAll': 'Pot every ball',
-  'goal.pocketSet': 'Pot the {numbers}',
-  'goal.pocketInOrder': 'Pot in order: {numbers}',
-  'goal.pocketInto': 'Pot the {number} into the marked pocket',
 
   // ------------------------------------------------------------------- music
   'music.title': 'Record player',
@@ -201,6 +142,24 @@ export const en: Record<keyof typeof it, Entry> = {
   'music.musicVolume': 'Music',
   'music.sfxVolume': 'Effects',
   'music.onlyOne': 'One track for now. Add more in assets/bgm/ and to the manifest.',
+
+  // ------------------------------------------------------------------ ball sets
+  'ballSet.classic': 'Classic',
+  'ballSet.classicFeel': 'Polished phenolic resin. The reference.',
+  'ballSet.night': 'Night',
+  'ballSet.nightFeel': 'Vivid colours, mirror finish: they throw the lamps back hard.',
+  'ballSet.ivory': 'Ivory',
+  'ballSet.ivoryFeel': 'Period clay, almost matte. Soft highlight, little of the room.',
+  'ballSet.solid': 'Solids',
+  'ballSet.solidFeel': 'No stripes: you read a ball by its colour alone.',
+
+  // ---------------------------------------------------------------------- setup
+  'setup.title': 'Setup',
+  'setup.subtitle': 'Dress the table',
+  'setup.place': 'Room',
+  'setup.cloth': 'Cloth',
+  'setup.balls': 'Balls',
+  'setup.start': 'Start',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Green',
@@ -233,23 +192,4 @@ export const en: Record<keyof typeof it, Entry> = {
   'device.monitor': 'Studio monitor',
 
   // ------------------------------------------------------------- level names
-  'level.primo-colpo': 'First shot',
-  'level.primo-colpoHint':
-    'The 3 is already lined up with the pocket. Aim at its centre and use very little power.',
-  'level.doppietta': 'One after the other',
-  'level.doppiettaHint':
-    'Two balls, two corners. The first is served up; for the second, think about where the cue ball ends.',
-  'level.in-ordine': 'One, two, three',
-  'level.in-ordineHint': 'Keep to the order: one ball down out of sequence and the puzzle is lost.',
-  'level.niente-nera': 'Not the black',
-  'level.niente-neraHint': 'Pot the 4 and the 5. If the 8 drops, you have lost.',
-  'level.prima-la-5': 'The 5 first',
-  'level.prima-la-5Hint': 'The cue ball has to touch the 5 before any other ball.',
-  'level.di-sponda': 'Off a cushion',
-  'level.di-spondaHint': 'Before any ball drops, something has to have touched a cushion.',
-  'level.buca-scelta': 'That pocket',
-  'level.buca-sceltaHint':
-    'The 9 has to go into the top middle pocket. A corner does not count.',
-  'level.ripulisci': 'Clear the table',
-  'level.ripulisciHint': 'Five balls, seven shots. Every ball has its pocket: find it.',
 };

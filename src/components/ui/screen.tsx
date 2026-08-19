@@ -1,14 +1,20 @@
 /**
  * The frame every menu sits in.
  *
- * Near-black, a serif heading, one lit hairline, and a lot of nothing. Restyling
- * this single component is what carried the look across all four menus.
+ * A serif heading and a lit hairline over a wash of baize — the table itself,
+ * dimmed right down, with a few balls drifting in the dark. Restyling this one
+ * component is what carries the look across every menu.
+ *
+ * The backdrop is deliberately behind the safe-area padding rather than inside
+ * it: it has to run under the notch and past the home indicator, or the illusion
+ * stops at a straight edge two thirds of the way up the screen.
  */
 
 import { type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FeltBackdrop } from '@/components/ui/felt';
 import { GlowRule, Heading, Overline } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -26,8 +32,10 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.four }]}>
-      <View style={styles.inner}>
+    <View style={styles.root}>
+      <FeltBackdrop />
+
+      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
         <View style={styles.header}>
           {onBack ? (
             <Pressable
@@ -109,6 +117,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Luxe.hairline,
+    borderRadius: 4,
+    backgroundColor: 'rgba(8, 12, 10, 0.6)',
   },
   backPressed: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -136,7 +146,11 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Luxe.hairline,
-    backgroundColor: Luxe.surface,
+    // Opaque enough to sit on the felt. The old surface was near-transparent,
+    // which was fine over flat ink and would let the backdrop print straight
+    // through the text now.
+    backgroundColor: 'rgba(8, 12, 10, 0.82)',
+    borderRadius: 4,
     padding: Spacing.four,
     gap: Spacing.four,
   },

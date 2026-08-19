@@ -28,12 +28,9 @@ import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core
 import type { Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
 import { createFreeState, resolveFreeShot, type FreeState } from '@/game/rules/free';
-import { levelById } from '@/game/rules/levels';
-import { createPuzzleState, resolvePuzzleShot, type PuzzleState } from '@/game/rules/puzzle';
 import { Phase, type GameModeKind, type ShotOutcome } from '@/game/rules/types';
 
 import { clearSavedGame, SAVE_VERSION, saveGame, type SavedGame } from './persistence';
-import { useProgress } from './progress';
 import { useSettings } from './settings';
 
 /**
@@ -118,8 +115,6 @@ export interface SessionState {
   world: World | null;
   phase: Phase;
   free: FreeState | null;
-  puzzle: PuzzleState | null;
-  levelId: string | null;
   aimAngle: number;
   power: number;
   /** Where the tip strikes the cue ball. Resets to centre after every shot. */
@@ -135,9 +130,7 @@ export interface SessionState {
   gameId: number;
 
   startFree: (playerCount: number, names: string[]) => void;
-  startPuzzle: (levelId: string) => boolean;
   resume: (save: SavedGame) => boolean;
-  retryLevel: () => void;
   setAimAngle: (angle: number) => void;
   nudgeAim: (delta: number) => void;
   setPower: (power: number) => void;
@@ -177,15 +170,13 @@ export const useSession = create<SessionState>((set, get) => {
   };
 
   const buildSave = (): SavedGame | null => {
-    const { mode, world, free, puzzle, levelId } = get();
+    const { mode, world, free } = get();
     if (!mode || !world) return null;
     return {
       version: SAVE_VERSION,
       mode,
       world: world.serialize(),
       free,
-      puzzle,
-      levelId,
       savedAt: new Date().toISOString(),
     };
   };
@@ -225,8 +216,7 @@ export const useSession = create<SessionState>((set, get) => {
    */
   const furnishedTable = () => {
     const table = createTable();
-    const stars = useProgress.getState().stars;
-    const location = effectiveLocation(useSettings.getState().locationId, stars);
+    const location = effectiveLocation(useSettings.getState().locationId);
     return { ...table, obstacles: obstaclesFor(location.id) };
   };
 
@@ -264,7 +254,7 @@ export const useSession = create<SessionState>((set, get) => {
 
   /** Applies the rules once the balls have stopped. */
   const settleShot = () => {
-    const { world, mode, free, puzzle, levelId } = get();
+    const { world, mode, free } = get();
     if (!world) return;
 
     world.settle();
@@ -298,18 +288,6 @@ export const useSession = create<SessionState>((set, get) => {
       finished = resolved.outcome.gameOver;
       if (resolved.outcome.cueBallNeedsRespot) world.respotCueBall();
       set({ free: resolved.state });
-    } else if (mode === 'puzzle' && puzzle && levelId) {
-      const level = levelById(levelId);
-      if (!level) return;
-
-      const resolved = resolvePuzzleShot(level, puzzle, world, events);
-      outcome = resolved.outcome;
-      finished = resolved.state.status !== 'playing';
-      if (resolved.outcome.cueBallNeedsRespot) world.respotCueBall();
-      if (resolved.state.status === 'won') {
-        useProgress.getState().recordResult(level.id, resolved.state.stars);
-      }
-      set({ puzzle: resolved.state });
     }
 
     const potted = outcome?.pocketed ?? [];
@@ -377,8 +355,6 @@ export const useSession = create<SessionState>((set, get) => {
         world,
         phase: Phase.AIMING,
         free: createFreeState(playerCount, names),
-        puzzle: null,
-        levelId: null,
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -391,45 +367,10 @@ export const useSession = create<SessionState>((set, get) => {
       aimAtNearestTarget();
       const save = buildSave();
       if (save) void saveGame(save);
-    },
-
-    startPuzzle: (levelId) => {
-      const level = levelById(levelId);
-      if (!level) return false;
-
-      accumulator = 0;
-      pending = null;
-      const world = World.fromLayout(
-        level.layout,
-        furnishedTable(),
-        clothProfile(useSettings.getState().clothId),
-      );
-      set({
-        mode: 'puzzle',
-        world,
-        phase: Phase.AIMING,
-        free: null,
-        puzzle: createPuzzleState(level),
-        levelId,
-        power: DEFAULT_POWER,
-        spin: NO_SPIN,
-        cameraMode: CameraMode.CUE,
-        replay: null,
-        celebration: null,
-        messages: [],
-        lastOutcome: null,
-        gameId: get().gameId + 1,
-      });
-      aimAtNearestTarget();
-      const save = buildSave();
-      if (save) void saveGame(save);
-      return true;
     },
 
     resume: (save) => {
-      const level = save.levelId ? levelById(save.levelId) : null;
-      if (save.mode === 'puzzle' && (!level || !save.puzzle)) return false;
-      if (save.mode === 'free' && !save.free) return false;
+      if (!save.free) return false;
 
       accumulator = 0;
       pending = null;
@@ -442,8 +383,6 @@ export const useSession = create<SessionState>((set, get) => {
         ),
         phase: Phase.AIMING,
         free: save.free,
-        puzzle: save.puzzle,
-        levelId: save.levelId,
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -455,11 +394,6 @@ export const useSession = create<SessionState>((set, get) => {
       });
       aimAtNearestTarget();
       return true;
-    },
-
-    retryLevel: () => {
-      const { levelId } = get();
-      if (levelId) get().startPuzzle(levelId);
     },
 
     setAimAngle: (aimAngle) => set({ aimAngle }),
@@ -547,8 +481,6 @@ export const useSession = create<SessionState>((set, get) => {
         world: null,
         phase: Phase.AIMING,
         free: null,
-        puzzle: null,
-        levelId: null,
         replay: null,
         celebration: null,
         messages: [],

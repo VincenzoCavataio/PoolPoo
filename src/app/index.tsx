@@ -4,9 +4,11 @@
  * Doubles as the splash: it hides the native splash once it has mounted, so
  * there is no flash of empty background between the two.
  *
- * Almost nothing on it. A serif wordmark, one lit hairline, a faint halo behind,
- * and a line of balls that drift by a couple of pixels. The restraint is the
- * point — the previous version shouted and looked cheap for it.
+ * One object, one word, one rule. Everything on screen is either the name of the
+ * game or the eight ball, and the eight ball is doing the work — it is the only
+ * thing in the whole game a person recognises from across a room, so it earns
+ * being large and being alone. The line of five small balls that used to sit at
+ * the foot said the same thing five times more quietly.
  */
 
 import { useRouter } from 'expo-router';
@@ -23,33 +25,46 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Breathe, GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
+import { Breathe, GlowRule, Heading, LuxeFonts, Overline, SoftHalo } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { colorForBall } from '@/game/core/ball';
 import { useT } from '@/i18n/use-t';
 
-const HOLD_MS = 2800;
-const RACK_PREVIEW = [1, 3, 8, 11, 14];
+const HOLD_MS = 3200;
 
-function DriftingBall({ number, index }: { number: number; index: number }) {
-  const drift = useSharedValue(0);
+/**
+ * The eight ball, drawn rather than rendered.
+ *
+ * Three flat layers — the sphere, a highlight up and to the left, and the white
+ * disc with the numeral — read as a lit ball at this size, and cost nothing next
+ * to standing up a GL context for one object on a screen that lasts three
+ * seconds. It rises a couple of points and settles, which is enough to make it
+ * feel like an object rather than a logo.
+ */
+function EightBall() {
+  const lift = useSharedValue(0);
 
   useEffect(() => {
-    drift.value = withRepeat(
-      withTiming(1, { duration: 2400 + index * 260, easing: Easing.inOut(Easing.sin) }),
+    lift.value = withRepeat(
+      withTiming(1, { duration: 3600, easing: Easing.inOut(Easing.sin) }),
       -1,
       true,
     );
-  }, [drift, index]);
+  }, [lift]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -3 + drift.value * 6 }],
+    transform: [{ translateY: -4 + lift.value * 8 }],
   }));
 
   return (
-    <Animated.View entering={FadeIn.delay(700 + index * 110).duration(700)} style={style}>
-      <View style={[styles.ball, { backgroundColor: colorForBall(number) }]} />
+    <Animated.View entering={FadeIn.duration(900)} style={style}>
+      <View style={styles.ball}>
+        {/* The lit side. Offset up and left, matching where the room's lamps are. */}
+        <View style={styles.ballSheen} />
+        <View style={styles.ballBadge}>
+          <Text style={styles.ballNumber}>8</Text>
+        </View>
+      </View>
     </Animated.View>
   );
 }
@@ -69,42 +84,34 @@ export default function TitleScreen() {
 
   return (
     <Pressable style={styles.container} onPress={() => router.replace('/menu')}>
-      <SoftHalo size={340} style={styles.halo} />
+      <SoftHalo size={420} style={styles.halo} />
 
       <View style={styles.centre}>
-        <Animated.View entering={FadeIn.duration(700)}>
-          <Overline color={Luxe.textFaint}>{t('title.kicker')}</Overline>
+        <EightBall />
+
+        <Animated.View entering={FadeInDown.delay(320).duration(800)} style={styles.wordmark}>
+          <Heading size={52}>{t('title.wordmark')}</Heading>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(760)} style={styles.wordmark}>
-          <Heading size={54}>{t('title.wordmark')}</Heading>
+        <Animated.View entering={FadeIn.delay(520).duration(700)} style={styles.ruleRow}>
+          <GlowRule width={132} />
         </Animated.View>
 
-        <Animated.View entering={FadeIn.delay(280).duration(700)} style={styles.ruleRow}>
-          <GlowRule width={110} />
-        </Animated.View>
-
-        <Animated.View entering={FadeIn.delay(420).duration(700)}>
-          <Text style={styles.dimension}>{t('title.dimension')}</Text>
+        <Animated.View entering={FadeIn.delay(680).duration(700)}>
+          <Overline color={Luxe.gold}>{t('title.dimension')}</Overline>
         </Animated.View>
       </View>
 
-      <View style={styles.foot}>
-        <View style={styles.ballRow}>
-          {RACK_PREVIEW.map((number, index) => (
-            <DriftingBall key={number} number={number} index={index} />
-          ))}
-        </View>
-
-        <Animated.View entering={FadeIn.delay(1200).duration(900)}>
-          <Breathe>
-            <Overline color={Luxe.textMuted}>{t('title.enter')}</Overline>
-          </Breathe>
-        </Animated.View>
-      </View>
+      <Animated.View entering={FadeIn.delay(1500).duration(900)} style={styles.foot}>
+        <Breathe>
+          <Overline color={Luxe.textMuted}>{t('title.enter')}</Overline>
+        </Breathe>
+      </Animated.View>
     </Pressable>
   );
 }
+
+const BALL_SIZE = 104;
 
 const styles = StyleSheet.create({
   container: {
@@ -114,41 +121,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   halo: {
-    top: '22%',
+    top: '18%',
   },
   centre: {
     alignItems: 'center',
-    gap: Spacing.three,
+  },
+  ball: {
+    width: BALL_SIZE,
+    height: BALL_SIZE,
+    borderRadius: BALL_SIZE / 2,
+    backgroundColor: '#141414',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // A rim of light, which is what separates a dark ball from a dark room.
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    overflow: 'hidden',
+  },
+  ballSheen: {
+    position: 'absolute',
+    top: -BALL_SIZE * 0.3,
+    left: -BALL_SIZE * 0.24,
+    width: BALL_SIZE * 0.9,
+    height: BALL_SIZE * 0.9,
+    borderRadius: BALL_SIZE * 0.45,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+  },
+  ballBadge: {
+    width: BALL_SIZE * 0.42,
+    height: BALL_SIZE * 0.42,
+    borderRadius: BALL_SIZE * 0.21,
+    backgroundColor: '#f4f1e8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ballNumber: {
+    color: '#141414',
+    fontSize: BALL_SIZE * 0.26,
+    fontWeight: '700',
+    fontFamily: LuxeFonts.sans,
   },
   wordmark: {
-    marginTop: Spacing.two,
+    marginTop: Spacing.five,
   },
   ruleRow: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  dimension: {
-    color: Luxe.gold,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 2,
+    paddingVertical: Spacing.three,
   },
   foot: {
     position: 'absolute',
     bottom: Spacing.six,
     alignItems: 'center',
-    gap: Spacing.four,
-  },
-  ballRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-    alignItems: 'center',
-  },
-  ball: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    opacity: 0.85,
   },
 });

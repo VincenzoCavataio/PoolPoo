@@ -94,7 +94,14 @@ export function SoftHalo({
 }
 
 /** Small, wide-tracked, upper-case label. Used for every secondary line. */
-export function Overline({ children, color = Luxe.textFaint }: { children: ReactNode; color?: string }) {
+/**
+ * Small spaced capitals, for labels above a heading.
+ *
+ * Defaults to `textMuted` rather than `textFaint`. The faint tone was legible on
+ * flat ink but only reaches 2.6:1 against the lit part of the felt behind the
+ * menus — under the 3:1 that small text needs — where muted holds 5.2:1.
+ */
+export function Overline({ children, color = Luxe.textMuted }: { children: ReactNode; color?: string }) {
   return <Text style={[styles.overline, { color }]}>{children}</Text>;
 }
 
@@ -141,11 +148,11 @@ export function Breathe({ children, period = 2200 }: { children: ReactNode; peri
 export type LuxeVariant = 'primary' | 'secondary' | 'danger';
 
 /**
- * A row, not a button-shaped button.
+ * A plate with a lit edge.
  *
- * Hairline top and bottom, the label on the left, a thin gold chevron on the
- * right. The primary action earns a gold border and the faintest gold wash —
- * that is the whole hierarchy, and it is enough.
+ * A dark panel, a bar of light down the leading side, and the label in spaced
+ * capitals. The primary action gets a gold edge, a gold label and a point more
+ * size — that is the whole hierarchy, and it is enough.
  */
 export function LuxeButton({
   label,
@@ -181,11 +188,29 @@ export function LuxeButton({
         disabled && styles.buttonDisabled,
         style,
       ]}>
+      {/*
+        A lit edge down the leading side, instead of a chevron down the trailing
+        one.
+
+        The chevron was the tell: a row with a `›` at the end is what a settings
+        list looks like, and three of them stacked read as a form no matter what
+        colour they are. A bar of light at the start reads as a thing that is
+        switched on — and the primary action gets a brighter one, so the eye lands
+        on it before reading a word.
+      */}
+      <View
+        style={[
+          styles.buttonEdge,
+          isPrimary && styles.buttonEdgePrimary,
+          isDanger && styles.buttonEdgeDanger,
+        ]}
+      />
+
       <View style={styles.buttonText}>
         <Text
           style={[
             styles.buttonLabel,
-            isPrimary && { color: Luxe.gold },
+            isPrimary && styles.buttonLabelPrimary,
             isDanger && { color: Luxe.danger },
           ]}
           numberOfLines={1}>
@@ -203,8 +228,6 @@ export function LuxeButton({
           <Text style={styles.badgeLabel}>{badge}</Text>
         </View>
       ) : null}
-
-      <Text style={[styles.chevron, isPrimary && { color: Luxe.gold }]}>›</Text>
     </Pressable>
   );
 }
@@ -246,36 +269,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    minHeight: 68,
-    paddingHorizontal: Spacing.three,
+    minHeight: 72,
+    paddingRight: Spacing.three,
     paddingVertical: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Luxe.hairline,
-    backgroundColor: Luxe.surface,
+    // Darker and more opaque than before: it now has to hold its own over the
+    // felt behind it, where the old near-transparent surface would have let the
+    // backdrop show straight through the label.
+    backgroundColor: 'rgba(8, 12, 10, 0.82)',
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   buttonPrimary: {
     borderColor: 'rgba(201, 169, 98, 0.45)',
-    backgroundColor: 'rgba(201, 169, 98, 0.06)',
+    backgroundColor: 'rgba(28, 23, 12, 0.86)',
   },
   buttonDanger: {
     borderColor: 'rgba(217, 117, 107, 0.35)',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(8, 12, 10, 0.7)',
   },
   buttonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(40, 46, 42, 0.9)',
   },
   buttonDisabled: {
     opacity: 0.32,
   },
+  /** The lit leading edge. Full height, so it reads as part of the panel. */
+  buttonEdge: {
+    width: 3,
+    alignSelf: 'stretch',
+    backgroundColor: Luxe.hairlineStrong,
+  },
+  buttonEdgePrimary: {
+    backgroundColor: Luxe.gold,
+  },
+  buttonEdgeDanger: {
+    backgroundColor: Luxe.danger,
+  },
   buttonText: {
     flex: 1,
     gap: 4,
+    paddingLeft: Spacing.one,
   },
   buttonLabel: {
     color: Luxe.text,
-    fontSize: 16,
-    fontWeight: '500',
-    letterSpacing: 1.6,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+  buttonLabelPrimary: {
+    color: Luxe.gold,
+    fontSize: 17,
   },
   buttonSublabel: {
     color: Luxe.textMuted,
@@ -294,11 +340,5 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '600',
     letterSpacing: 1.8,
-  },
-  chevron: {
-    color: Luxe.textFaint,
-    fontSize: 22,
-    fontWeight: '300',
-    marginTop: -2,
   },
 });

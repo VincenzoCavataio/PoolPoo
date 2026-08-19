@@ -13,7 +13,6 @@ import * as THREE from 'three';
 import { ShotAudio } from '@/game/audio/shot-audio';
 import type { Table } from '@/game/core/table';
 import { Phase } from '@/game/rules/types';
-import { useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
@@ -237,9 +236,8 @@ export function GameScene() {
   const replay = useSession((state) => state.replay);
   const gameId = useSession((state) => state.gameId);
   const locationId = useSettings((state) => state.locationId);
-  const stars = useProgress((state) => state.stars);
 
-  const location = effectiveLocation(locationId, stars);
+  const location = effectiveLocation(locationId);
 
   if (!world) return null;
 
