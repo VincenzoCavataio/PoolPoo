@@ -22,7 +22,15 @@ import { BALL_RADIUS, PHYSICS } from '@/game/core/constants';
 import type { World } from '@/game/core/world';
 
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from './ball-numbers';
-import { BALL_HEIGHT, POCKET_DEPTH, sceneX, sceneZ, spinAxis, spinRate } from './coords';
+import {
+  BALL_HEIGHT,
+  POCKET_DEPTH,
+  sceneX,
+  sceneZ,
+  spinAxis,
+  SPOT_RADIUS,
+  spinRate,
+} from './coords';
 
 /**
  * Reference height for how far a ball's shadow pulls away from it. Not a limit —
@@ -42,6 +50,29 @@ const STRIPE_LATITUDE = 0.52;
 const BADGE_LATITUDE = 0.86;
 
 const SHADOW_ALPHA = 0.4;
+
+/**
+ * The cue ball's spot markings.
+ *
+ * A plain white sphere gives the eye nothing to track, so all the spin work in
+ * the solver — draw, follow, english — was invisible: the ball simply slid
+ * about. Six red spots on the cardinal axes fix that. Six rather than one so
+ * there is always at least one in view whichever way the ball is facing, and on
+ * the axes so the direction of the turn reads directly.
+ *
+ * This is what a measuring cue ball actually looks like, so it is not only
+ * legible but the right kind of object to be looking at.
+ */
+/**
+ * Spot colour, in linear space — which is why the numbers look darker than the
+ * red they produce.
+ *
+ * The previous value came out at sRGB 229,101,105: a salmon pink rather than a
+ * red. Filmic tone mapping pulls saturation out of bright colours, so a spot has
+ * to start further into the corner of the gamut than seems necessary to land on
+ * a convincing red once it reaches the screen.
+ */
+const SPOT_COLOR = 'vec3(0.95, 0.035, 0.03)';
 
 /**
  * Half-width of the badge cap measured across the ball. A point at latitude
@@ -95,12 +126,46 @@ function createBallMaterial(numbers: THREE.Texture): THREE.MeshPhysicalMaterial 
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-        float latitude = abs(vBallNormal.y);
+        /**
+         * Re-normalise per fragment.
+         *
+         * The vertex stage hands over a unit vector, but interpolating across a
+         * triangle shortens it towards the middle of each face — so a threshold
+         * on its components follows the mesh rather than the sphere. On a 24x18
+         * ball a spot spans barely one quadrilateral, which was enough to make
+         * the spots come out faceted instead of round. One normalize here fixes
+         * the shape exactly, and costs nothing next to raising the tessellation
+         * of sixteen instanced balls.
+         */
+        vec3 ballNormal = normalize(vBallNormal);
+        float latitude = abs(ballNormal.y);
         vec3 markingColor = vec3(0.94, 0.93, 0.89);
 
         // Stripes: coloured band round the equator, white towards the poles.
         if (vStyle > 1.5 && latitude > ${STRIPE_LATITUDE.toFixed(3)}) {
           diffuseColor.rgb = markingColor;
+        }
+
+        // The cue ball: red spots at both ends of all three axes. The ball
+        // normal is this fragment's direction from the centre in the ball's own
+        // frame, so a spot is simply "close to an axis", and the ball's own
+        // rotation carries the spots round with it for free.
+        if (vStyle < 0.5) {
+          float onAxis = max(max(abs(ballNormal.x), abs(ballNormal.y)), abs(ballNormal.z));
+          /**
+           * Antialiased edge, so the spots stay clean when the ball is only a few
+           * pixels across and when it is spinning fast.
+           *
+           * The band has to scale with the spot. It was a fixed 0.02 either side,
+           * which is wider than the spot itself now — the edge would have eaten
+           * the whole marking and left a faint smudge.
+           */
+          float spot = smoothstep(
+            ${(1 - SPOT_RADIUS * 1.35).toFixed(5)},
+            ${(1 - SPOT_RADIUS * 0.65).toFixed(5)},
+            onAxis
+          );
+          diffuseColor.rgb = mix(diffuseColor.rgb, ${SPOT_COLOR}, spot);
         }
 
         // Every numbered ball carries the white badge at both poles, with its
@@ -109,7 +174,7 @@ function createBallMaterial(numbers: THREE.Texture): THREE.MeshPhysicalMaterial 
         if (vStyle > 0.5 && latitude > ${BADGE_LATITUDE.toFixed(3)}) {
           diffuseColor.rgb = markingColor;
 
-          vec2 capPosition = vec2(vBallNormal.x * sign(vBallNormal.y), vBallNormal.z);
+          vec2 capPosition = vec2(ballNormal.x * sign(ballNormal.y), ballNormal.z);
           vec2 cellUv = capPosition / ${BADGE_EXTENT.toFixed(4)} * 0.5 + 0.5;
 
           if (cellUv.x > 0.0 && cellUv.x < 1.0 && cellUv.y > 0.0 && cellUv.y < 1.0) {

@@ -300,7 +300,7 @@ export class World {
     cue.v.x = dirX * speed;
     cue.v.y = dirY * speed;
 
-    const side = clampUnit(spin.side) * PHYSICS.maxTipOffset * BALL_RADIUS;
+    const side = clampUnit(spin.side) * PHYSICS.maxSideTipOffset * BALL_RADIUS;
     const vertical = clampUnit(spin.vertical) * PHYSICS.maxTipOffset * BALL_RADIUS;
 
     // Side axis: the shot direction turned left, which is the up axis crossed

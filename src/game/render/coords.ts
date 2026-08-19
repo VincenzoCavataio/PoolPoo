@@ -86,3 +86,18 @@ export function spinAxis(w: Vec3): [number, number, number] {
 export function spinRate(w: Vec3): number {
   return Math.hypot(w.x, w.y, w.z);
 }
+
+/**
+ * Size of a spot, as how far the surface normal may fall from an axis.
+ *
+ * Not a linear radius: the shader compares this against the largest component of
+ * the ball's own normal, so the value is a cosine threshold and the spot it
+ * produces is much wider than the number suggests. At 0.2 each spot came out
+ * 34 mm across on a 57 mm ball — over half the ball, and twelve of the twenty
+ * pixels the ball occupies in the table view.
+ *
+ * 0.012 puts them at roughly 9 mm: about three pixels from the table view and
+ * twenty in the cue view, which is small enough to read as a marked ball rather
+ * than a patterned one while still turning visibly.
+ */
+export const SPOT_RADIUS = 0.012;

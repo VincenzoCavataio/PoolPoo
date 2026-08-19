@@ -263,6 +263,18 @@ export const PHYSICS = {
    * beyond pure follow.
    */
   maxTipOffset: 0.45,
+
+  /**
+   * Furthest the tip may strike from the centre *sideways*, as a fraction of the
+   * radius — a separate, smaller limit than the vertical one.
+   *
+   * They were one number, so dialling the english down also weakened draw and
+   * follow, which is the wrong trade: the vertical spin is well behaved and the
+   * side spin was not. A real cue can reach the same distance in any direction,
+   * but a horizontal blow that far off the vertical axis is exactly the one that
+   * miscues, so a tighter usable range is honest as well as convenient.
+   */
+  maxSideTipOffset: 0.28,
 } as const;
 
 /**

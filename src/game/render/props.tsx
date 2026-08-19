@@ -377,7 +377,9 @@ function parquetParts(): Part[] {
  */
 function galleryParts(): Part[] {
   const parts: Part[] = [];
-  const z = WALL_Z - 0.03;
+  // Far enough off the wall that the whole stack — backing, mount, canvas, paint,
+  // moulding — fits in front of it without any of it poking through.
+  const z = WALL_Z - 0.09;
 
   /** One framed picture: moulding, mount, canvas, and the paint on it. */
   function framed(
@@ -390,17 +392,47 @@ function galleryParts(): Part[] {
   ) {
     const lip = 0.045;
     const mount = 0.028;
+
+    /**
+     * The layers stack *forwards*, out of the wall towards the room.
+     *
+     * They originally went backwards, which put the canvas behind the mount and
+     * the paint behind the canvas — surfaces sharing the same millimetre of
+     * depth. That is a z-fight, and it is what made the pictures shimmer and
+     * flicker as the camera turned: the depth buffer cannot decide which face is
+     * in front, so it changes its mind from frame to frame.
+     *
+     * Each layer now sits a clear 6 mm in front of the one behind it, which is
+     * far more than the depth buffer's precision at this distance, so the order
+     * can never be ambiguous.
+     */
+    // Each layer's centre is placed so its back face clears the front face of
+    // the layer behind it, with 2 mm of daylight between them. Spacing the
+    // centres by a flat step is not enough: the boxes are thicker than the step,
+    // so they still overlap, which is what the shimmering was.
+    const backing = z;
+    const mountZ = backing + 0.013;
+    const canvasZ = mountZ + 0.012;
+    const paintZ = canvasZ + 0.0095;
+    // The moulding straddles the whole stack and stands proud of the paint, so
+    // the frame reads as a frame rather than a border printed on the picture.
+    const frameZ = backing + 0.042;
+
+    // A solid back panel, so there is no gap to see through to the wall.
+    parts.push(box('woodDark', [w + lip, h + lip, 0.012], [cx, cy, backing]));
+
     // Moulding, built as four bars so the frame has a hollow rather than being
     // a solid slab with a picture painted on the front.
-    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy + h / 2 + lip / 2, z]));
-    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy - h / 2 - lip / 2, z]));
-    parts.push(box(frame, [lip, h, 0.05], [cx - w / 2 - lip / 2, cy, z]));
-    parts.push(box(frame, [lip, h, 0.05], [cx + w / 2 + lip / 2, cy, z]));
-    // Mount board, set back, then the canvas behind it.
-    parts.push(box('paper', [w, h, 0.012], [cx, cy, z - 0.012]));
-    parts.push(box('canvas', [w - mount * 2, h - mount * 2, 0.01], [cx, cy, z - 0.02]));
+    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy + h / 2 + lip / 2, frameZ]));
+    parts.push(box(frame, [w + lip * 2, lip, 0.05], [cx, cy - h / 2 - lip / 2, frameZ]));
+    parts.push(box(frame, [lip, h, 0.05], [cx - w / 2 - lip / 2, cy, frameZ]));
+    parts.push(box(frame, [lip, h, 0.05], [cx + w / 2 + lip / 2, cy, frameZ]));
+
+    // Mount board, then the canvas inside it, then the paint on the canvas.
+    parts.push(box('paper', [w, h, 0.01], [cx, cy, mountZ]));
+    parts.push(box('canvas', [w - mount * 2, h - mount * 2, 0.01], [cx, cy, canvasZ]));
     for (const [material, ox, oy, sw, sh] of strokes) {
-      parts.push(box(material, [sw, sh, 0.006], [cx + ox, cy + oy, z - 0.026]));
+      parts.push(box(material, [sw, sh, 0.005], [cx + ox, cy + oy, paintZ]));
     }
   }
 
@@ -424,11 +456,15 @@ function galleryParts(): Part[] {
     ['oil', 0.06, -0.02, 0.09, 0.1],
   ]);
 
-  // Brass picture light over the landscape: a stem and a half-cylinder shade.
-  parts.push(box('brass', [0.03, 0.14, 0.03], [-0.78, 1.3, z + 0.02]));
-  parts.push(
-    cyl('brass', 0.045, 0.34, [-0.78, 1.4, z + 0.09], [0, 0, Math.PI / 2]),
-  );
+  /**
+   * Brass picture light over the landscape: a stem and a half-cylinder shade.
+   *
+   * Clear of the frame in both height and depth. The stem originally started
+   * inside the frame's top bar and at almost the same depth, which is the other
+   * shimmer the pictures had.
+   */
+  parts.push(box('brass', [0.03, 0.16, 0.03], [-0.78, 1.35, z + 0.055]));
+  parts.push(cyl('brass', 0.045, 0.34, [-0.78, 1.46, z + 0.12], [0, 0, Math.PI / 2]));
 
   return parts;
 }
@@ -491,7 +527,9 @@ function armchairParts(): Part[] {
 function trophyCaseParts(): Part[] {
   const parts: Part[] = [];
   const x = -WALL_X + 0.24;
-  const z = -1.4;
+  // Clear of the bookcase, which owns this wall from z -2.62 to -0.98. The two
+  // were sharing a metre of it, so the cabinet stood inside the shelving.
+  const z = -0.2;
 
   // Carcass and plinth.
   parts.push(box('woodDark', [0.42, 1.6, 1.1], [x, FLOOR_Y + 0.8, z]));
@@ -530,7 +568,9 @@ function plantParts(): Part[] {
   const spots: [number, number, number][] = [
     [WALL_X - 0.55, 0, WALL_Z - 0.7],
     [-WALL_X + 0.5, 0, WALL_Z - 0.9],
-    [-WALL_X + 0.55, 0, -WALL_Z + 0.75],
+    // Off the -x wall: the bookcase runs down it and the pot was leaning on its
+    // corner. Moved in towards the middle of the end wall instead.
+    [-WALL_X + 1.25, 0, -WALL_Z + 0.6],
   ];
   const parts: Part[] = [];
 
@@ -676,8 +716,10 @@ function rugParts(): Part[] {
 }
 
 function sideTableParts(): Part[] {
-  const x = -1.75;
-  const z = 2.55;
+  // Against the far end wall. It was originally tucked into the corner where the
+  // plant, the stool and an armchair all already stood — three overlaps at once.
+  const x = 0.75;
+  const z = -WALL_Z + 0.5;
   const top = FLOOR_Y + 0.62;
 
   return [
@@ -746,6 +788,99 @@ const BUILDERS: Record<PropGroup, () => Part[]> = {
   trophyCase: trophyCaseParts,
   arcade: arcadeParts,
 };
+
+/**
+ * Every shape a set of prop groups draws. Exposed so tests can check the
+ * geometry itself rather than trusting it by eye.
+ */
+export function propParts(groups: PropGroup[]): Part[] {
+  return groups.flatMap((group) => BUILDERS[group]());
+}
+
+/** A single piece of furniture's footprint on the floor, in scene axes. */
+export interface PropFootprint {
+  x: number;
+  z: number;
+  halfX: number;
+  halfZ: number;
+  /** Height above the floor, so short things can be ignored. */
+  height: number;
+}
+
+/**
+ * Where the furniture actually stands, measured from the shapes that get drawn.
+ *
+ * The collision boxes in `locations.ts` have to be written by hand — the solver
+ * wants a handful of simple boxes, not four hundred — but that means the two can
+ * drift apart, and they did: plants had boxes at positions no plant occupied,
+ * while the stools and speakers had none at all. This derives the truth from the
+ * geometry so a test can hold the hand-written table against it.
+ *
+ * Parts are clustered by proximity, because a group like `plants` draws three
+ * separate objects and each is its own obstacle.
+ */
+export function propFootprints(groups: PropGroup[]): PropFootprint[] {
+  const found: PropFootprint[] = [];
+
+  for (const group of groups) {
+    // Flat floor coverings are not obstacles.
+    if (group === 'parquet' || group === 'rug') continue;
+
+    for (const part of BUILDERS[group]()) {
+      const [x, y, z] = part.position;
+      let halfX = 0;
+      let halfY = 0;
+      let halfZ = 0;
+      if (part.box) {
+        halfX = part.box[0] / 2;
+        halfY = part.box[1] / 2;
+        halfZ = part.box[2] / 2;
+      } else if (part.cylinder) {
+        halfX = part.cylinder.radius;
+        halfZ = part.cylinder.radius;
+        halfY = part.cylinder.height / 2;
+      } else if (part.sphere) {
+        halfX = part.sphere.radius;
+        halfY = part.sphere.radius;
+        halfZ = part.sphere.radius;
+      } else if (part.cone) {
+        halfX = part.cone.radius;
+        halfZ = part.cone.radius;
+        halfY = part.cone.height / 2;
+      }
+
+      // Anything mounted on a wall above head height is out of a rolling ball's
+      // reach, and folding it in would stretch a footprint across the room.
+      if (y - halfY > FLOOR_Y + 1.4) continue;
+
+      // Touching, not merely nearby. A generous margin here swallowed the
+      // speakers into the shelving beside them and reported one wide block
+      // where there are three separate objects.
+      const near = found.find(
+        (f) =>
+          Math.abs(f.x - x) < f.halfX + halfX + 0.02 &&
+          Math.abs(f.z - z) < f.halfZ + halfZ + 0.02,
+      );
+
+      if (!near) {
+        found.push({ x, z, halfX, halfZ, height: y + halfY - FLOOR_Y });
+        continue;
+      }
+
+      const minX = Math.min(near.x - near.halfX, x - halfX);
+      const maxX = Math.max(near.x + near.halfX, x + halfX);
+      const minZ = Math.min(near.z - near.halfZ, z - halfZ);
+      const maxZ = Math.max(near.z + near.halfZ, z + halfZ);
+      near.x = (minX + maxX) / 2;
+      near.z = (minZ + maxZ) / 2;
+      near.halfX = (maxX - minX) / 2;
+      near.halfZ = (maxZ - minZ) / 2;
+      near.height = Math.max(near.height, y + halfY - FLOOR_Y);
+    }
+  }
+
+  return found;
+}
 
 // ------------------------------------------------------------------ the merge
 

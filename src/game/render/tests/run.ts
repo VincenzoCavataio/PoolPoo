@@ -11,9 +11,10 @@
 import { assert, assertClose, assertEqual, report, suite, test } from '../../core/tests/harness';
 import { createTable } from '../../core/table';
 import { BALL_RADIUS, PHYSICS } from '../../core/constants';
-import { spinAxis, spinRate } from '../coords';
+import { spinAxis, spinRate, SPOT_RADIUS } from '../coords';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
+import { propFootprints, propParts } from '../props';
 
 const CELL = 64;
 const SIZE = CELL * NUMBER_ATLAS_GRID;
@@ -352,6 +353,55 @@ suite('furniture layout', () => {
   });
 
   /**
+   * Every collision box has to sit on a piece of furniture that is really drawn
+   * there.
+   *
+   * The table is written by hand, and the first version was wrong in both
+   * directions: two plant boxes stood where no plant was, and the two stools and
+   * two speakers had no box at all. A box in the wrong place is a ball bouncing
+   * off thin air; a missing one is a ball rolling through a bookcase.
+   */
+  test('every collision box sits on something that is drawn', () => {
+    const drawn = propFootprints(LOCATIONS.find((l) => l.id === 'sala')!.props);
+
+    for (const o of obstaclesFor('sala')) {
+      // Back into scene axes: sim x is scene -z, sim y is scene x.
+      const sceneX = o.y;
+      const sceneZ = -o.x;
+      const near = drawn.find(
+        (d) => Math.abs(d.x - sceneX) < 0.25 && Math.abs(d.z - sceneZ) < 0.25,
+      );
+      assert(
+        near !== undefined,
+        `a collision box at scene (${sceneX.toFixed(2)}, ${sceneZ.toFixed(2)}) ` +
+          'has no furniture standing there',
+      );
+    }
+  });
+
+  test('everything a ball can hit has a collision box', () => {
+    const boxes = obstaclesFor('sala').map((o) => ({ x: o.y, z: -o.x }));
+
+    for (const piece of propFootprints(LOCATIONS.find((l) => l.id === 'sala')!.props)) {
+      // Only pieces a ball can actually be stopped by. Individual cue shafts and
+      // the pictures on the wall are drawn as their own slivers of geometry, and
+      // giving each of them an obstacle would be pointless — a ball rolls past
+      // anything this thin without ever meeting enough of it to bounce off.
+      if (piece.height < BALL_RADIUS * 2) continue;
+      if (piece.halfX < 0.08 || piece.halfZ < 0.08) continue;
+
+      const covered = boxes.some(
+        (b) => Math.abs(b.x - piece.x) < 0.25 && Math.abs(b.z - piece.z) < 0.25,
+      );
+      assert(
+        covered,
+        `the piece at scene (${piece.x.toFixed(2)}, ${piece.z.toFixed(2)}) ` +
+          'has no collision box, so a ball rolls straight through it',
+      );
+    }
+  });
+
+  /**
    * Two boxes sharing a footprint leave a gap a ball can be wedged into, where
    * each piece keeps pushing it back towards the other.
    */
@@ -393,6 +443,183 @@ suite('furniture layout', () => {
         assert(o.halfX > 0 && o.halfY > 0 && o.height > 0, `${id}: a piece has no size`);
       }
     }
+  });
+});
+
+suite('coplanar surfaces', () => {
+  /**
+   * Two flat faces sharing the same depth is a z-fight: the depth buffer cannot
+   * decide which is in front and swaps between them as the camera moves, which
+   * reads on screen as shimmering or flickering.
+   *
+   * The framed pictures had it badly — their layers were stacked backwards, so
+   * the canvas sat inside the mount and the paint inside the canvas. This walks
+   * every thin, wall-facing shape in the room and checks that any two sharing a
+   * patch of wall are separated in depth by more than the fudge a depth buffer
+   * can be trusted with at this range.
+   */
+  const MIN_SEPARATION = 0.0015;
+
+  interface Slab {
+    x: number;
+    y: number;
+    z: number;
+    halfX: number;
+    halfY: number;
+    halfZ: number;
+  }
+
+  function wallSlabs(): Slab[] {
+    const slabs: Slab[] = [];
+    for (const location of LOCATIONS) {
+      for (const part of propParts(location.props)) {
+        if (!part.box) continue;
+        const [w, h, d] = part.box;
+        // Thin and facing the room: the shapes that stack up on a wall.
+        if (d > 0.06 || w < 0.02 || h < 0.02) continue;
+        const [x, y, z] = part.position;
+        slabs.push({ x, y, z, halfX: w / 2, halfY: h / 2, halfZ: d / 2 });
+      }
+    }
+    return slabs;
+  }
+
+  test('no two flat surfaces fight over the same depth', () => {
+    const slabs = wallSlabs();
+    let worst = Infinity;
+    let where = '';
+
+    for (let i = 0; i < slabs.length; i++) {
+      for (let j = i + 1; j < slabs.length; j++) {
+        const a = slabs[i];
+        const b = slabs[j];
+        // Only pairs that actually overlap when seen face-on.
+        if (Math.abs(a.x - b.x) >= a.halfX + b.halfX) continue;
+        if (Math.abs(a.y - b.y) >= a.halfY + b.halfY) continue;
+
+        /**
+         * Surfaces at the same depth are one object, not a conflict.
+         *
+         * The four bars of a picture frame sit at identical z and cross at the
+         * corners on purpose — they cannot shimmer against each other because
+         * there is no ambiguity about which is in front. What flickers is two
+         * surfaces at *different* depths that are nonetheless too close for the
+         * depth buffer to separate, so that is the only case worth flagging.
+         */
+        if (Math.abs(a.z - b.z) < 1e-6) continue;
+
+        const gap = Math.abs(a.z - b.z) - (a.halfZ + b.halfZ);
+        if (gap < worst) {
+          worst = gap;
+          where = `(${a.x.toFixed(2)}, ${a.y.toFixed(2)}) and (${b.x.toFixed(2)}, ${b.y.toFixed(2)})`;
+        }
+      }
+    }
+
+    assert(
+      worst === Infinity || worst > -MIN_SEPARATION,
+      `two surfaces overlap in depth by ${(-worst * 1000).toFixed(2)}mm at ${where}, ` +
+        'which will shimmer as the camera turns',
+    );
+  });
+});
+
+suite('cue ball spots', () => {
+  /**
+   * Diameter of one spot in metres, from the shader's threshold.
+   *
+   * The shader tests the largest component of the ball's own surface normal
+   * against `1 - SPOT_RADIUS`, so the value is a cosine and the marking it makes
+   * is far wider than the number reads. Getting that wrong is what made the
+   * first version cover half the ball.
+   */
+  const spotDiameter = 2 * BALL_RADIUS * Math.sin(Math.acos(1 - SPOT_RADIUS));
+
+  test('a spot is a few millimetres, not a patch', () => {
+    assert(
+      spotDiameter < 0.012,
+      `a spot is ${(spotDiameter * 1000).toFixed(1)}mm across, which reads as a pattern`,
+    );
+  });
+
+  test('a spot is still big enough to see turning', () => {
+    assert(
+      spotDiameter > 0.004,
+      `a spot is only ${(spotDiameter * 1000).toFixed(1)}mm across and would vanish`,
+    );
+  });
+
+  /**
+   * The spots have to be round, and the sphere they sit on is coarse.
+   *
+   * The shader thresholds the components of the ball's surface normal, and the
+   * normal the rasteriser interpolates across a face is shorter than unit in the
+   * middle of it. On a 24x18 sphere that shortening varies enough around the
+   * equator — where the longitude lines are furthest apart — to squash the spots
+   * by nearly half in one direction. Re-normalising per fragment restores a true
+   * sphere to threshold against; this checks the boundary is the same distance
+   * out whichever way you leave the centre.
+   */
+  test('a spot is round, not squashed by the mesh', () => {
+    const segmentsLon = 24;
+    const segmentsLat = 18;
+
+    /** The interpolated, un-normalised normal the fragment stage receives. */
+    function interpolated(theta: number, phi: number): [number, number, number] {
+      const lon = (theta / (2 * Math.PI)) * segmentsLon;
+      const lat = (phi / Math.PI) * segmentsLat;
+      const l0 = Math.floor(lon);
+      const p0 = Math.floor(lat);
+      const fu = lon - l0;
+      const fv = lat - p0;
+
+      const corner = (li: number, pi: number): [number, number, number] => {
+        const th = (li / segmentsLon) * 2 * Math.PI;
+        const ph = (pi / segmentsLat) * Math.PI;
+        return [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)];
+      };
+
+      const a = corner(l0, p0);
+      const b = corner(l0 + 1, p0);
+      const c = corner(l0, p0 + 1);
+      const d = corner(l0 + 1, p0 + 1);
+      return [0, 1, 2].map(
+        (i) => (a[i] * (1 - fu) + b[i] * fu) * (1 - fv) + (c[i] * (1 - fu) + d[i] * fu) * fv,
+      ) as [number, number, number];
+    }
+
+    // The +x spot sits on the equator, the worst case for this.
+    const threshold = 1 - SPOT_RADIUS;
+    const radii: number[] = [];
+    for (let k = 0; k < 36; k++) {
+      const around = (k / 36) * Math.PI * 2;
+      let edge = 0;
+      for (let t = 0; t < 0.4; t += 0.0005) {
+        const theta = (t * Math.cos(around) + 2 * Math.PI) % (2 * Math.PI);
+        const phi = Math.PI / 2 + t * Math.sin(around);
+        const raw = interpolated(theta, phi);
+        const length = Math.hypot(raw[0], raw[1], raw[2]);
+        const n = raw.map((v) => v / length);
+        const onAxis = Math.max(Math.abs(n[0]), Math.abs(n[1]), Math.abs(n[2]));
+        if (onAxis > threshold) edge = t;
+        else break;
+      }
+      radii.push(edge);
+    }
+
+    const smallest = Math.min(...radii);
+    const largest = Math.max(...radii);
+    const variation = (largest - smallest) / largest;
+    assert(
+      variation < 0.05,
+      `the spot boundary varies by ${(variation * 100).toFixed(0)}% around its centre, ` +
+        'so it is not round',
+    );
+  });
+
+  test('a spot is a small fraction of the ball', () => {
+    const share = spotDiameter / (BALL_RADIUS * 2);
+    assert(share < 0.2, `a spot covers ${(share * 100).toFixed(0)}% of the ball's width`);
   });
 });
 
