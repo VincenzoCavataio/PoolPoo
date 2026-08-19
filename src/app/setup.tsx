@@ -16,8 +16,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackButton, BallsIcon, ClothIcon, PocketIcon } from '@/components/ui/icons';
-import { Heading, LuxeFonts } from '@/components/ui/luxe';
+import { BallsIcon, ClothIcon, PocketIcon } from '@/components/ui/icons';
+import { LuxeFonts } from '@/components/ui/luxe';
+import { ScreenHeader } from '@/components/ui/screen';
 import { BALL_SETS, ballSetById, colorForBallIn } from '@/constants/ball-sets';
 import { CLOTH_OPTIONS, clothById, Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -182,10 +183,7 @@ export default function SetupScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <View style={styles.header}>
-          <BackButton label={t('common.back')} onPress={() => router.back()} />
-          <Heading size={26}>{t('setup.title')}</Heading>
-        </View>
+        <ScreenHeader title={t('setup.title')} onBack={() => router.back()} />
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.stage}>
           <TablePreview locationId={locationId} clothId={clothId} ballSetId={ballSetId} />
@@ -297,11 +295,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.five,
     gap: Spacing.three,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
   },
   pressed: {
     opacity: 0.6,

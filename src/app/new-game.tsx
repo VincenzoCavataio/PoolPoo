@@ -16,8 +16,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackButton, RackIcon } from '@/components/ui/icons';
-import { GlowRule, Heading, LuxeFonts } from '@/components/ui/luxe';
+import { RackIcon } from '@/components/ui/icons';
+import { GlowRule, LuxeFonts } from '@/components/ui/luxe';
+import { ScreenHeader } from '@/components/ui/screen';
 import { ballSetById, colorForBallIn } from '@/constants/ball-sets';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -135,10 +136,7 @@ export default function NewGameScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <View style={styles.header}>
-          <BackButton label={t('common.back')} onPress={() => router.back()} />
-          <Heading size={26}>{t('newGame.title')}</Heading>
-        </View>
+        <ScreenHeader title={t('newGame.title')} onBack={() => router.back()} />
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.centre}>
           <Text style={styles.prompt}>{t('newGame.players')}</Text>
@@ -186,15 +184,18 @@ export default function NewGameScreen() {
             accessibilityRole="button"
             onPress={next}
             style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
-            <View style={styles.goArt} pointerEvents="none">
-              <RackIcon size={88} color={Luxe.gold} />
+            <View style={styles.goIcon}>
+              <RackIcon size={22} color={Luxe.gold} />
             </View>
 
-            <GlowRule width={30} align="flex-start" color={Luxe.gold} />
-            <Text style={styles.goLabel}>{t('newGame.startFree')}</Text>
-            <Text style={styles.goHint}>
-              {t('newGame.players')} · {players}
-            </Text>
+            <View style={styles.goText}>
+              <Text style={styles.goLabel}>{t('newGame.next')}</Text>
+              <Text style={styles.goHint} numberOfLines={1}>
+                {t('newGame.players')} · {players}
+              </Text>
+            </View>
+
+            <Text style={styles.goChevron}>{'›'}</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -221,11 +222,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.six,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
   pressed: {
     opacity: 0.6,
   },
@@ -236,13 +232,25 @@ const styles = StyleSheet.create({
    * `justifyContent: 'center'` put it in the middle of the space left over,
    * which left a wide gap between the picker and the button below it.
    */
+  /**
+   * The picker, centred in the space the header and the button leave.
+   *
+   * `flex: 1` already gives this block everything those two do not claim, so
+   * centring inside it puts the choice in the middle of the screen's own empty
+   * middle — which is where the eye goes, and where it belongs on a screen that
+   * asks exactly one question.
+   *
+   * It used to be pinned to the top of that space and then pushed back down by a
+   * padding and a `top` offset, each added at a different time to correct the
+   * one before it. Three numbers were deciding one position, and none of them
+   * held when the header gained a panel and the button moved. One rule replaces
+   * them: stay in the middle, whatever the rows above and below turn out to be.
+   */
   centre: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: Spacing.five,
+    justifyContent: 'center',
     gap: Spacing.three,
-    top: Spacing.seven
   },
   /** Brighter and a shade larger: this names the only choice on the screen. */
   prompt: {
@@ -312,36 +320,79 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
 
+  /**
+   * On to dressing the table — a step, not the finish.
+   *
+   * This used to be the button that started the game, and it was built like it:
+   * a tall panel, a 24pt serif line, a rack bleeding off the corner. Then the
+   * setup screen went in behind it and this became the first of two steps, while
+   * the styling stayed where it was — so the intermediate step shouted and the
+   * one that actually breaks was quieter than it.
+   *
+   * Now it is an outlined row and the button on the setup screen is filled gold.
+   * The pair reads in the right order: this one moves you along, that one starts
+   * the game.
+   *
+   * The background is a neutral dark rather than the near-black gold that was
+   * here (hue 45, a couple of degrees off the gold itself), which against the
+   * green of these screens read as brown.
+   */
   go: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.three,
-    padding: Spacing.four,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(201, 169, 98, 0.55)',
-    backgroundColor: '#1d1809',
-    overflow: 'hidden',
-    top: -Spacing.six
+    borderColor: 'rgba(201, 169, 98, 0.5)',
+    backgroundColor: '#111716',
+    /**
+     * Lifted well clear of the bottom of the screen.
+     *
+     * `marginBottom`, not the `top: -64` that was here: the button is in normal
+     * flow, where `top` shifts it visually but leaves its original box in the
+     * layout — so the space it vacated stayed empty and the gap below was really
+     * the offset plus the container's padding. A margin moves the box itself,
+     * which is the same lift expressed once instead of twice.
+     */
+    marginBottom: Spacing.six + Spacing.six,
   },
   goPressed: {
-    backgroundColor: '#2b2410',
+    backgroundColor: '#1a2321',
   },
-  /** The rack, bled off the corner — the same device the menu's panel uses. */
-  goArt: {
-    position: 'absolute',
-    top: -Spacing.two,
-    right: -Spacing.two,
-    opacity: 0.18,
+  /** The rack, small and inset — a mark on the row, not a background. */
+  goIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: 'rgba(201, 169, 98, 0.08)',
+  },
+  goText: {
+    flex: 1,
+    gap: 3,
   },
   goLabel: {
     color: Luxe.gold,
-    fontSize: 24,
-    fontFamily: LuxeFonts.serif,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
   },
   goHint: {
     color: Luxe.textMuted,
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    lineHeight: 15,
+  },
+  /** A chevron, because this one goes somewhere rather than doing something. */
+  goChevron: {
+    color: 'rgba(201, 169, 98, 0.6)',
+    fontSize: 22,
+    lineHeight: 24,
+    marginTop: -2,
   },
 });

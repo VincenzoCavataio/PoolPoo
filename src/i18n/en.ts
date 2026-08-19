@@ -59,7 +59,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'newGame.players': 'Players',
   'newGame.soloHint': 'On your own it is a high-score run.',
   'newGame.multiHint': '{count} players taking turns on the same device.',
-  'newGame.startFree': 'Start free play',
+  'newGame.next': 'Dress the table',
 
 
   // ----------------------------------------------------------------- options
@@ -183,7 +183,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'setup.place': 'Room',
   'setup.cloth': 'Cloth',
   'setup.balls': 'Balls',
-  'setup.start': 'Start',
+  'setup.start': 'Start playing',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Green',

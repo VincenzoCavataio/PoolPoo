@@ -60,7 +60,7 @@ export const it = {
   'newGame.players': 'Giocatori',
   'newGame.soloHint': 'Con un solo giocatore è una sfida al punteggio.',
   'newGame.multiHint': '{count} giocatori a turno sullo stesso dispositivo.',
-  'newGame.startFree': 'Inizia partita libera',
+  'newGame.next': 'Allestisci il tavolo',
 
 
   // ----------------------------------------------------------------- options
@@ -184,7 +184,7 @@ export const it = {
   'setup.place': 'Sala',
   'setup.cloth': 'Panno',
   'setup.balls': 'Palline',
-  'setup.start': 'Inizia',
+  'setup.start': 'Inizia a giocare',
 
   // ------------------------------------------------------------------- cloth
   'cloth.verde': 'Verde',

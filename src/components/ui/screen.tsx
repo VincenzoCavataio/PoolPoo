@@ -11,7 +11,7 @@
  */
 
 import { type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/ui/icons';
@@ -28,6 +28,46 @@ interface ScreenProps {
   footer?: ReactNode;
 }
 
+/**
+ * The title bar every screen wears.
+ *
+ * The title is centred, and that takes a little arranging: the back chevron sits
+ * on the left, so text simply placed beside it lands off to one side of the
+ * panel. The fix is to balance it — an empty box the same width as the chevron
+ * on the right, with the title taking the space between. The title is then
+ * centred on the *panel*, not on the leftovers, and it stays centred whether or
+ * not there is a chevron at all.
+ *
+ * Shared, so the three screens that carry a heading cannot drift apart. They had
+ * each grown their own copy, and the panel behind them arrived at different
+ * times in different files.
+ */
+export function ScreenHeader({
+  title,
+  subtitle,
+  onBack,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+}) {
+  return (
+    <View style={styles.header}>
+      <View style={styles.headerSide}>
+        {onBack ? <BackButton label="Indietro" onPress={onBack} /> : null}
+      </View>
+
+      <View style={styles.headerText}>
+        <Heading size={22}>{title}</Heading>
+        {subtitle ? <Overline>{subtitle}</Overline> : null}
+      </View>
+
+      {/* The counterweight: empty, and exactly as wide as the chevron. */}
+      <View style={styles.headerSide} />
+    </View>
+  );
+}
+
 export function Screen({ title, subtitle, onBack, children, footer }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
@@ -37,14 +77,7 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
         {/* Same header as every other screen: a drawn chevron and a serif
             title, with no rule under it. The rule was there to separate the
             title from a list; there is no list any more. */}
-        <View style={styles.header}>
-          {onBack ? <BackButton label="Indietro" onPress={onBack} /> : null}
-
-          <View style={styles.headerText}>
-            <Heading size={26}>{title}</Heading>
-            {subtitle ? <Overline>{subtitle}</Overline> : null}
-          </View>
-        </View>
+        <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} />
 
         <ScrollView
           contentContainerStyle={styles.content}
@@ -94,15 +127,46 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
   },
+  /**
+   * The title bar, on a surface of its own.
+   *
+   * It used to be a heading and a chevron laid straight onto the room behind —
+   * which is the one thing every panel on these screens had already been fixed
+   * *not* to do. The scene drifts, so a rail passing under a serif title changes
+   * the contrast under it while it is being read, and the app ended up with its
+   * content on solid ground and its titles floating over moving scenery.
+   *
+   * Same treatment as the panels below it: a dark ground, a hairline, rounded
+   * corners. The table is still seen — in the gaps between panels, which is
+   * where it was always meant to show through.
+   */
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.three,
-    paddingBottom: Spacing.three,
+    // Centred, not bottom-aligned: the three columns are a chevron, a title and
+    // a counterweight, and they sit on one line rather than on a baseline.
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: '#0d1210',
   },
   headerText: {
     flex: 1,
-    gap: Spacing.two,
+    alignItems: 'center',
+    gap: 2,
+  },
+  /**
+   * The two ends of the bar, kept the same width.
+   *
+   * The chevron lives in the left one and the right one stays empty. Equal
+   * widths are what let the middle be the true middle: without the counterweight
+   * the title centres in the space the chevron leaves, which sits it visibly off
+   * to the right of the panel.
+   */
+  headerSide: {
+    width: 40,
   },
   title: {
     marginBottom: 2,
