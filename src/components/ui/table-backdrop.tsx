@@ -34,6 +34,7 @@ import * as THREE from 'three';
 import { currentTilt, useTilt } from '@/components/ui/floating';
 import { playBallast, playSwitch } from '@/game/audio/sfx';
 import { createTable } from '@/game/core/table';
+import { useRoomLight } from '@/store/room-light';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '@/game/render/ball-numbers';
 import { SPOT_RADIUS } from '@/game/render/coords';
 import { TableMesh } from '@/game/render/table-mesh';
@@ -601,8 +602,17 @@ function CeilingLamp({ armed }: { armed: boolean }) {
   const clock = useRef(0);
   const heard = useRef(0);
 
-  // A different stutter every launch, and none at all if it is already lit.
-  const strikes = useMemo(buildStrikes, []);
+  /**
+   * The strike sequence, rebuilt every time the switch is thrown on.
+   *
+   * Held in a ref rather than a memo because it has to be replaced from inside
+   * the frame loop: a tube that has been switched off and on again gets a fresh
+   * stutter, not a replay of the one it did at launch.
+   */
+  const strikes = useRef(buildStrikes());
+
+  const on = useRoomLight((state) => state.on);
+  const wasOn = useRef(on);
 
   useFrame((_, delta) => {
     /**
@@ -614,6 +624,32 @@ function CeilingLamp({ armed }: { armed: boolean }) {
      * already lit — the switch-on would have happened where nobody saw it.
      */
     if (!armed) return;
+
+    /**
+     * The switch being thrown, caught on the frame it changes.
+     *
+     * Off is instant — that is what a switch does, and a fluorescent has no fade
+     * to give on the way down; the arc simply stops. On is the whole performance
+     * again, from the dark hold through the stutter, so the sequence and the
+     * clock are both replaced rather than resumed.
+     */
+    if (on !== wasOn.current) {
+      wasOn.current = on;
+
+      if (on) {
+        strikes.current = buildStrikes();
+        clock.current = 0;
+        heard.current = 0;
+        lit = false;
+      } else {
+        lit = false;
+        for (const lamp of lights.current) if (lamp) lamp.intensity = 0;
+        glass.emissiveIntensity = 0;
+      }
+    }
+
+    // Switched off: the room stays dark and no clock runs.
+    if (!on) return;
 
     // Already been through it once: navigating back to the menu finds the light
     // on, not a tube that strikes itself again every time.
@@ -628,8 +664,8 @@ function CeilingLamp({ armed }: { armed: boolean }) {
     const now = clock.current;
 
     let glow = 0;
-    for (let i = 0; i < strikes.flashes.length; i++) {
-      const flash = strikes.flashes[i];
+    for (let i = 0; i < strikes.current.flashes.length; i++) {
+      const flash = strikes.current.flashes[i];
       if (now < flash.at || now >= flash.until) continue;
 
       if (flash.until === Number.POSITIVE_INFINITY) {
@@ -649,8 +685,8 @@ function CeilingLamp({ armed }: { armed: boolean }) {
      * clock rather than testing a window, so a slow frame cannot step over one
      * and lose its click.
      */
-    for (let i = heard.current; i < strikes.flashes.length; i++) {
-      const flash = strikes.flashes[i];
+    for (let i = heard.current; i < strikes.current.flashes.length; i++) {
+      const flash = strikes.current.flashes[i];
       if (flash.at > before && flash.at <= now) {
         const settled = flash.until === Number.POSITIVE_INFINITY;
         playSwitch(settled ? 'settle' : 'strike');

@@ -24,6 +24,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Floating } from '@/components/ui/floating';
+import { LightSwitch } from '@/components/ui/light-switch';
 import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
 import { GlowRule, Heading } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
@@ -80,10 +81,27 @@ export default function MenuScreen() {
           styles.inner,
           { paddingTop: insets.top + Spacing.five, paddingBottom: insets.bottom + Spacing.four },
         ]}>
-        <Animated.View entering={FadeIn.duration(260)} style={styles.header}>
-          <Heading size={46}>{t('title.wordmark')}</Heading>
-          <GlowRule width={52} align="flex-start" color={Luxe.gold} />
-          <Text style={styles.subtitle}>{t('menu.subtitle')}</Text>
+        {/*
+          The wordmark, with the light switch beside it.
+
+          The switch belongs to the room rather than to the menu, so it is not
+          lined up with the actions below — it sits out at the top edge where a
+          switch is on a wall, level with the title and well away from anything
+          that navigates. Nothing else is up here to be pressed by mistake.
+        */}
+        <Animated.View entering={FadeIn.duration(260)} style={styles.titleRow}>
+          <View style={styles.header}>
+            {/* 42, not 46: the switch now takes a corner of this line, and at 46
+                "After Hours" came within two points of wrapping on a 375pt
+                screen. */}
+            <Heading size={42}>{t('title.wordmark')}</Heading>
+            <GlowRule width={52} align="flex-start" color={Luxe.gold} />
+            <Text style={styles.subtitle}>{t('menu.subtitle')}</Text>
+          </View>
+
+          <Floating phase={1.6} depth={0.7}>
+            <LightSwitch />
+          </Floating>
         </Animated.View>
 
         {/* The view of the table. Nothing is drawn here on purpose. */}
@@ -175,6 +193,7 @@ export default function MenuScreen() {
               <Text style={styles.quietLabel}>{t('menu.options')}</Text>
             </Pressable>
           </Animated.View>
+
         </View>
       </View>
     </View>
@@ -266,6 +285,20 @@ const styles = StyleSheet.create({
   },
 
   // -------------------------------------------------------------- continue
+  /**
+   * The title and the switch, on one line.
+   *
+   * The title keeps the left and takes what it needs; the switch sits at the far
+   * end. `flex-start` on the cross axis rather than centring, so the switch
+   * hangs level with the top of the wordmark instead of drifting down beside its
+   * rule and subtitle.
+   */
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -93,18 +93,26 @@ export default function LoadingScreen() {
       style={styles.container}>
       <SoftHalo size={360} style={styles.halo} />
 
+      {/*
+        On a panel, like every other screen.
+
+        The rest of the app puts its content on a dark ground with a hairline
+        round it; this screen was the last one still laying type straight onto
+        the background, which made the pause look like a different app rather
+        than a beat within this one.
+      */}
       <View style={styles.centre}>
-        <Animated.View entering={FadeIn.delay(160).duration(700)} style={styles.heading}>
-          <Heading size={30}>{t('loading.title')}</Heading>
-          <GlowRule width={72} color={Luxe.gold} />
-        </Animated.View>
+        <Animated.View entering={FadeIn.delay(160).duration(700)} style={styles.panel}>
+          <Heading size={26}>{t('loading.title')}</Heading>
+          <GlowRule width={64} color={Luxe.gold} />
 
-        <Animated.View entering={FadeIn.delay(360).duration(700)} style={styles.barBlock}>
-          <View style={styles.track}>
-            <Animated.View style={[styles.fill, fill]} />
+          <View style={styles.barBlock}>
+            <View style={styles.track}>
+              <Animated.View style={[styles.fill, fill]} />
+            </View>
+
+            <Overline>{t('loading.subtitle')}</Overline>
           </View>
-
-          <Overline>{t('loading.subtitle')}</Overline>
         </Animated.View>
       </View>
     </Animated.View>
@@ -135,11 +143,24 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.five,
     alignItems: 'center',
-    gap: Spacing.five,
   },
-  heading: {
+  /**
+   * The panel the whole pause sits on.
+   *
+   * The same ground, hairline and radius as the panels on every other screen —
+   * this was the last place in the app still setting type directly on the
+   * background.
+   */
+  panel: {
+    width: '100%',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.three,
+    paddingVertical: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Luxe.hairline,
+    backgroundColor: '#0d1210',
   },
   barBlock: {
     width: '100%',

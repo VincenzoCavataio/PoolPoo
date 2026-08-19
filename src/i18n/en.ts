@@ -44,6 +44,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'menu.newGameSub': 'Free play or puzzles',
   'menu.continue': 'Continue',
   'menu.noSave': 'No saved game',
+  'menu.lightSwitch': 'Room light',
   'menu.options': 'Options',
   'menu.savedFree': {
     one: 'Free play · {count} player',

@@ -45,6 +45,7 @@ export const it = {
   'menu.newGameSub': 'Partita libera oppure puzzle',
   'menu.continue': 'Continua',
   'menu.noSave': 'Nessuna partita salvata',
+  'menu.lightSwitch': 'Luce della sala',
   'menu.options': 'Opzioni',
   'menu.savedFree': {
     one: 'Partita libera · {count} giocatore',
