@@ -83,17 +83,3 @@ export function adjustEye(deltaHeight: number, deltaBack: number): void {
   rig.eyeBack = clamp(rig.eyeBack + deltaBack, LIMITS.eyeBack);
 }
 
-/**
- * Heights of the panels covering the top and bottom of the canvas, in points.
- *
- * The GL surface fills the screen so the scene has no seams, which means the HUD
- * sits over the table and used to hide the near pockets. The camera compensates
- * with `setViewOffset`, framing the table inside the band left free instead of
- * inside the whole viewport. Measured by the panels themselves via `onLayout`,
- * so any change to the HUD's height corrects the framing automatically.
- */
-export const uiInsets = { top: 0, bottom: 0 };
-
-export function setUiInset(edge: 'top' | 'bottom', size: number): void {
-  uiInsets[edge] = size;
-}

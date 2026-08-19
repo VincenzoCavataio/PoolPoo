@@ -1,11 +1,17 @@
 /**
  * The game screen.
  *
- * The GL canvas fills the screen so the scene has no seams, and the panels float
- * over it. That would hide the near pockets, so each panel measures itself and
- * reports its height to the camera rig, which frames the table into the band
- * left free rather than into the whole viewport. Change the HUD's height and the
- * framing corrects itself.
+ * The table is a framed panel with the interface stacked around it, rather than
+ * a full-bleed canvas with controls floating on top. That is a layout decision,
+ * but it settles a rendering one too: the canvas used to run edge to edge and
+ * the near pockets ended up behind the panels, so every panel measured itself
+ * and the camera skewed its projection to frame the table into whatever band was
+ * left. With the canvas occupying only the space it is given, none of that is
+ * needed — what you see is the whole viewport, and the framing is honest.
+ *
+ * The rows, top to bottom: a title bar with the way out and whose turn it is,
+ * the table itself, a row of view controls tucked under it, and the shooting
+ * panel.
  */
 
 import { useRouter } from 'expo-router';
@@ -17,14 +23,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
-import { GameHud, GameOverOverlay } from '@/components/game/hud';
+import { GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
 import { MusicHud } from '@/components/game/music-hud';
-import { Palette } from '@/constants/game-theme';
+import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { releaseMusic, useMusic } from '@/game/audio/music';
 import { initSfx, releaseSfx, setSfxVolume } from '@/game/audio/sfx';
 import { useTableGestures } from '@/game/input/gestures';
-import { setUiInset } from '@/game/render/camera';
 import { GameScene } from '@/game/render/scene';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -39,14 +44,6 @@ export default function GameScreen() {
   useEffect(() => {
     if (!world) router.replace('/menu');
   }, [world, router]);
-
-  useEffect(
-    () => () => {
-      setUiInset('top', 0);
-      setUiInset('bottom', 0);
-    },
-    [],
-  );
 
   /**
    * Audio belongs to the room, so it lives and dies with this screen. Settings
@@ -75,34 +72,32 @@ export default function GameScreen() {
   if (!world) return null;
 
   return (
-    <View style={styles.root}>
-      <GestureDetector gesture={gestures}>
-        <View style={StyleSheet.absoluteFill}>
-          <GameScene />
-        </View>
-      </GestureDetector>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <GameHud />
 
-      <View
-        style={[styles.hudLayer, { paddingTop: insets.top }]}
-        pointerEvents="box-none"
-        onLayout={(event) => setUiInset('top', event.nativeEvent.layout.height)}>
-        <GameHud />
+      {/* The table. `flex: 1` hands it every point the rows above and below do
+          not claim, so the board grows on a tall phone instead of the layout
+          having to guess a height. */}
+      <View style={styles.stage}>
+        <GestureDetector gesture={gestures}>
+          <View style={styles.canvas}>
+            <GameScene />
+          </View>
+        </GestureDetector>
+
+        {/* Inside the stage so they stay pinned to the table's own edges rather
+            than the screen's, and the celebration reads as happening on the
+            board. */}
+        <ShotNote />
+        <Celebration />
       </View>
 
-      {/* Vertically centred, which keeps it clear of the HUD above and the
-          shooting panel below whatever height either grows to. */}
-      <View style={styles.cameraLayer} pointerEvents="box-none">
-        <CameraControls />
-      </View>
+      <CameraControls />
 
-      <View
-        style={[styles.controlLayer, { paddingBottom: insets.bottom + Spacing.two }]}
-        pointerEvents="box-none"
-        onLayout={(event) => setUiInset('bottom', event.nativeEvent.layout.height)}>
+      <View style={[styles.controlLayer, { paddingBottom: insets.bottom + Spacing.two }]}>
         <GameControls />
       </View>
 
-      <Celebration />
       <MusicHud />
       <GameOverOverlay />
     </View>
@@ -114,24 +109,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.background,
   },
-  hudLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+
+  /**
+   * The window the table is played through.
+   *
+   * Clipped, outlined and rounded, so it reads as a board set into the screen.
+   * `overflow: 'hidden'` is what does the cutting — without it the GL surface
+   * spills past the rounded corners on Android.
+   */
+  stage: {
+    flex: 1,
+    marginHorizontal: Spacing.three,
+    marginTop: Spacing.two,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    overflow: 'hidden',
+    backgroundColor: Palette.background,
   },
-  cameraLayer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    right: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+  canvas: {
+    flex: 1,
   },
   controlLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    // No longer absolutely positioned: it is a row in the stack now, so the
+    // table above it shrinks to make room instead of hiding behind it.
+    paddingTop: Spacing.one,
   },
 });

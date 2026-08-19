@@ -122,32 +122,77 @@ function NeonSign({ height }: { height: number }) {
 }
 
 /** The wall unit the device stands on. */
+/**
+ * Geometry and materials for the shelf, built once and shared.
+ *
+ * Every `<mesh>` in a react-three-fiber tree that declares its own
+ * `<boxGeometry>` and `<meshPhysicalMaterial>` creates a *new* one of each — so
+ * the four brackets and legs here were four geometries and four materials
+ * describing the same 3 cm strip of steel, and three.js cannot batch draws that
+ * do not share a material. Hoisting them to module scope means one geometry and
+ * one material per distinct part, which is what lets the renderer sort and reuse
+ * them instead of setting up state afresh for each.
+ */
+const SHELF_GEOMETRY = {
+  backing: new THREE.BoxGeometry(0.92, 0.72, 0.03),
+  board: new THREE.BoxGeometry(0.86, 0.045, 0.32),
+  bracket: new THREE.BoxGeometry(0.03, 0.14, 0.22),
+  leg: new THREE.BoxGeometry(0.045, LEG_DROP, 0.045),
+};
+
+const SHELF_MATERIAL = {
+  backing: new THREE.MeshPhysicalMaterial({
+    color: '#3a2718',
+    roughness: 0.6,
+    clearcoat: 0.25,
+  }),
+  board: new THREE.MeshPhysicalMaterial({
+    color: '#6b4a2f',
+    roughness: 0.4,
+    clearcoat: 0.45,
+  }),
+  steel: new THREE.MeshPhysicalMaterial({
+    color: '#3a3f45',
+    roughness: 0.35,
+    metalness: 0.75,
+  }),
+};
+
+const BRACKET_X = [-0.33, 0.33];
+const LEG_X = [-0.36, 0.36];
+
 function WallShelf({ freestanding }: { freestanding: boolean }) {
   return (
     <group>
       {/* A backing board, so the unit reads as one piece and works outdoors too,
           where there is no wall behind it. */}
-      <mesh position={[0, 0.22, -0.03]}>
-        <boxGeometry args={[0.92, 0.72, 0.03]} />
-        <meshPhysicalMaterial color="#3a2718" roughness={0.6} clearcoat={0.25} />
-      </mesh>
-      <mesh position={[0, 0, 0.14]}>
-        <boxGeometry args={[0.86, 0.045, 0.32]} />
-        <meshPhysicalMaterial color="#6b4a2f" roughness={0.4} clearcoat={0.45} />
-      </mesh>
-      {[-0.33, 0.33].map((x) => (
-        <mesh key={x} position={[x, -0.09, 0.09]}>
-          <boxGeometry args={[0.03, 0.14, 0.22]} />
-          <meshPhysicalMaterial color="#3a3f45" roughness={0.35} metalness={0.75} />
-        </mesh>
+      <mesh
+        position={[0, 0.22, -0.03]}
+        geometry={SHELF_GEOMETRY.backing}
+        material={SHELF_MATERIAL.backing}
+      />
+      <mesh
+        position={[0, 0, 0.14]}
+        geometry={SHELF_GEOMETRY.board}
+        material={SHELF_MATERIAL.board}
+      />
+      {BRACKET_X.map((x) => (
+        <mesh
+          key={x}
+          position={[x, -0.09, 0.09]}
+          geometry={SHELF_GEOMETRY.bracket}
+          material={SHELF_MATERIAL.steel}
+        />
       ))}
 
       {freestanding
-        ? [-0.36, 0.36].map((x) => (
-            <mesh key={`leg-${x}`} position={[x, -0.06 + LEG_DROP / 2, 0.02]}>
-              <boxGeometry args={[0.045, LEG_DROP, 0.045]} />
-              <meshPhysicalMaterial color="#3a3f45" roughness={0.35} metalness={0.75} />
-            </mesh>
+        ? LEG_X.map((x) => (
+            <mesh
+              key={`leg-${x}`}
+              position={[x, -0.06 + LEG_DROP / 2, 0.02]}
+              geometry={SHELF_GEOMETRY.leg}
+              material={SHELF_MATERIAL.steel}
+            />
           ))
         : null}
     </group>

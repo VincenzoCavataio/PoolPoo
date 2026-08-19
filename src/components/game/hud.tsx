@@ -20,6 +20,18 @@ import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { useProgress } from '@/store/progress';
 import { useSession } from '@/store/session';
 
+/**
+ * The panel colours the top HUD is built from.
+ *
+ * Named rather than repeated inline, because the same glass has to appear on the
+ * scoreboard, the puzzle box, the note and the camera controls — and the whole
+ * point of this pass is that those stop looking like four separate widgets that
+ * happen to share a screen. Slightly more opaque than the bottom bar's surface:
+ * this sits over the bright end of the table where the lamps are.
+ */
+export const HUD_SURFACE = 'rgba(10, 17, 14, 0.9)';
+export const HUD_SURFACE_ACTIVE = 'rgba(61, 220, 132, 0.16)';
+
 export function Stars({ value, max = 3 }: { value: number; max?: number }) {
   return (
     <Text style={styles.stars}>
@@ -47,23 +59,43 @@ function BackButton() {
   );
 }
 
+/**
+ * Whose turn it is, and what everyone has scored.
+ *
+ * A title, not a panel. The screen is a stack of rows now, and this is the top
+ * one — so the player's name reads as the heading of what is going on below it,
+ * with the other players trailing behind at label size. That ordering is the
+ * whole point: at a glance you get the name, and only if you look do you get the
+ * table.
+ *
+ * Scores use tabular figures so a number does not shift sideways as it ticks
+ * past nine, the same treatment the power readout gets.
+ */
 function FreeScoreboard() {
   const free = useSession((s) => s.free);
   if (!free) return null;
 
+  const current = free.players[free.current];
+  const others = free.players.filter((_, i) => i !== free.current);
+
   return (
-    <View style={styles.chipRow}>
-      {free.players.map((player, index) => {
-        const active = index === free.current && !free.finished;
-        return (
-          <View key={player.id} style={[styles.chip, active && styles.chipActive]}>
-            <Text style={[styles.chipName, active && styles.chipNameActive]} numberOfLines={1}>
-              {player.name}
+    <View style={styles.titleBlock}>
+      <View style={styles.titleLine}>
+        <Text style={styles.playerName} numberOfLines={1}>
+          {current?.name ?? ''}
+        </Text>
+        <Text style={styles.playerScore}>{current?.score ?? 0}</Text>
+      </View>
+
+      {others.length > 0 ? (
+        <View style={styles.otherRow}>
+          {others.map((player) => (
+            <Text key={player.id} style={styles.otherPlayer} numberOfLines={1}>
+              {player.name} <Text style={styles.otherScore}>{player.score}</Text>
             </Text>
-            <Text style={[styles.chipScore, active && styles.chipScoreActive]}>{player.score}</Text>
-          </View>
-        );
-      })}
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -96,13 +128,7 @@ function PuzzleStatus() {
 }
 
 export function GameHud() {
-  const render = useMessageRenderer();
   const mode = useSession((s) => s.mode);
-  const messages = useSession((s) => s.messages);
-  const phase = useSession((s) => s.phase);
-
-  // One line only: the celebration banner already carries the loud news.
-  const note = phase === Phase.AIMING ? messages[messages.length - 1] : undefined;
 
   return (
     <View style={styles.hud} pointerEvents="box-none">
@@ -113,13 +139,39 @@ export function GameHud() {
         </View>
       </View>
 
-      {note ? (
-        <View style={styles.note} pointerEvents="none">
-          <Text style={styles.noteLabel} numberOfLines={1}>
-            {render(note)}
-          </Text>
-        </View>
-      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The last thing that happened, laid over the bottom of the table.
+ *
+ * Kept out of the title bar and out of the stack. It comes and goes between
+ * shots, and a row that appears and disappears would resize the table under the
+ * player's hands every time — so it floats inside the board's own frame, where
+ * it costs nothing when there is nothing to say.
+ */
+export function ShotNote() {
+  const render = useMessageRenderer();
+  const messages = useSession((s) => s.messages);
+  const phase = useSession((s) => s.phase);
+  const lastOutcome = useSession((s) => s.lastOutcome);
+
+  const note = phase === Phase.AIMING ? messages[messages.length - 1] : undefined;
+  if (!note) return null;
+
+  const isFoul = lastOutcome?.foul === true;
+
+  return (
+    <View style={styles.noteLayer} pointerEvents="none">
+      <View style={[styles.note, isFoul && styles.noteFoul]}>
+        {/* A stripe down the leading edge, so a foul is distinguishable from an
+            ordinary turn message without reading the words. */}
+        <View style={[styles.noteAccent, isFoul && styles.noteAccentFoul]} />
+        <Text style={[styles.noteLabel, isFoul && styles.noteLabelFoul]} numberOfLines={1}>
+          {render(note)}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -235,10 +287,8 @@ export function GameOverOverlay() {
 const styles = StyleSheet.create({
   // Positioned by the game screen's HUD layer, so this is a plain flow container.
   hud: {
-    gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
+    paddingTop: Spacing.one,
   },
   topRow: {
     flexDirection: 'row',
@@ -248,18 +298,21 @@ const styles = StyleSheet.create({
   topContent: {
     flex: 1,
   },
+  /**
+   * The way out, as a chevron rather than a button.
+   *
+   * Nothing floats over the table any more, so this sits in the title bar with
+   * the player's name — a panelled square would read as a control that does
+   * something to the game, which back does not.
+   */
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.medium,
-    backgroundColor: 'rgba(12, 19, 16, 0.88)',
-    borderWidth: 1,
-    borderColor: Palette.border,
-    alignItems: 'center',
+    width: 28,
+    height: 34,
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   backLabel: {
-    color: Palette.text,
+    color: Palette.textMuted,
     fontSize: 26,
     lineHeight: 28,
     marginTop: -3,
@@ -267,52 +320,54 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  chip: {
+  titleBlock: {
     flex: 1,
+    gap: 1,
+  },
+  titleLine: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
-    borderRadius: Radius.small,
-    backgroundColor: 'rgba(12, 19, 16, 0.88)',
-    borderWidth: 1,
-    borderColor: Palette.border,
+    alignItems: 'baseline',
+    gap: Spacing.two,
   },
-  chipActive: {
-    borderColor: Palette.accent,
-    backgroundColor: 'rgba(61, 220, 132, 0.18)',
-  },
-  chipName: {
-    color: Palette.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
+  playerName: {
     flexShrink: 1,
-  },
-  chipNameActive: {
     color: Palette.text,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
-  chipScore: {
-    color: Palette.textMuted,
-    fontSize: 13,
+  playerScore: {
+    color: Palette.accent,
+    fontSize: 15,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  chipScoreActive: {
-    color: Palette.accent,
+  /** The players waiting, at label size so they never compete with the heading. */
+  otherRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  otherPlayer: {
+    color: Palette.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  otherScore: {
+    color: Palette.text,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   puzzleBox: {
-    backgroundColor: 'rgba(12, 19, 16, 0.88)',
+    backgroundColor: HUD_SURFACE,
     borderWidth: 1,
     borderColor: Palette.border,
     borderRadius: Radius.small,
     paddingHorizontal: Spacing.two,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   puzzleHeader: {
     flexDirection: 'row',
@@ -338,13 +393,42 @@ const styles = StyleSheet.create({
     color: Palette.textMuted,
     fontSize: 11,
   },
+  noteLayer: {
+    position: 'absolute',
+    left: Spacing.two,
+    right: Spacing.two,
+    bottom: Spacing.two,
+    alignItems: 'flex-start',
+  },
   note: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(12, 19, 16, 0.85)',
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: HUD_SURFACE,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    // Square like the panels above it. The pill shape was the one thing up here
+    // that belonged to no other control on screen.
+    borderRadius: Radius.small,
+    paddingRight: Spacing.three,
+    paddingVertical: 5,
     maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  noteFoul: {
+    borderColor: 'rgba(255, 107, 94, 0.5)',
+  },
+  noteAccent: {
+    width: 3,
+    alignSelf: 'stretch',
+    backgroundColor: Palette.accent,
+  },
+  noteAccentFoul: {
+    backgroundColor: Palette.danger,
+  },
+  noteLabelFoul: {
+    color: Palette.danger,
   },
   noteLabel: {
     color: Palette.text,

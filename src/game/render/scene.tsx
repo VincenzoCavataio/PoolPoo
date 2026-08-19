@@ -19,7 +19,7 @@ import { useSettings } from '@/store/settings';
 
 import { AimGuide } from './aim-guide';
 import { Balls } from './balls';
-import { CameraMode, rig, uiInsets } from './camera';
+import { CameraMode, rig } from './camera';
 import { sceneX, sceneZ } from './coords';
 import { Environment } from './environment';
 import { EnvironmentReflections } from './environment-map';
@@ -36,6 +36,27 @@ const DAMPING = 11;
 const REPLAY_DAMPING = 5;
 /** How far ahead of the cue ball the cue view looks. */
 const CUE_LOOK_AHEAD = 1.0;
+
+/**
+ * There is no pixel-ratio dial on this platform.
+ *
+ * Capping it looked like the biggest performance win available — the canvas
+ * draws at the display's full native density, and every one of those pixels is
+ * paid for by the fragment shader with all seven lights in it. But expo-gl
+ * creates its drawing buffer at the view's native resolution and can only render
+ * at that size, so telling three.js a smaller ratio does not shrink the buffer:
+ * it draws a smaller picture into the corner of a full-size one. That is exactly
+ * what it did — the scene appeared at two thirds scale in the bottom-left until
+ * the first layout change re-ran the setup and put it right.
+ *
+ * The canvas is also reconfigured with `dpr: PixelRatio.get()` by
+ * react-three-fiber's own native wrapper, so any value set in `onCreated` is
+ * overwritten a moment later regardless.
+ *
+ * The fill rate still came down by half, from framing the table into a panel
+ * rather than the whole screen. That one is real because the buffer itself is
+ * smaller.
+ */
 /** The aim stops following a fallen ball once it is on the floor. */
 const FLOOR_LOOK_FLOOR = -0.78;
 
@@ -54,7 +75,7 @@ function CameraRig({ table }: { table: Table }) {
     [],
   );
   const settled = useRef(false);
-  const framing = useRef({ top: -1, bottom: -1, width: -1, height: -1 });
+  const framing = useRef({ width: -1, height: -1 });
 
   useLayoutEffect(() => {
     camera.fov = FOV;
@@ -70,27 +91,20 @@ function CameraRig({ table }: { table: Table }) {
     const { wanted, wantedLook, look } = scratch;
 
     /**
-     * The HUD sits over the canvas, so the table is framed inside the band it
-     * leaves free rather than inside the whole viewport. `setViewOffset` renders
-     * the full canvas as an over-scan of that band: the table lands between the
-     * panels, and the extra scenery fills the space behind them.
+     * Straight aspect ratio, no skew.
+     *
+     * The canvas used to run the full height of the screen with the panels lying
+     * over it, so the table had to be framed into whatever band they left free —
+     * `setViewOffset` rendered the whole canvas as an over-scan of that band. Now
+     * the canvas *is* the band: it occupies exactly the space the layout gives
+     * it, and every pixel of it is visible. Keeping the offset would shift the
+     * framing a second time, for a gap that no longer exists.
      */
-    const freeHeight = Math.max(160, size.height - uiInsets.top - uiInsets.bottom);
-    if (
-      framing.current.top !== uiInsets.top ||
-      framing.current.bottom !== uiInsets.bottom ||
-      framing.current.width !== size.width ||
-      framing.current.height !== size.height
-    ) {
+    const freeHeight = Math.max(160, size.height);
+    if (framing.current.width !== size.width || framing.current.height !== size.height) {
       camera.aspect = size.width / freeHeight;
-      camera.setViewOffset(size.width, freeHeight, 0, -uiInsets.top, size.width, size.height);
       camera.updateProjectionMatrix();
-      framing.current = {
-        top: uiInsets.top,
-        bottom: uiInsets.bottom,
-        width: size.width,
-        height: size.height,
-      };
+      framing.current = { width: size.width, height: size.height };
     }
 
     const { world, phase, replay, aimAngle, cameraMode } = useSession.getState();
@@ -242,6 +256,7 @@ export function GameScene() {
         // turn into flat discs instead of reading as reflections.
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.15;
+
       }}>
       {/* Both attach to the scene itself, so they belong at the top level. */}
       <color attach="background" args={[location.background]} />
