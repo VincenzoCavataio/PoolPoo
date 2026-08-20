@@ -32,18 +32,23 @@ import type { Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
 import {
   createMatch,
+  cpusIn,
   currentCall,
   currentCpu,
   currentSeat,
   isFinished,
   legalTargets,
   needsCall,
+  onTheEight,
   partnersOf,
   playerCount as matchPlayerCount,
   rerackDone,
   resolveShot,
   shotsTaken,
   standings,
+  targetOf,
+  teamOfSeat,
+  teamSizes,
   wantsRerack,
   winningSeats,
   withCall,
@@ -534,6 +539,17 @@ export const useSession = create<SessionState>((set, get) => {
 
     let outcome: ShotOutcome | null = null;
     let finished = false;
+    /*
+     * Whether the fourteen went back up on this shot.
+     *
+     * Noted here because `rerackDone` clears the flag immediately below, and by
+     * the time the trophy detector runs there would be nothing left to say it
+     * happened — which is the one thing straight pool's own trophies are about.
+     */
+    let reracked = false;
+
+    // Read before resolving: the rules consume the call as part of the shot.
+    const callBefore = match ? currentCall(match) : null;
 
     if (match) {
       const resolved = resolveShot(match, world, events);
@@ -555,6 +571,7 @@ export const useSession = create<SessionState>((set, get) => {
         const keep = world.remainingObjectBalls().map((ball) => ball.number);
         world.rerack(keep);
         next = rerackDone(next);
+        reracked = true;
       }
 
       set({ match: next, standings: standings(next) });
@@ -583,22 +600,84 @@ export const useSession = create<SessionState>((set, get) => {
         .filter((_, i) => i !== seat)
         .reduce((best, p) => Math.max(best, p.score ?? 0), 0);
 
+      /*
+       * How far the cue ball travelled to reach what it struck.
+       *
+       * Measured off the snapshot taken before the shot, because by now both
+       * balls have moved: the pre-shot positions are the only place the length
+       * of the pot still exists.
+       */
+      const firstHit = events.find((e) => e.kind === 'ball-hit' && e.a === 0);
+      let contactDistance: number | null = null;
+      if (firstHit && pending) {
+        const before = pending.snapshot.balls;
+        const cue = before.find((b) => b.number === 0);
+        const struck = before.find(
+          (b) => b.number === (firstHit as { b: number }).b,
+        );
+        if (cue && struck) {
+          contactDistance = Math.hypot(cue.p.x - struck.p.x, cue.p.y - struck.p.y);
+        }
+      }
+
+      /*
+       * Whether this shot finished off the shooter's group.
+       *
+       * Compared across the shot rather than read after it: `onTheEight` is true
+       * for every visit once the group is gone, and the trophy is for the shot
+       * that cleared it.
+       */
+      const teamBefore = teamOfSeat(match, seat);
+      const wasOnEight = teamBefore === null ? false : onTheEight(match, world, teamBefore);
+      const nowOnEight =
+        teamBefore === null ? false : onTheEight(get().match ?? match, world, teamBefore);
+      const clearedGroup = !wasOnEight && nowOnEight;
+
+      const partners = partnersOf(match, seat);
+      const sides = teamSizes(match);
+
       const { awards, run } = detectShot(
         {
           events,
           outcome,
           spin: pending?.spin ?? NO_SPIN,
+          power: pending?.power ?? 0,
           isBreak: shotsTaken(match) === 0,
           wonGame: finished && winningSeats(get().match ?? match).includes(seat),
           players: matchPlayerCount(match),
           winnerScore: shooter?.score ?? 0,
           runnerUpScore: runnerUp,
+
+          mode: match.kind,
+          // The call as it stood when the shot was played: the rules clear it
+          // once resolved, so the post-shot state has nothing to compare.
+          call: callBefore,
+          contactDistance,
+          cpus: cpusIn(match),
+          shooterIsHuman: shooter?.cpu !== true,
+          hasPartner: partners.length > 0,
+          ownTeamSize: teamBefore === null ? 1 : sides[teamBefore],
+          otherTeamSize: teamBefore === null ? 0 : sides[teamBefore === 0 ? 1 : 0],
+          clearedGroup,
+          reracked,
+          target: targetOf(match),
         },
         trophyRun,
       );
 
       trophyRun = run;
       const trophies = useTrophies.getState();
+
+      /*
+       * Winning in every discipline, tracked as a set rather than a count.
+       *
+       * `advance` would have counted four wins in free play as four
+       * disciplines. What the trophy asks is which ones you have won in, and
+       * that is a question only a set can answer.
+       */
+      if (finished && winningSeats(get().match ?? match).includes(seat)) {
+        trophies.discover('disciplines', match.kind, 'all-disciplines', 4);
+      }
       for (const id of awards.award) trophies.award(id);
       for (const id of awards.advance) trophies.advance(id);
     }

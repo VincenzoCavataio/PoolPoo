@@ -20,6 +20,7 @@ import type { World } from '../core/world';
 import {
   createEightState,
   groupOf,
+  onTheEight as eightOnTheEight,
   resolveEightShot,
   type EightState,
 } from './eight-ball';
@@ -231,6 +232,54 @@ export function legalTargets(match: Match, world: World): number[] | null {
   const onTable = world.remainingObjectBalls().map((ball) => ball.number);
   const mine = onTable.filter((number) => groupOf(number) === group);
   return mine.length > 0 ? mine : onTable.filter((number) => number === 8);
+}
+
+/**
+ * Whether a side has cleared its group and may shoot the black.
+ *
+ * Answers `false` for every mode without groups, so callers do not have to ask
+ * which discipline is running before asking the question.
+ */
+export function onTheEight(match: Match, world: World, team: number): boolean {
+  if (match.kind !== GameModeKind.EIGHT && match.kind !== GameModeKind.EIGHT_CALLED) {
+    return false;
+  }
+  return eightOnTheEight(match.state, world, team);
+}
+
+/** Which side a seat plays for, or `null` in the modes without sides. */
+export function teamOfSeat(match: Match, seat: number): number | null {
+  if (match.kind !== GameModeKind.EIGHT && match.kind !== GameModeKind.EIGHT_CALLED) {
+    return null;
+  }
+  return match.state.players[seat]?.team ?? null;
+}
+
+/** How many seats each side holds. `[0, 0]` outside eight-ball. */
+export function teamSizes(match: Match): [number, number] {
+  if (match.kind !== GameModeKind.EIGHT && match.kind !== GameModeKind.EIGHT_CALLED) {
+    return [0, 0];
+  }
+  const sizes: [number, number] = [0, 0];
+  for (const player of match.state.players) sizes[player.team === 0 ? 0 : 1] += 1;
+  return sizes;
+}
+
+/**
+ * The computers at the table, in no particular order.
+ *
+ * Read by the trophies to decide what a win was worth: beating one hard machine
+ * counts for more than beating three easy ones.
+ */
+export function cpusIn(match: Match): Difficulty[] {
+  return match.state.players
+    .map((player) => player.cpu)
+    .filter((level): level is Difficulty => level !== undefined);
+}
+
+/** The score a game is played to, or 0 in the modes that are not raced to one. */
+export function targetOf(match: Match): number {
+  return match.kind === GameModeKind.STRAIGHT ? match.state.target : 0;
 }
 
 /**

@@ -15,7 +15,7 @@ import { assert, report, suite, test } from '../../core/tests/harness';
 
 import type { ShotEvent } from '../../core/events';
 import { NO_SPIN } from '../../core/world';
-import { emptyOutcome, type ShotOutcome } from '../../rules/types';
+import { emptyOutcome, GameModeKind, type ShotOutcome } from '../../rules/types';
 import { TROPHIES } from '../catalogue';
 import { detectShot, emptyRunState, type ShotFacts } from '../detect';
 import { it } from '../../../i18n/it';
@@ -27,12 +27,26 @@ function shot(over: Partial<ShotFacts> = {}): ShotFacts {
     events: [],
     outcome: emptyOutcome(),
     spin: NO_SPIN,
+    power: 0.6,
     isBreak: false,
     wonGame: false,
     players: 2,
     winnerScore: 0,
     runnerUpScore: 0,
-    ...over,
+    mode: GameModeKind.FREE,
+    call: null,
+    contactDistance: null,
+    cpus: [],
+    // A person unless a test says otherwise: the computer's own visits earn
+    // nothing, and defaulting the other way would make every test assert that.
+    shooterIsHuman: true,
+    hasPartner: false,
+    ownTeamSize: 1,
+    otherTeamSize: 1,
+    clearedGroup: false,
+    reracked: false,
+    target: 0,
+  ...over,
   };
 }
 
@@ -237,6 +251,220 @@ suite('a run of scoring shots', () => {
   test('six in a row is the hidden one', () => {
     assert(!play([true, true, true, true, true]).includes('long-run'), 'five is not six');
     assert(play([true, true, true, true, true, true]).includes('long-run'), 'six in a row');
+  });
+});
+
+
+// -------------------------------------------------------------- new ground
+
+/**
+ * The trophies that came with the four disciplines.
+ *
+ * These are the ones most likely to fire when they should not, because each
+ * depends on state the detector is *told* about rather than state it can read
+ * off the event log: which mode, whose turn, whether a rack went up. A fact
+ * wired to the wrong place is invisible until somebody earns a trophy they did
+ * not deserve.
+ */
+suite('what the disciplines earn', () => {
+  const pot = (ball: number, pocket = 'corner-ne'): ShotEvent => ({
+    kind: 'pocketed',
+    t: 0.5,
+    ball,
+    pocket: pocket as never,
+  });
+
+  test('a computer earns nothing on its own visit', () => {
+    const earned = awardsFor(
+      shot({
+        shooterIsHuman: false,
+        outcome: potting([1, 2, 3]),
+        wonGame: true,
+        events: [pot(1), pot(2), pot(3)],
+      }),
+    );
+    assert(earned.length === 0, `a machine earned ${earned.join(', ')}`);
+  });
+
+  test('four balls at once is its own trophy', () => {
+    const earned = awardsFor(shot({ outcome: potting([1, 2, 3, 4]) }));
+    assert(earned.includes('quad-pot'), 'quad-pot');
+    assert(earned.includes('triple-pot'), 'and the ones below it');
+  });
+
+  test('three on the break is a big break', () => {
+    const earned = awardsFor(shot({ isBreak: true, outcome: potting([1, 2, 3]) }));
+    assert(earned.includes('big-break'), 'big-break');
+  });
+
+  test('two on the break is not', () => {
+    const earned = awardsFor(shot({ isBreak: true, outcome: potting([1, 2]) }));
+    assert(!earned.includes('big-break'), 'big-break should need three');
+    assert(earned.includes('break-pot'), 'but it is still a pot on the break');
+  });
+
+  test('a long pot needs the distance, a short one does not qualify', () => {
+    const near = awardsFor(shot({ outcome: potting([1]), contactDistance: 0.4 }));
+    assert(!near.includes('long-pot'), 'a short pot is not a long one');
+
+    const far = awardsFor(shot({ outcome: potting([1]), contactDistance: 1.5 }));
+    assert(far.includes('long-pot'), 'long-pot');
+  });
+
+  test('a gentle pot is a touch shot, a firm one is not', () => {
+    const soft = awardsFor(shot({ outcome: potting([1]), power: 0.15 }));
+    assert(soft.includes('soft-touch'), 'soft-touch');
+
+    const firm = awardsFor(shot({ outcome: potting([1]), power: 0.8 }));
+    assert(!firm.includes('soft-touch'), 'a firm shot is not a touch shot');
+  });
+
+  test('draw counts, follow does not', () => {
+    const drawn = awardsFor(
+      shot({ outcome: potting([1]), spin: { side: 0, vertical: -0.8 } }),
+    );
+    assert(drawn.includes('draw-pot'), 'draw-pot');
+
+    const followed = awardsFor(
+      shot({ outcome: potting([1]), spin: { side: 0, vertical: 0.8 } }),
+    );
+    assert(!followed.includes('draw-pot'), 'follow is not draw');
+  });
+
+  test('the called trophies need the pocket to match, not just the ball', () => {
+    const wrong = awardsFor(
+      shot({
+        mode: GameModeKind.EIGHT_CALLED,
+        call: { ball: 3, pocket: 'side-n' as never },
+        outcome: potting([3]),
+        events: [pot(3, 'corner-sw')],
+      }),
+    );
+    assert(!wrong.includes('called-side-pocket'), 'the wrong pocket earns nothing');
+
+    const right = awardsFor(
+      shot({
+        mode: GameModeKind.EIGHT_CALLED,
+        call: { ball: 3, pocket: 'side-n' as never },
+        outcome: potting([3]),
+        events: [pot(3, 'side-n')],
+      }),
+    );
+    assert(right.includes('called-side-pocket'), 'called-side-pocket');
+  });
+
+  test('a re-rack is only claimed when one happened', () => {
+    const without = awardsFor(shot({ mode: GameModeKind.STRAIGHT, outcome: potting([1]) }));
+    assert(!without.includes('straight-rerack'), 'no rack, no trophy');
+
+    const with_ = awardsFor(
+      shot({ mode: GameModeKind.STRAIGHT, outcome: potting([1]), reracked: true }),
+    );
+    assert(with_.includes('straight-rerack'), 'straight-rerack');
+  });
+
+  test('a run across the rack needs both the run and the rack', () => {
+    let run = emptyRunState();
+    // First pot, and the rack goes up with it.
+    run = detectShot(
+      shot({ mode: GameModeKind.STRAIGHT, outcome: potting([1]), reracked: true }),
+      run,
+    ).run;
+    // Second pot, carrying the run on into the new rack.
+    const second = detectShot(
+      shot({ mode: GameModeKind.STRAIGHT, outcome: potting([2]) }),
+      run,
+    );
+    assert(
+      second.awards.award.includes('straight-across-racks'),
+      'straight-across-racks',
+    );
+  });
+
+  test('a miss ends the run and the rack it crossed', () => {
+    let run = emptyRunState();
+    run = detectShot(
+      shot({ mode: GameModeKind.STRAIGHT, outcome: potting([1]), reracked: true }),
+      run,
+    ).run;
+    // A miss.
+    run = detectShot(shot({ mode: GameModeKind.STRAIGHT }), run).run;
+    const after = detectShot(shot({ mode: GameModeKind.STRAIGHT, outcome: potting([2]) }), run);
+    assert(
+      !after.awards.award.includes('straight-across-racks'),
+      'a broken run does not cross anything',
+    );
+  });
+
+  test('beating a mixed table credits only the hardest machine', () => {
+    const earned = awardsFor(
+      shot({ wonGame: true, cpus: ['easy', 'easy', 'hard'], outcome: potting([1]) }),
+    );
+    assert(earned.includes('beat-hard'), 'beat-hard');
+    assert(!earned.includes('beat-easy'), 'the easy ones do not also count');
+    assert(!earned.includes('beat-medium'), 'nor a medium that was not there');
+    assert(earned.includes('beat-three-cpus'), 'three machines at the table');
+  });
+
+  test('a win between people credits no computer at all', () => {
+    const earned = awardsFor(shot({ wonGame: true, cpus: [], outcome: potting([1]) }));
+    assert(!earned.includes('beat-easy'), 'nobody to beat');
+    assert(!earned.includes('beat-hard'), 'nobody to beat');
+  });
+
+  test('the outnumbered win needs to actually be outnumbered', () => {
+    const even = awardsFor(
+      shot({
+        mode: GameModeKind.EIGHT,
+        wonGame: true,
+        ownTeamSize: 2,
+        otherTeamSize: 2,
+        outcome: potting([8]),
+      }),
+    );
+    assert(!even.includes('eight-outnumbered'), 'two against two is not outnumbered');
+
+    const alone = awardsFor(
+      shot({
+        mode: GameModeKind.EIGHT,
+        wonGame: true,
+        ownTeamSize: 1,
+        otherTeamSize: 2,
+        outcome: potting([8]),
+      }),
+    );
+    assert(alone.includes('eight-outnumbered'), 'eight-outnumbered');
+  });
+
+  test('potting the black early is the hidden mistake, not the win', () => {
+    const earned = awardsFor(
+      shot({
+        mode: GameModeKind.EIGHT,
+        outcome: { ...potting([8]), gameOver: true },
+        wonGame: false,
+      }),
+    );
+    assert(earned.includes('own-goal'), 'own-goal');
+    assert(!earned.includes('eight-on-the-black'), 'losing is not winning on the black');
+  });
+
+  test('mode trophies do not leak between disciplines', () => {
+    const free = awardsFor(shot({ mode: GameModeKind.FREE, wonGame: true, outcome: potting([1]) }));
+    assert(!free.includes('eight-first-win'), 'free play is not eight-ball');
+    assert(!free.includes('straight-first-win'), 'free play is not straight pool');
+    assert(!free.includes('called-first-win'), 'free play is not the called game');
+  });
+
+  test('both ends needs pockets at opposite ends', () => {
+    const sameEnd = awardsFor(
+      shot({ outcome: potting([1, 2]), events: [pot(1, 'corner-ne'), pot(2, 'corner-se')] }),
+    );
+    assert(!sameEnd.includes('both-ends'), 'both pockets were at the same end');
+
+    const opposite = awardsFor(
+      shot({ outcome: potting([1, 2]), events: [pot(1, 'corner-ne'), pot(2, 'corner-sw')] }),
+    );
+    assert(opposite.includes('both-ends'), 'both-ends');
   });
 });
 

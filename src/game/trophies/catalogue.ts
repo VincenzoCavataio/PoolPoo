@@ -5,10 +5,13 @@
  * awards it, and the tests that check the two agree. Nothing here knows how a
  * trophy is stored or drawn.
  *
- * Four kinds, and they are different on purpose:
+ * Five kinds, and they are different on purpose:
  *
  *  - **progress** — turn up and play. These exist so the first hour has a rhythm.
  *  - **skill** — you did something on purpose and it worked.
+ *  - **mode** — belongs to one discipline, and says something only that
+ *    discipline can say. These are what make four games feel like four games
+ *    rather than one game with four scoreboards.
  *  - **feat** — a whole game played to a standard, which is much harder than any
  *    single shot.
  *  - **secret** — not listed until earned. The screen shows a locked outline and
@@ -19,9 +22,10 @@
  * had it, so they are written once and left alone.
  */
 
+import type { GameModeKind } from '@/game/rules/types';
 import type { MessageKey } from '@/i18n';
 
-export type TrophyKind = 'progress' | 'skill' | 'feat' | 'secret';
+export type TrophyKind = 'progress' | 'skill' | 'mode' | 'feat' | 'secret';
 
 export interface Trophy {
   id: string;
@@ -43,6 +47,14 @@ export interface Trophy {
    * between "play 10 games" being a goal and being a surprise.
    */
   target?: number;
+  /**
+   * Which discipline it belongs to, for the ones that belong to one.
+   *
+   * Used only to group the screen: the detector decides what fires, and it reads
+   * the mode from the shot rather than from here. Two sources for one rule is
+   * how they end up disagreeing.
+   */
+  mode?: GameModeKind;
 }
 
 export const TROPHIES: Trophy[] = [
@@ -73,14 +85,35 @@ export const TROPHIES: Trophy[] = [
     target: 10,
   },
   {
+    id: 'fifty-games',
+    kind: 'progress',
+    labelKey: 'trophy.fiftyGames',
+    hintKey: 'trophy.fiftyGamesHint',
+    target: 50,
+  },
+  {
     id: 'hundred-pots',
     kind: 'progress',
     labelKey: 'trophy.hundredPots',
     hintKey: 'trophy.hundredPotsHint',
     target: 100,
   },
+  {
+    id: 'thousand-pots',
+    kind: 'progress',
+    labelKey: 'trophy.thousandPots',
+    hintKey: 'trophy.thousandPotsHint',
+    target: 1000,
+  },
+  {
+    id: 'all-disciplines',
+    kind: 'progress',
+    labelKey: 'trophy.allDisciplines',
+    hintKey: 'trophy.allDisciplinesHint',
+    target: 4,
+  },
 
-  // ------------------------------------------------------------------ skill
+  // ------------------------------------------------------------------- skill
   {
     id: 'double-pot',
     kind: 'skill',
@@ -94,10 +127,22 @@ export const TROPHIES: Trophy[] = [
     hintKey: 'trophy.triplePotHint',
   },
   {
+    id: 'quad-pot',
+    kind: 'skill',
+    labelKey: 'trophy.quadPot',
+    hintKey: 'trophy.quadPotHint',
+  },
+  {
     id: 'cushion-pot',
     kind: 'skill',
     labelKey: 'trophy.cushionPot',
     hintKey: 'trophy.cushionPotHint',
+  },
+  {
+    id: 'two-cushion-pot',
+    kind: 'skill',
+    labelKey: 'trophy.twoCushionPot',
+    hintKey: 'trophy.twoCushionPotHint',
   },
   {
     id: 'spin-pot',
@@ -106,16 +151,221 @@ export const TROPHIES: Trophy[] = [
     hintKey: 'trophy.spinPotHint',
   },
   {
+    id: 'draw-pot',
+    kind: 'skill',
+    labelKey: 'trophy.drawPot',
+    hintKey: 'trophy.drawPotHint',
+  },
+  {
     id: 'break-pot',
     kind: 'skill',
     labelKey: 'trophy.breakPot',
     hintKey: 'trophy.breakPotHint',
   },
   {
+    id: 'big-break',
+    kind: 'skill',
+    labelKey: 'trophy.bigBreak',
+    hintKey: 'trophy.bigBreakHint',
+  },
+  {
     id: 'run-of-three',
     kind: 'skill',
     labelKey: 'trophy.runOfThree',
     hintKey: 'trophy.runOfThreeHint',
+  },
+  {
+    id: 'run-of-five',
+    kind: 'skill',
+    labelKey: 'trophy.runOfFive',
+    hintKey: 'trophy.runOfFiveHint',
+  },
+  {
+    id: 'long-pot',
+    kind: 'skill',
+    labelKey: 'trophy.longPot',
+    hintKey: 'trophy.longPotHint',
+  },
+  {
+    id: 'soft-touch',
+    kind: 'skill',
+    labelKey: 'trophy.softTouch',
+    hintKey: 'trophy.softTouchHint',
+  },
+
+  // ------------------------------------------------------- eight-ball
+  {
+    id: 'eight-first-win',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightFirstWin',
+    hintKey: 'trophy.eightFirstWinHint',
+  },
+  {
+    id: 'eight-on-the-black',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightOnTheBlack',
+    hintKey: 'trophy.eightOnTheBlackHint',
+  },
+  {
+    id: 'eight-clear-group',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightClearGroup',
+    hintKey: 'trophy.eightClearGroupHint',
+  },
+  {
+    id: 'eight-team-win',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightTeamWin',
+    hintKey: 'trophy.eightTeamWinHint',
+  },
+  {
+    id: 'eight-outnumbered',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightOutnumbered',
+    hintKey: 'trophy.eightOutnumberedHint',
+  },
+  {
+    id: 'eight-ten-wins',
+    kind: 'mode',
+    mode: 'eight',
+    labelKey: 'trophy.eightTenWins',
+    hintKey: 'trophy.eightTenWinsHint',
+    target: 10,
+  },
+
+  // --------------------------------------------------- eight-ball, called
+  {
+    id: 'called-first-win',
+    kind: 'mode',
+    mode: 'eight-called',
+    labelKey: 'trophy.calledFirstWin',
+    hintKey: 'trophy.calledFirstWinHint',
+  },
+  {
+    id: 'called-as-said',
+    kind: 'mode',
+    mode: 'eight-called',
+    labelKey: 'trophy.calledAsSaid',
+    hintKey: 'trophy.calledAsSaidHint',
+    target: 25,
+  },
+  {
+    id: 'called-run-of-three',
+    kind: 'mode',
+    mode: 'eight-called',
+    labelKey: 'trophy.calledRunOfThree',
+    hintKey: 'trophy.calledRunOfThreeHint',
+  },
+  {
+    id: 'called-black',
+    kind: 'mode',
+    mode: 'eight-called',
+    labelKey: 'trophy.calledBlack',
+    hintKey: 'trophy.calledBlackHint',
+  },
+  {
+    id: 'called-side-pocket',
+    kind: 'mode',
+    mode: 'eight-called',
+    labelKey: 'trophy.calledSidePocket',
+    hintKey: 'trophy.calledSidePocketHint',
+  },
+
+  // ------------------------------------------------------------ straight pool
+  {
+    id: 'straight-first-win',
+    kind: 'mode',
+    mode: 'straight',
+    labelKey: 'trophy.straightFirstWin',
+    hintKey: 'trophy.straightFirstWinHint',
+  },
+  {
+    id: 'straight-rerack',
+    kind: 'mode',
+    mode: 'straight',
+    labelKey: 'trophy.straightRerack',
+    hintKey: 'trophy.straightRerackHint',
+  },
+  {
+    id: 'straight-across-racks',
+    kind: 'mode',
+    mode: 'straight',
+    labelKey: 'trophy.straightAcrossRacks',
+    hintKey: 'trophy.straightAcrossRacksHint',
+  },
+  {
+    id: 'straight-run-of-eight',
+    kind: 'mode',
+    mode: 'straight',
+    labelKey: 'trophy.straightRunOfEight',
+    hintKey: 'trophy.straightRunOfEightHint',
+  },
+  {
+    id: 'straight-half-target',
+    kind: 'mode',
+    mode: 'straight',
+    labelKey: 'trophy.straightHalfTarget',
+    hintKey: 'trophy.straightHalfTargetHint',
+  },
+
+  // ------------------------------------------------------------- free play
+  {
+    id: 'free-clean-sweep',
+    kind: 'mode',
+    mode: 'free',
+    labelKey: 'trophy.freeCleanSweep',
+    hintKey: 'trophy.freeCleanSweepHint',
+  },
+  {
+    id: 'free-double-figures',
+    kind: 'mode',
+    mode: 'free',
+    labelKey: 'trophy.freeDoubleFigures',
+    hintKey: 'trophy.freeDoubleFiguresHint',
+  },
+
+  // ----------------------------------------------------------- the computer
+  {
+    id: 'beat-easy',
+    kind: 'feat',
+    labelKey: 'trophy.beatEasy',
+    hintKey: 'trophy.beatEasyHint',
+  },
+  {
+    id: 'beat-medium',
+    kind: 'feat',
+    labelKey: 'trophy.beatMedium',
+    hintKey: 'trophy.beatMediumHint',
+  },
+  {
+    id: 'beat-hard',
+    kind: 'feat',
+    labelKey: 'trophy.beatHard',
+    hintKey: 'trophy.beatHardHint',
+  },
+  {
+    id: 'beat-hard-ten',
+    kind: 'feat',
+    labelKey: 'trophy.beatHardTen',
+    hintKey: 'trophy.beatHardTenHint',
+    target: 10,
+  },
+  {
+    id: 'beat-three-cpus',
+    kind: 'feat',
+    labelKey: 'trophy.beatThreeCpus',
+    hintKey: 'trophy.beatThreeCpusHint',
+  },
+  {
+    id: 'beat-hard-clean',
+    kind: 'feat',
+    labelKey: 'trophy.beatHardClean',
+    hintKey: 'trophy.beatHardCleanHint',
   },
 
   // ------------------------------------------------------------------- feats
@@ -137,15 +387,20 @@ export const TROPHIES: Trophy[] = [
     labelKey: 'trophy.shutout',
     hintKey: 'trophy.shutoutHint',
   },
+  {
+    id: 'wire-to-wire',
+    kind: 'feat',
+    labelKey: 'trophy.wireToWire',
+    hintKey: 'trophy.wireToWireHint',
+  },
+  {
+    id: 'comeback',
+    kind: 'feat',
+    labelKey: 'trophy.comeback',
+    hintKey: 'trophy.comebackHint',
+  },
 
-  // ---------------------------------------------------------------- secrets
-  /**
-   * The hidden ones.
-   *
-   * Each is something a player might do without meaning to, or something only
-   * curiosity finds. None of them can be aimed at from the trophy screen,
-   * because until you have it the screen will not say what it is.
-   */
+  // ------------------------------------------------------------------ hidden
   {
     id: 'off-the-table',
     kind: 'secret',
@@ -182,8 +437,26 @@ export const TROPHIES: Trophy[] = [
     labelKey: 'trophy.longRun',
     hintKey: 'trophy.longRunHint',
   },
+  {
+    id: 'own-goal',
+    kind: 'secret',
+    labelKey: 'trophy.ownGoal',
+    hintKey: 'trophy.ownGoalHint',
+  },
+  {
+    id: 'both-ends',
+    kind: 'secret',
+    labelKey: 'trophy.bothEnds',
+    hintKey: 'trophy.bothEndsHint',
+  },
+  {
+    id: 'named-yourself',
+    kind: 'secret',
+    labelKey: 'trophy.namedYourself',
+    hintKey: 'trophy.namedYourselfHint',
+  },
 ];
 
 export function trophyById(id: string): Trophy | undefined {
-  return TROPHIES.find((t) => t.id === id);
+  return TROPHIES.find((trophy) => trophy.id === id);
 }

@@ -25,6 +25,10 @@ import { trophyTally, useTrophies } from '@/store/trophies';
 const GROUPS: { kind: TrophyKind; labelKey: MessageKey }[] = [
   { kind: 'progress', labelKey: 'trophy.groupProgress' },
   { kind: 'skill', labelKey: 'trophy.groupSkill' },
+  // The disciplines, after the shots that apply to all of them and before the
+  // whole-game feats: it is the widest section, and it reads as the middle of
+  // the list rather than as an appendix to it.
+  { kind: 'mode', labelKey: 'trophy.groupMode' },
   { kind: 'feat', labelKey: 'trophy.groupFeat' },
   { kind: 'secret', labelKey: 'trophy.groupSecret' },
 ];

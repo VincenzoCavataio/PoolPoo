@@ -103,11 +103,16 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       ...DEFAULTS,
 
-      setPlayerName: (playerName) =>
+      setPlayerName: (playerName) => {
         // Trimmed here rather than at each call site: a name that is all spaces
         // has to read as unanswered, or the menu never asks again and every
         // scoreboard shows a blank.
-        set({ playerName: playerName.trim().slice(0, 24) }),
+        const trimmed = playerName.trim().slice(0, 24);
+        // Introducing yourself is a small thing to have done, and the kind of
+        // thing a hidden trophy is for.
+        if (trimmed) useTrophies.getState().award('named-yourself');
+        set({ playerName: trimmed });
+      },
       setLanguage: (language) => set({ language }),
       setCloth: (clothId) => set({ clothId }),
       setBallSet: (ballSetId) => {
