@@ -13,7 +13,20 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GameButton } from '@/components/ui/button';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { Phase } from '@/game/rules/types';
+import { GameModeKind, Phase } from '@/game/rules/types';
+import { currentCall, winningSeats } from '@/game/rules/match';
+import type { PocketId } from '@/game/core/table';
+import type { MessageKey } from '@/i18n';
+
+/** How each pocket is named in the ticker. Shared with the call picker's labels. */
+const POCKET_LABELS: Record<PocketId, MessageKey> = {
+  'corner-nw': 'call.pocketCornerNw',
+  'corner-ne': 'call.pocketCornerNe',
+  'corner-sw': 'call.pocketCornerSw',
+  'corner-se': 'call.pocketCornerSe',
+  'side-n': 'call.pocketSideN',
+  'side-s': 'call.pocketSideS',
+};
 import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
@@ -68,12 +81,30 @@ function BackButton() {
  * Scores use tabular figures so a number does not shift sideways as it ticks
  * past nine, the same treatment the power readout gets.
  */
-function FreeScoreboard() {
-  const free = useSession((s) => s.free);
-  if (!free) return null;
+function Scoreboard() {
+  const t = useT();
+  const table = useSession((s) => s.standings);
+  const mode = useSession((s) => s.mode);
+  const match = useSession((s) => s.match);
+  if (table.length === 0) return null;
 
-  const current = free.players[free.current];
-  const others = free.players.filter((_, i) => i !== free.current);
+  const current = table.find((row) => row.isCurrent);
+  const call = match ? currentCall(match) : null;
+  const others = table.filter((row) => !row.isCurrent);
+
+  /**
+   * What a seat is worth, in a word.
+   *
+   * Eight-ball has no score at all — it is won, not counted — so the number
+   * beside a name there would always be zero and would mean nothing. What
+   * matters instead is which half of the table you are on, and that only once
+   * somebody has claimed it.
+   */
+  const badge = (row: (typeof table)[number]): string => {
+    if (row.group) return t(row.group === 'solids' ? 'rules.solids' : 'rules.stripes');
+    if (row.score === undefined) return t('rules.open');
+    return String(row.score);
+  };
 
   return (
     <View style={styles.titleBlock}>
@@ -81,14 +112,32 @@ function FreeScoreboard() {
         <Text style={styles.playerName} numberOfLines={1}>
           {current?.name ?? ''}
         </Text>
-        <Text style={styles.playerScore}>{current?.score ?? 0}</Text>
+        <Text style={styles.playerScore}>{current ? badge(current) : ''}</Text>
       </View>
+
+      {/* The run, which is the whole point of 14.1 and meaningless elsewhere. */}
+      {mode === GameModeKind.STRAIGHT && current?.run ? (
+        <Text style={styles.runLine}>{t('rules.runOf', { count: current.run })}</Text>
+      ) : null}
+
+      {/*
+        The shot that was called, kept in view until it is played.
+
+        Naming a pocket and then having nowhere to check what you named is the
+        obvious way to lose track of it — particularly in straight pool, where a
+        call is made on every single visit.
+      */}
+      {call ? (
+        <Text style={styles.callLine}>
+          {t('call.declared', { number: call.ball, pocket: t(POCKET_LABELS[call.pocket]) })}
+        </Text>
+      ) : null}
 
       {others.length > 0 ? (
         <View style={styles.otherRow}>
-          {others.map((player) => (
-            <Text key={player.id} style={styles.otherPlayer} numberOfLines={1}>
-              {player.name} <Text style={styles.otherScore}>{player.score}</Text>
+          {others.map((row) => (
+            <Text key={row.id} style={styles.otherPlayer} numberOfLines={1}>
+              {row.name} <Text style={styles.otherScore}>{badge(row)}</Text>
             </Text>
           ))}
         </View>
@@ -103,7 +152,7 @@ export function GameHud() {
       <View style={styles.topRow} pointerEvents="box-none">
         <BackButton />
         <View style={styles.topContent} pointerEvents="box-none">
-          <FreeScoreboard />
+          <Scoreboard />
         </View>
       </View>
 
@@ -156,36 +205,54 @@ export function GameOverOverlay() {
   const router = useRouter();
   const t = useT();
   const phase = useSession((s) => s.phase);
-  const free = useSession((s) => s.free);
-  const startFree = useSession((s) => s.startFree);
+  const match = useSession((s) => s.match);
+  const table = useSession((s) => s.standings);
+  const startGame = useSession((s) => s.startGame);
   const leaveGame = useSession((s) => s.leaveGame);
 
-  if (phase !== Phase.GAME_OVER || !free) return null;
+  if (phase !== Phase.GAME_OVER || !match) return null;
 
   const goToMenu = () => {
     leaveGame();
     router.replace('/menu');
   };
 
-  const ranked = [...free.players].sort((a, b) => b.score - a.score);
+  const won = winningSeats(match);
+  /*
+   * Ordered by score where there is one, and left in seat order where there is
+   * not.
+   *
+   * Eight-ball is won rather than counted, so sorting its rows by a score that
+   * is always zero would shuffle them arbitrarily between games. The winners
+   * are marked instead, which is the thing worth showing.
+   */
+  const ranked =
+    table[0]?.score === undefined ? table : [...table].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   return (
     <View style={styles.overlay}>
       <View style={styles.overlayCard}>
         <Text style={styles.overlayTitle}>
-          {free.winners.length === 1
-            ? t('result.winner', {
-                name: free.players.find((p) => p.id === free.winners[0])?.name ?? '',
-              })
-            : t('result.draw')}
+          {won.length === 1
+            ? t('result.winner', { name: table.find((row) => row.id === won[0])?.name ?? '' })
+            : won.length > 1
+              ? // A winning pair, named together: the frame was won by a side.
+                t('result.winners', {
+                  names: won
+                    .map((id) => table.find((row) => row.id === id)?.name ?? '')
+                    .join(' & '),
+                })
+              : t('result.draw')}
         </Text>
 
         <View style={styles.resultTable}>
-          {ranked.map((player) => (
-            <View key={player.id} style={styles.resultRow}>
-              <Text style={styles.resultName}>{player.name}</Text>
+          {ranked.map((row) => (
+            <View key={row.id} style={styles.resultRow}>
+              <Text style={styles.resultName}>{row.name}</Text>
               <Text style={styles.resultScore}>
-                {t('result.points', { count: player.score })}
+                {row.score === undefined
+                  ? t(won.includes(row.id) ? 'result.won' : 'result.lost')
+                  : t('result.points', { count: row.score })}
               </Text>
             </View>
           ))}
@@ -194,7 +261,8 @@ export function GameOverOverlay() {
         <GameButton
           label={t('result.newGame')}
           variant="primary"
-          onPress={() => startFree(free.players.length, free.players.map((p) => p.name))}
+          // The same people, the same rules, a fresh rack.
+          onPress={() => startGame(match.kind, table.length, table.map((row) => row.name))}
         />
         <GameButton label={t('common.menu')} variant="ghost" onPress={goToMenu} />
       </View>
@@ -273,6 +341,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+  },
+  /** The standing call, under the name. Called modes only. */
+  callLine: {
+    color: Palette.textMuted,
+    fontSize: 11,
+    letterSpacing: 0.6,
+  },
+  /** The current run, under the name. 14.1 only. */
+  runLine: {
+    color: Palette.gold,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
   },
   otherScore: {
     color: Palette.text,

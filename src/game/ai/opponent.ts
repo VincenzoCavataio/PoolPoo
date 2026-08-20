@@ -23,7 +23,7 @@
 
 import { BALL_RADIUS } from '@/game/core/constants';
 import { predictAim } from '@/game/core/predict';
-import type { Table } from '@/game/core/table';
+import type { PocketId, Table } from '@/game/core/table';
 import type { Vec2 } from '@/game/core/vec';
 import type { ShotSpin, World } from '@/game/core/world';
 
@@ -74,6 +74,35 @@ export interface PlannedShot {
   angle: number;
   power: number;
   spin: ShotSpin;
+  /**
+   * What it is going for, in the modes that make you say.
+   *
+   * The planner has to choose a ball and a pocket to aim at anyway, so naming
+   * them costs nothing — and a computer that shot without calling would foul on
+   * every visit in the called games. Absent when it is playing a safety, where
+   * there is nothing honest to call.
+   */
+  call?: { ball: number; pocket: PocketId };
+}
+
+/** What the rules allow this seat to do, handed down by the caller. */
+export interface ShotConstraints {
+  /**
+   * The balls it may hit first. Undefined means anything on the table.
+   *
+   * The caller owns the rules, so this does not need to know whether the game
+   * is solids-and-stripes or everything.
+   */
+  targets?: number[];
+  /**
+   * Seats on its own side.
+   *
+   * Only used to decide that a safety is worth playing at all: leaving a
+   * partner snookered is worse than leaving an opponent snookered, so with a
+   * partner still to come it prefers a weak attacking shot over a good defensive
+   * one. Empty outside eight-ball, and in singles too.
+   */
+  partners?: number[];
 }
 
 /**
@@ -120,6 +149,9 @@ interface Candidate {
   power: number;
   /** Higher is better. */
   score: number;
+  /** Which ball into which pocket, so the shot can be called. */
+  ball: number;
+  pocket: PocketId;
 }
 
 /**
@@ -160,6 +192,7 @@ function scoreShot(
   ballNumber: number,
   ball: Vec2,
   pocket: Vec2,
+  pocketId: PocketId,
 ): Candidate | null {
   const ghost = ghostBall(ball, pocket);
 
@@ -208,7 +241,7 @@ function scoreShot(
    */
   const power = Math.min(0.85, 0.3 + reach * 0.35 + (1 - cut) * 0.25);
 
-  return { angle, power, score };
+  return { angle, power, score, ball: ballNumber, pocket: pocketId };
 }
 
 /**
@@ -223,8 +256,9 @@ export function planShot(
   world: World,
   difficulty: Difficulty,
   seed: number,
-  legal?: number[],
+  constraints: ShotConstraints = {},
 ): PlannedShot | null {
+  const legal = constraints.targets;
   const profile = DIFFICULTIES[difficulty];
   const random = createRandom(seed);
 
@@ -249,6 +283,7 @@ export function planShot(
         ball.number,
         ball.p,
         pocket.center,
+        pocket.id,
       );
       if (shot) candidates.push(shot);
     }
@@ -269,10 +304,21 @@ export function planShot(
 
     if (!nearest) return null;
 
+    /*
+     * Harder when a partner has to play next.
+     *
+     * A soft roll is the right shot when the person who inherits the table is an
+     * opponent — it leaves them nothing. It is the wrong shot when the table
+     * passes to your own side, because then you have snookered your partner.
+     * With a partner to come it hits firmly enough to open the position up,
+     * which is what a person in that seat would do.
+     */
+    const partnerNext = (constraints.partners?.length ?? 0) > 0;
+
     const angle = Math.atan2(nearest.ball.y - cueBall.p.y, nearest.ball.x - cueBall.p.x);
     return {
       angle: angle + gaussian(random) * profile.aimError,
-      power: 0.35,
+      power: partnerNext ? 0.62 : 0.35,
       spin: { side: 0, vertical: 0 },
     };
   }
@@ -295,5 +341,14 @@ export function planShot(
     // No spin: side is what a good player uses for position, and the opponent
     // does not plan a next shot yet. Adding it would only make it miss.
     spin: { side: 0, vertical: 0 },
+    /*
+     * Called as aimed, not as it will land.
+     *
+     * The aim error is applied above, so what actually drops may not be this —
+     * which is exactly right: a called shot you miss is a called shot you
+     * missed, and a computer whose call always came true would be playing a
+     * different game from the person opposite.
+     */
+    call: { ball: chosen.ball, pocket: chosen.pocket },
   };
 }

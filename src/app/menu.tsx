@@ -50,7 +50,7 @@ import { useSettings } from '@/store/settings';
 
 function describeSavedGame(save: SavedGame, t: Translator): string {
   const when = describeSave(save);
-  const players = save.free?.players.length ?? 1;
+  const players = save.match?.state.players.length ?? 1;
   return `${t('menu.savedFree', { count: players })}${when ? ` · ${when}` : ''}`;
 }
 
@@ -159,7 +159,7 @@ export default function MenuScreen() {
                 .filter((ball) => !ball.pocketed && !ball.offTable)
                 .map((ball) => ({ number: ball.number, x: ball.p.x, y: ball.p.y }))
             : null,
-          loaded?.free?.players.length ?? 0,
+          loaded?.match?.state.players.length ?? 0,
         );
       });
       return () => {

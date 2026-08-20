@@ -82,7 +82,7 @@ suite('the opponent plays a shot at all', () => {
   test('it will not aim at a ball it is not allowed to hit', () => {
     const world = sitter();
     // Ball 1 is the only one on the table, and it is off limits.
-    const shot = planShot(world, 'hard', 1, [9]);
+    const shot = planShot(world, 'hard', 1, { targets: [9] });
     assertEqual(shot, null, 'the only ball was not a legal target');
   });
 

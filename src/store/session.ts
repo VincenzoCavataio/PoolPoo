@@ -30,8 +30,31 @@ import { detectShot, emptyRunState, type TrophyRunState } from '@/game/trophies/
 import { useTrophies } from '@/store/trophies';
 import type { Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
-import { createFreeState, resolveFreeShot, type FreeState } from '@/game/rules/free';
-import { Phase, type GameModeKind, type ShotOutcome } from '@/game/rules/types';
+import {
+  createMatch,
+  currentCall,
+  currentCpu,
+  currentSeat,
+  isFinished,
+  legalTargets,
+  needsCall,
+  partnersOf,
+  playerCount as matchPlayerCount,
+  rerackDone,
+  resolveShot,
+  shotsTaken,
+  standings,
+  wantsRerack,
+  winningSeats,
+  withCall,
+  type Match,
+} from '@/game/rules/match';
+import {
+  GameModeKind,
+  Phase,
+  type ShotOutcome,
+  type Standing,
+} from '@/game/rules/types';
 
 import { clearSavedGame, SAVE_VERSION, saveGame, type SavedGame } from './persistence';
 import { useSettings } from './settings';
@@ -158,7 +181,22 @@ export interface SessionState {
   mode: GameModeKind | null;
   world: World | null;
   phase: Phase;
-  free: FreeState | null;
+  /**
+   * The game in progress, whichever discipline it is.
+   *
+   * Replaces the old `free` field. The modes keep separate state shapes because
+   * they genuinely differ — eight-ball has teams and no score, straight pool has
+   * runs and a target — so this is a tagged union rather than one struct with
+   * everything optional.
+   */
+  match: Match | null;
+  /**
+   * The scoreboard, flattened.
+   *
+   * Kept beside the match so the HUD can render without knowing the ruleset.
+   * Recomputed whenever the match changes, which is once per shot.
+   */
+  standings: Standing[];
   aimAngle: number;
   power: number;
   /** Where the tip strikes the cue ball. Resets to centre after every shot. */
@@ -173,7 +211,21 @@ export interface SessionState {
   /** Bumped when the ball set changes, so the scene remounts. */
   gameId: number;
 
-  startFree: (playerCount: number, names: string[], cpus?: (Difficulty | undefined)[]) => void;
+  /**
+   * Starts a game under the given rules.
+   *
+   * `startFree` stays as the name every existing caller uses, now with the mode
+   * as its first argument — renaming it would have touched five screens to say
+   * the same thing.
+   */
+  startGame: (
+    kind: Match['kind'],
+    playerCount: number,
+    names: string[],
+    cpus?: (Difficulty | undefined)[],
+  ) => void;
+  /** Names the ball and pocket for the coming shot, in the called modes. */
+  setCall: (call: { ball: number; pocket: PocketId } | null) => void;
   resume: (save: SavedGame) => boolean;
   setAimAngle: (angle: number) => void;
   nudgeAim: (delta: number) => void;
@@ -214,13 +266,13 @@ export const useSession = create<SessionState>((set, get) => {
   };
 
   const buildSave = (): SavedGame | null => {
-    const { mode, world, free } = get();
-    if (!mode || !world) return null;
+    const { mode, world, match } = get();
+    if (!mode || !world || !match) return null;
     return {
       version: SAVE_VERSION,
       mode,
       world: world.serialize(),
-      free,
+      match,
       savedAt: new Date().toISOString(),
     };
   };
@@ -262,17 +314,40 @@ export const useSession = create<SessionState>((set, get) => {
    * being played on an abandoned game.
    */
   const takeCpuTurnIfNeeded = () => {
-    const { free, phase } = get();
-    if (!free || free.finished || phase !== Phase.AIMING) return;
+    const { match, phase } = get();
+    if (!match || isFinished(match) || phase !== Phase.AIMING) return;
 
-    const seat = free.players[free.current];
-    if (!seat?.cpu) return;
+    const level = currentCpu(match);
+    if (!level) return;
 
     const world = get().world;
     if (!world) return;
 
-    const shot = planShot(world, seat.cpu, Date.now() & 0xffff);
+    /*
+     * What this seat is allowed to aim at, and who is on its side.
+     *
+     * `targets` is null in every mode but eight-ball, where it is the shooter's
+     * own group — or the black once that group is clear. Without it the computer
+     * plays whatever is easiest and fouls on its own turn, which reads less like
+     * a weak opponent than like a broken one.
+     *
+     * `partners` is empty outside eight-ball and in singles too, so it costs
+     * nothing where it does not apply.
+     */
+    const shot = planShot(world, level, Date.now() & 0xffff, {
+      targets: legalTargets(match, world) ?? undefined,
+      partners: partnersOf(match, currentSeat(match)),
+    });
     if (!shot) return;
+
+    /*
+     * In the called modes the computer has to say what it is going for.
+     *
+     * The planner already knows — it chose a ball and a pocket — so this only
+     * records that choice where the rules will look for it. A computer that
+     * shot without calling would foul on every visit.
+     */
+    if (shot.call) set({ match: withCall(get().match ?? match, shot.call) });
 
     cancelCpuTurn();
 
@@ -326,9 +401,9 @@ export const useSession = create<SessionState>((set, get) => {
       elapsed += CPU_TICK_MS;
 
       const state = get();
-      const current = state.free?.players[state.free.current];
+      const stillCpu = state.match ? currentCpu(state.match) : undefined;
       // Everything may have changed while it was playing its turn.
-      if (!state.world || state.phase !== Phase.AIMING || !current?.cpu) {
+      if (!state.world || state.phase !== Phase.AIMING || !stillCpu) {
         cancelCpuTurn();
         return;
       }
@@ -432,7 +507,7 @@ export const useSession = create<SessionState>((set, get) => {
 
   /** Applies the rules once the balls have stopped. */
   const settleShot = () => {
-    const { world, mode, free } = get();
+    const { world, match } = get();
     if (!world) return;
 
     world.settle();
@@ -460,12 +535,29 @@ export const useSession = create<SessionState>((set, get) => {
     let outcome: ShotOutcome | null = null;
     let finished = false;
 
-    if (mode === 'free' && free) {
-      const resolved = resolveFreeShot(free, world, events);
+    if (match) {
+      const resolved = resolveShot(match, world, events);
       outcome = resolved.outcome;
       finished = resolved.outcome.gameOver;
       if (resolved.outcome.cueBallNeedsRespot) world.respotCueBall();
-      set({ free: resolved.state });
+
+      /*
+       * Straight pool's re-rack, applied here because only the session may
+       * write to the world.
+       *
+       * The break ball stays where it lies and so does the cue ball; everything
+       * else goes back into the triangle. Doing it now rather than at the start
+       * of the next shot means the player sees the table they will be playing
+       * from while the outcome is still on screen.
+       */
+      let next = resolved.match;
+      if (wantsRerack(next)) {
+        const keep = world.remainingObjectBalls().map((ball) => ball.number);
+        world.rerack(keep);
+        next = rerackDone(next);
+      }
+
+      set({ match: next, standings: standings(next) });
     }
 
     /**
@@ -475,19 +567,30 @@ export const useSession = create<SessionState>((set, get) => {
      * pass over the events, so a trophy can never disagree with the score. The
      * detector is pure; this is the only place it meets the store.
      */
-    if (outcome && mode === 'free' && free) {
-      const shooter = free.players[free.current];
-      const others = free.players.filter((_, i) => i !== free.current);
-      const runnerUp = others.reduce((best, p) => Math.max(best, p.score), 0);
+    if (outcome && match) {
+      /*
+       * Read off the flattened scoreboard rather than off one mode's state.
+       *
+       * Eight-ball has no scores at all, so the two score fields fall back to
+       * zero there and the trophies that compare them simply never fire in that
+       * mode — which is right, because "won by more than twenty" is not a thing
+       * that happens in a game you win by potting the black.
+       */
+      const seat = currentSeat(match);
+      const table = standings(match);
+      const shooter = table[seat];
+      const runnerUp = table
+        .filter((_, i) => i !== seat)
+        .reduce((best, p) => Math.max(best, p.score ?? 0), 0);
 
       const { awards, run } = detectShot(
         {
           events,
           outcome,
           spin: pending?.spin ?? NO_SPIN,
-          isBreak: free.shotsTaken === 0,
-          wonGame: finished && get().free?.winners.includes(free.current) === true,
-          players: free.players.length,
+          isBreak: shotsTaken(match) === 0,
+          wonGame: finished && winningSeats(get().match ?? match).includes(seat),
+          players: matchPlayerCount(match),
           winnerScore: shooter?.score ?? 0,
           runnerUpScore: runnerUp,
         },
@@ -541,7 +644,8 @@ export const useSession = create<SessionState>((set, get) => {
     mode: null,
     world: null,
     phase: Phase.AIMING,
-    free: null,
+    match: null,
+    standings: [],
     puzzle: null,
     levelId: null,
     aimAngle: 0,
@@ -554,18 +658,21 @@ export const useSession = create<SessionState>((set, get) => {
     lastOutcome: null,
     gameId: 0,
 
-    startFree: (playerCount, names, cpus) => {
+    startGame: (kind, playerCount, names, cpus) => {
       accumulator = 0;
       pending = null;
       trophyRun = emptyRunState();
       // The cloth is a physics choice, not only a colour, so the table is built
       // with the profile the player picked.
       const world = World.rack(furnishedTable(), clothProfile(useSettings.getState().clothId));
+      const match = createMatch({ kind, playerCount, names, cpus });
+
       set({
-        mode: 'free',
+        mode: kind,
         world,
         phase: Phase.AIMING,
-        free: createFreeState(playerCount, names, cpus),
+        match,
+        standings: standings(match),
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -583,7 +690,7 @@ export const useSession = create<SessionState>((set, get) => {
     },
 
     resume: (save) => {
-      if (!save.free) return false;
+      if (!save.match) return false;
 
       accumulator = 0;
       pending = null;
@@ -596,7 +703,8 @@ export const useSession = create<SessionState>((set, get) => {
           clothProfile(useSettings.getState().clothId),
         ),
         phase: Phase.AIMING,
-        free: save.free,
+        match: save.match,
+        standings: standings(save.match),
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -625,12 +733,35 @@ export const useSession = create<SessionState>((set, get) => {
 
     setSpin: (spin) => set({ spin }),
 
+    /**
+     * What the shooter says they are going to do.
+     *
+     * Stored on the match rather than beside it, because the rules read it
+     * from there and clear it themselves once the shot has been resolved — a
+     * call belongs to one shot, and one that outlived its shot would hold
+     * somebody to a pocket they named several visits ago.
+     */
+    setCall: (call) => {
+      const { match } = get();
+      if (!match) return;
+      set({ match: withCall(match, call) });
+    },
+
     takeShot: () => {
-      const { world, phase, aimAngle, power, spin, cameraMode } = get();
+      const { world, phase, aimAngle, power, spin, cameraMode, match } = get();
       if (!world || phase !== Phase.AIMING) return;
       // Shooting from the overhead view is deliberately not allowed: you line a
       // shot up from behind the cue, not from the ceiling.
       if (cameraMode !== CameraMode.CUE) return;
+
+      /*
+       * In the called games, no shot without a call.
+       *
+       * Refused rather than allowed and then charged as a foul. A player who has
+       * not answered the picker has not decided yet, and taking their shot for
+       * them and then penalising it would be the game punishing its own UI.
+       */
+      if (match && needsCall(match) && !currentCall(match)) return;
 
       pending = { snapshot: world.serialize(), angle: aimAngle, power, spin };
 
@@ -717,7 +848,8 @@ export const useSession = create<SessionState>((set, get) => {
         mode: null,
         world: null,
         phase: Phase.AIMING,
-        free: null,
+        match: null,
+    standings: [],
         replay: null,
         celebration: null,
         messages: [],

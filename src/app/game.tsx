@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
+import { CallPicker } from '@/components/game/call-picker';
 import { GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
 import { MusicHud } from '@/components/game/music-hud';
 import { TrophyBanner } from '@/components/game/trophy-banner';
@@ -88,6 +89,9 @@ export default function GameScreen() {
       </View>
 
       <View style={[styles.controlLayer, { paddingBottom: insets.bottom + Spacing.two }]}>
+        {/* Above the controls, because it has to be answered before they are any
+            use — in the called games a shot taken without a call is a foul. */}
+        <CallPicker />
         <GameControls />
       </View>
 

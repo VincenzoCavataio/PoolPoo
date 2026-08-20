@@ -16,10 +16,11 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { RackIcon } from '@/components/ui/icons';
 import { ScreenHeader } from '@/components/ui/screen';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -27,6 +28,8 @@ import type { Difficulty } from '@/game/ai/opponent';
 import { playTap } from '@/game/audio/sfx';
 import type { MessageKey } from '@/i18n';
 import { useT } from '@/i18n/use-t';
+import type { Match } from '@/game/rules/match';
+import { GameModeKind, PLAYABLE_MODES } from '@/game/rules/types';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
@@ -46,11 +49,21 @@ export default function DifficultyScreen() {
   const router = useRouter();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const startFree = useSession((s) => s.startFree);
+  const startGame = useSession((s) => s.startGame);
   const playerName = useSettings((s) => s.playerName);
   const setPlayerName = useSettings((s) => s.setPlayerName);
 
-  const params = useLocalSearchParams<{ players?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ players?: string; mode?: string; rules?: string }>();
+  /**
+   * Which rules the game will be played under, chosen two screens back.
+   *
+   * Validated against the playable list rather than trusted: this arrives as a
+   * string off a URL, and an unrecognised one would otherwise reach the session
+   * and start a game with no resolver.
+   */
+  const rules = (PLAYABLE_MODES as readonly string[]).includes(params.rules ?? '')
+    ? (params.rules as Match['kind'])
+    : GameModeKind.FREE;
   // Carried from the mode screen; anything but `cpu` is a game between people.
   const mode = params.mode === 'cpu' ? 'cpu' : 'human';
   // The total round the table, the person included.
@@ -87,7 +100,8 @@ export default function DifficultyScreen() {
     const chosen = seats[0].name.trim();
     if (chosen && chosen !== playerName) setPlayerName(chosen);
 
-    startFree(
+    startGame(
+      rules,
       seats.length,
       seats.map((seat, i) => seat.name.trim() || t('rules.player', { number: i + 1 })),
       seats.map((seat) => seat.level),
@@ -106,7 +120,18 @@ export default function DifficultyScreen() {
       />
 
       <View style={styles.inner}>
-        <View style={styles.centre}>
+        {/*
+          Scrolls once the seats outgrow the screen.
+
+          A panel per player, and there can be eight — each with a name field and
+          a row of difficulty pills. Centred while they fit, scrolling when they
+          do not, which `flexGrow` on the content container gives for free.
+        */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.centre}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
           {seats.map((seat, index) => (
             <Animated.View
               key={index}
@@ -174,14 +199,25 @@ export default function DifficultyScreen() {
               ) : null}
             </Animated.View>
           ))}
-        </View>
+        </ScrollView>
 
         <Animated.View entering={FadeInDown.delay(120).duration(280)}>
           <Pressable
             accessibilityRole="button"
             onPress={begin}
             style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
-            <Text style={styles.goLabel}>{t('newGame.next')}</Text>
+            <View style={styles.goIcon}>
+              <RackIcon size={24} color={Luxe.ink} />
+            </View>
+
+            <View style={styles.goText}>
+              <Text style={styles.goLabel}>{t('newGame.next')}</Text>
+              {/* How many are sitting down, which is what this screen settled. */}
+              <Text style={styles.goHint} numberOfLines={1}>
+                {t('newGame.players')} · {seats.length}
+              </Text>
+            </View>
+
             <Text style={styles.goChevron}>{'›'}</Text>
           </Pressable>
         </Animated.View>
@@ -205,10 +241,14 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
   },
-  centre: {
+  scroll: {
     flex: 1,
+  },
+  centre: {
+    flexGrow: 1,
     justifyContent: 'center',
     gap: Spacing.three,
+    paddingBottom: Spacing.three,
   },
   /**
    * One seat, given room to be read.
@@ -272,31 +312,55 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
+  /**
+   * The step forward, filled gold like every other one.
+   *
+   * Gold-on-dark means "this is the way on" everywhere in the app; the outlined
+   * treatment belongs to the choices above, not to the control that commits
+   * them.
+   */
   go: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+    padding: Spacing.three,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: '#080b0a',
+    backgroundColor: Luxe.gold,
   },
   goPressed: {
-    backgroundColor: '#141a19',
+    backgroundColor: '#b8985a',
+  },
+  /** The rack in a darker inset, so it reads as set into the bar. */
+  goIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: 'rgba(8, 9, 11, 0.14)',
+  },
+  goText: {
+    flex: 1,
+    gap: 2,
   },
   goLabel: {
-    color: Luxe.gold,
-    fontSize: 14,
+    color: Luxe.ink,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 2.2,
     textTransform: 'uppercase',
   },
+  goHint: {
+    color: 'rgba(8, 9, 11, 0.68)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
   goChevron: {
-    color: 'rgba(201, 169, 98, 0.6)',
-    fontSize: 22,
-    lineHeight: 24,
-    marginTop: -2,
+    // 0.7 rather than 0.55: at 3.4:1 the lighter value was under what a small
+    // graphic needs to stay crisp against the gold.
+    color: 'rgba(8, 9, 11, 0.7)',
+    fontSize: 26,
+    lineHeight: 28,
+    marginTop: -3,
   },
 });

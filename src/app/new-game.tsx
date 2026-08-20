@@ -23,6 +23,7 @@ import { ScreenHeader } from '@/components/ui/screen';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
+import { GameModeKind } from '@/game/rules/types';
 import { useT } from '@/i18n/use-t';
 
 const PLAYER_OPTIONS = [1, 2, 3, 4];
@@ -34,8 +35,11 @@ export default function NewGameScreen() {
   const [players, setPlayers] = useState(2);
 
   // Carried from the mode screen. Anything else is a game between people.
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; rules?: string }>();
   const mode = params.mode === 'cpu' ? 'cpu' : 'human';
+  // Carried through untouched: this screen has no opinion about the rules, it
+  // only has to not lose them on the way to the seats.
+  const rules = params.rules ?? GameModeKind.FREE;
 
   /**
    * On to dressing the table.
@@ -65,7 +69,7 @@ export default function NewGameScreen() {
      */
     router.push({
       pathname: '/difficulty',
-      params: { mode, players: String(players + 1) },
+      params: { mode, rules, players: String(players + 1) },
     });
   };
 
@@ -132,7 +136,7 @@ export default function NewGameScreen() {
             onPress={next}
             style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
             <View style={styles.goIcon}>
-              <RackIcon size={22} color={Luxe.gold} />
+              <RackIcon size={24} color={Luxe.ink} />
             </View>
 
             <View style={styles.goText}>
@@ -272,12 +276,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
+    padding: Spacing.three,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: '#080b0a',
+    backgroundColor: Luxe.gold,
     /**
      * Lifted well clear of the bottom of the screen.
      *
@@ -290,40 +291,40 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.six + Spacing.six,
   },
   goPressed: {
-    backgroundColor: '#141a19',
+    backgroundColor: '#b8985a',
   },
-  /** The rack, small and inset — a mark on the row, not a background. */
+  /** The rack in a darker inset, so it reads as set into the bar. */
   goIcon: {
-    width: 40,
-    height: 40,
+    width: 46,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    backgroundColor: 'rgba(201, 169, 98, 0.08)',
+    backgroundColor: 'rgba(8, 9, 11, 0.14)',
   },
   goText: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   goLabel: {
-    color: Luxe.gold,
-    fontSize: 14,
+    color: Luxe.ink,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 2.2,
     textTransform: 'uppercase',
   },
   goHint: {
-    color: Luxe.textMuted,
-    fontSize: 11,
-    lineHeight: 15,
+    color: 'rgba(8, 9, 11, 0.68)',
+    fontSize: 12,
+    lineHeight: 16,
   },
   /** A chevron, because this one goes somewhere rather than doing something. */
   goChevron: {
-    color: 'rgba(201, 169, 98, 0.6)',
-    fontSize: 22,
-    lineHeight: 24,
-    marginTop: -2,
+    // 0.7 rather than 0.55: at 3.4:1 the lighter value was under what a small
+    // graphic needs to stay crisp against the gold.
+    color: 'rgba(8, 9, 11, 0.7)',
+    fontSize: 26,
+    lineHeight: 28,
+    marginTop: -3,
   },
 });

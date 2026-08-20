@@ -1517,4 +1517,71 @@ suite('a shot settles before the floor is still', () => {
 });
 
 
+
+suite('re-racking', () => {
+  /** A world with `down` pocketed and everything else where the rack put it. */
+  function afterPotting(down: number[]): World {
+    const world = World.rack();
+    for (const n of down) {
+      const ball = world.ballByNumber(n);
+      if (!ball) continue;
+      ball.pocketed = true;
+      ball.pocketedIn = 'corner-ne';
+    }
+    return world;
+  }
+
+  test('the fourteen come back and the break ball is left alone', () => {
+    const world = afterPotting([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    const breakBall = world.ballByNumber(15)!;
+    const where = { x: breakBall.p.x, y: breakBall.p.y };
+
+    const returned = world.rerack([15]);
+
+    assertEqual(returned.length, 14, 'fourteen balls back');
+    assertClose(breakBall.p.x, where.x, 1e-9, 'break ball did not move in x');
+    assertClose(breakBall.p.y, where.y, 1e-9, 'break ball did not move in y');
+    assertEqual(world.remainingObjectBalls().length, 15, 'a full table again');
+  });
+
+  test('the cue ball is never racked', () => {
+    const world = afterPotting([1, 2, 3]);
+    const cue = world.cueBall()!;
+    cue.pocketed = true;
+
+    world.rerack([]);
+
+    assertEqual(cue.pocketed, true, 'the cue ball is the session’s problem, not the rack’s');
+  });
+
+  test('racked balls do not overlap each other', () => {
+    const world = afterPotting(Array.from({ length: 15 }, (_, i) => i + 1));
+    world.rerack([]);
+
+    const balls = world.remainingObjectBalls();
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        const gap = Math.hypot(balls[i].p.x - balls[j].p.x, balls[i].p.y - balls[j].p.y);
+        assert(
+          gap >= BALL_RADIUS * 2 * 0.999,
+          `balls ${balls[i].number} and ${balls[j].number} overlap: ${gap.toFixed(4)}m`,
+        );
+      }
+    }
+  });
+
+  test('a racked ball settles rather than carrying its old motion', () => {
+    const world = afterPotting([1]);
+    const ball = world.ballByNumber(1)!;
+    ball.v.x = 4;
+    ball.v.y = -2;
+
+    world.rerack([]);
+
+    assertClose(ball.v.x, 0, 1e-9, 'no leftover velocity');
+    assertClose(ball.v.y, 0, 1e-9, 'no leftover velocity');
+    assertEqual(ball.pocketed, false, 'back in play');
+  });
+});
+
 report();

@@ -11,17 +11,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { SerializedWorld } from '@/game/core/world';
 import type { FreeState } from '@/game/rules/free';
-import type { GameModeKind } from '@/game/rules/types';
+import { PLAYABLE_MODES, type GameModeKind } from '@/game/rules/types';
+import type { Match } from '@/game/rules/match';
 
 const SAVE_KEY = 'pool.save.v1';
 
-export const SAVE_VERSION = 1;
+/**
+ * Bumped when four disciplines replaced the one.
+ *
+ * A version-1 save holds a `free` field this build no longer understands and
+ * no record of which rules it was played under. Rather than guess, it fails
+ * validation like any other malformed save and the menu simply offers no
+ * Continue — which is the behaviour that was already there for saves the game
+ * had outgrown.
+ */
+export const SAVE_VERSION = 2;
 
 export interface SavedGame {
   version: number;
   mode: GameModeKind;
   world: SerializedWorld;
-  free: FreeState | null;
+  /** The game in progress, tagged with the rules it is being played under. */
+  match: Match | null;
   savedAt: string;
 }
 
@@ -31,9 +42,9 @@ function isValid(value: unknown): value is SavedGame {
   if (save.version !== SAVE_VERSION) return false;
   // A save from when the game had puzzles is not a game any more. It fails here
   // rather than loading half of one, and the menu simply offers no Continue.
-  if (save.mode !== 'free') return false;
+  if (!PLAYABLE_MODES.includes(save.mode as (typeof PLAYABLE_MODES)[number])) return false;
   if (!save.world || !Array.isArray(save.world.balls) || save.world.balls.length === 0) return false;
-  if (!save.free) return false;
+  if (!save.match || !Array.isArray(save.match.state?.players)) return false;
   return true;
 }
 

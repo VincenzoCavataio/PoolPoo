@@ -22,9 +22,6 @@ import { Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
 import type { MessageKey } from '@/i18n';
-import { humanNames } from '@/game/rules/player-names';
-import { useSession } from '@/store/session';
-import { useSettings } from '@/store/settings';
 
 interface Mode {
   id: 'solo' | 'cpu' | 'human';
@@ -42,24 +39,19 @@ const MODES: Mode[] = [
 export default function ModeScreen() {
   const router = useRouter();
   const t = useT();
-  const startFree = useSession((s) => s.startFree);
-  const playerName = useSettings((s) => s.playerName);
 
   const choose = (mode: Mode['id']) => {
     playTap('confirm');
 
-    if (mode === 'solo') {
-      /*
-       * Solo skips the count and the difficulties: there is nobody else to
-       * describe. The game is started here so the setup screen has something to
-       * dress, exactly as the player-count screen does for the other two.
-       */
-      startFree(1, humanNames(1, playerName, t));
-      router.push('/setup');
-      return;
-    }
-
-    router.push({ pathname: '/new-game', params: { mode } });
+    /*
+     * Which game, before how many people.
+     *
+     * The discipline decides what the later screens may even offer — eight-ball
+     * cannot be played alone, and teams only mean anything there — so it has to
+     * be settled first. Solo goes to the same screen, which simply shows the two
+     * disciplines one person can play.
+     */
+    router.push({ pathname: '/rules', params: { mode } });
   };
 
   return (

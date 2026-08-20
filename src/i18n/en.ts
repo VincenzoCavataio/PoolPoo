@@ -108,6 +108,33 @@ export const en: Record<keyof typeof it, Entry> = {
   'mode.human': 'With friends',
   'mode.humanBody': 'Several people on one phone, taking turns',
 
+  // -------------------------------------------------------------- discipline
+  'discipline.title': 'Which game',
+
+  // ------------------------------------------------------------------ call
+  'call.pickBall': 'Which ball',
+  'game.callFirst': 'Call it',
+  'call.pickPocket': 'The {number} into which pocket',
+  'call.pocketCornerNw': 'Top left corner',
+  'call.pocketCornerNe': 'Top right corner',
+  'call.pocketCornerSw': 'Bottom left corner',
+  'call.pocketCornerSe': 'Bottom right corner',
+  'call.pocketSideN': 'Right middle pocket',
+  'call.pocketSideS': 'Left middle pocket',
+  'call.declared': '{number} → {pocket}',
+  'discipline.free': 'Free play',
+  'discipline.freeBody':
+    'All fifteen in play, a point a ball. Potting keeps you at the table. Most points when it empties wins.',
+  'discipline.eight': 'Eight-ball',
+  'discipline.eightBody':
+    'Solids against stripes. The first ball potted after the break picks your group; clear yours, then the black. Four players is teams.',
+  'discipline.eightCalled': 'Eight-ball, called',
+  'discipline.eightCalledBody':
+    'Eight-ball, but you name the ball and the pocket before each shot. Anywhere else does not count.',
+  'discipline.straight': 'Straight pool',
+  'discipline.straightBody':
+    'Every ball a point, always called, to 25. When one is left the other fourteen go back up and the run carries on.',
+
   'difficulty.title': 'Who is playing',
   'difficulty.easy': 'Easy',
   'difficulty.medium': 'Medium',
@@ -149,6 +176,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'newGame.freeBody':
     'Full rack, 15 balls. A point for every ball potted, and potting keeps you at the table. Scratching or missing everything costs a point and hands the turn over.',
   'newGame.opponents': 'Opponents',
+  'newGame.players': 'Players',
   'newGame.cpuHint': {
     one: 'One opponent played by the computer.',
     other: '{count} opponents played by the computer.',
@@ -238,6 +266,9 @@ export const en: Record<keyof typeof it, Entry> = {
 
   // ----------------------------------------------------------------- results
   'result.winner': '{name} wins',
+  'result.winners': '{names} win',
+  'result.won': 'Won',
+  'result.lost': 'Lost',
   'result.draw': 'Draw',
   'result.points': {
     one: '{count} point',
@@ -260,6 +291,28 @@ export const en: Record<keyof typeof it, Entry> = {
   'rules.foulPenalty': 'Foul: {reason} (−{count})',
   'rules.turnTo': '{name} to play',
   'rules.keepShooting': 'Shoot again',
+
+  // ------------------------------------------------------------- 8-ball
+  'rules.foulEightFirst': 'Hit the black first',
+  'rules.foulWrongGroup': 'Hit the other group first',
+  'rules.eightWon': '{name} finishes on the black',
+  'rules.eightLost': '{name} potted the black early',
+  'rules.tookSolids': '{name} takes the solids',
+  'rules.tookStripes': '{name} takes the stripes',
+  'rules.potted': '{name} pots',
+  'rules.pottedMany': '{name} pots {count}',
+  'rules.foulTurnOver': 'Foul: {reason}',
+
+  // -------------------------------------------------------------- 14.1
+  'rules.rerack': 'The fourteen go back up',
+  'rules.rerackFull': 'Table cleared: a full rack',
+  'rules.solids': 'Solids',
+  'rules.stripes': 'Stripes',
+  'rules.open': 'Open',
+  'rules.runOf': {
+    one: 'Run of {count}',
+    other: 'Run of {count}',
+  },
   'rules.winsWith': '{name} wins with {count} points',
   'rules.drawAt': 'Draw at {count} points',
   'rules.resumed': 'Game resumed',

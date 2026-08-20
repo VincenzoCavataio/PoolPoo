@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/theme';
 import { usePowerGesture } from '@/game/input/gestures';
 import { CameraMode } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
+import { currentCall, currentCpu, isFinished, needsCall } from '@/game/rules/match';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
@@ -154,8 +155,13 @@ export function GameControls() {
 
   /** True while the seat whose turn it is belongs to the computer. */
   const isCpuTurn = useSession((s) => {
-    const free = s.free;
-    return Boolean(free && !free.finished && free.players[free.current]?.cpu);
+    const match = s.match;
+    return Boolean(match && !isFinished(match) && currentCpu(match));
+  });
+
+  const awaitingCall = useSession((s) => {
+    const match = s.match;
+    return Boolean(match && needsCall(match) && !currentCall(match));
   });
 
   const [trackWidth, setTrackWidth] = useState(0);
@@ -163,7 +169,14 @@ export function GameControls() {
 
   const aiming = phase === Phase.AIMING;
   const fromCue = cameraMode === CameraMode.CUE;
-  const canShoot = aiming && fromCue;
+  /*
+   * A shot still owed a call cannot be taken.
+   *
+   * The session refuses it anyway; this is so the button says why rather than
+   * doing nothing when pressed, which is the difference between a rule and a
+   * bug from where the player is sitting.
+   */
+  const canShoot = aiming && fromCue && !awaitingCall;
 
   if (!aiming) return null;
 
@@ -225,15 +238,25 @@ export function GameControls() {
           </GestureDetector>
 
           <Pressable
-            accessibilityLabel={canShoot ? t('game.shootLabel') : t('game.goAimLabel')}
-            onPress={canShoot ? takeShot : () => setCameraMode(CameraMode.CUE)}
+            accessibilityLabel={
+              awaitingCall
+                ? t('game.callFirst')
+                : canShoot
+                  ? t('game.shootLabel')
+                  : t('game.goAimLabel')
+            }
+            onPress={
+              // Nothing to do while a call is owed: the picker above is the
+              // control that matters, and moving the camera would not help.
+              awaitingCall ? undefined : canShoot ? takeShot : () => setCameraMode(CameraMode.CUE)
+            }
             style={({ pressed }) => [
               styles.shoot,
               !canShoot && styles.shootBlocked,
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.shootLabel, !canShoot && styles.shootLabelBlocked]}>
-              {canShoot ? t('game.shoot') : t('game.goAim')}
+              {awaitingCall ? t('game.callFirst') : canShoot ? t('game.shoot') : t('game.goAim')}
             </Text>
           </Pressable>
         </View>

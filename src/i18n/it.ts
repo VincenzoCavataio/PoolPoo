@@ -109,6 +109,33 @@ export const it = {
   'mode.human': 'Tra amici',
   'mode.humanBody': 'Più persone sullo stesso telefono, a turno',
 
+  // -------------------------------------------------------------- discipline
+  'discipline.title': 'Che partita',
+
+  // ------------------------------------------------------------------ call
+  'call.pickBall': 'Quale pallina',
+  'game.callFirst': 'Dichiara',
+  'call.pickPocket': 'La {number} in quale buca',
+  'call.pocketCornerNw': 'Angolo in alto a sinistra',
+  'call.pocketCornerNe': 'Angolo in alto a destra',
+  'call.pocketCornerSw': 'Angolo in basso a sinistra',
+  'call.pocketCornerSe': 'Angolo in basso a destra',
+  'call.pocketSideN': 'Buca centrale destra',
+  'call.pocketSideS': 'Buca centrale sinistra',
+  'call.declared': '{number} → {pocket}',
+  'discipline.free': 'Partita libera',
+  'discipline.freeBody':
+    'Tutte e quindici in gioco, un punto a pallina. Chi imbuca continua. Vince chi ha più punti quando il tavolo si svuota.',
+  'discipline.eight': 'Americana',
+  'discipline.eightBody':
+    'Pieni contro mezze. Il primo che imbuca dopo lo spacco sceglie il gruppo; chi finisce il suo chiude con la nera. In quattro si gioca a squadre.',
+  'discipline.eightCalled': 'Americana dichiarata',
+  'discipline.eightCalledBody':
+    'Come l’americana, ma prima di ogni tiro devi dire quale pallina e in quale buca. Se entra altrove non conta.',
+  'discipline.straight': '14.1 continua',
+  'discipline.straightBody':
+    'Ogni pallina vale un punto, sempre dichiarata, fino a 25. Quando ne resta una si rifanno le altre quattordici e la serie continua.',
+
   'difficulty.title': 'Chi gioca',
   'difficulty.easy': 'Facile',
   'difficulty.medium': 'Medio',
@@ -150,6 +177,7 @@ export const it = {
   'newGame.freeBody':
     'Castello completo, 15 palline. Un punto per pallina imbucata, e chi imbuca continua a tirare. Bianca in buca o nessuna pallina colpita costa un punto e passa il turno.',
   'newGame.opponents': 'Avversari',
+  'newGame.players': 'Giocatori',
   'newGame.cpuHint': {
     one: 'Un avversario controllato dal computer.',
     other: '{count} avversari controllati dal computer.',
@@ -239,6 +267,9 @@ export const it = {
 
   // ----------------------------------------------------------------- results
   'result.winner': 'Vince {name}',
+  'result.winners': 'Vincono {names}',
+  'result.won': 'Vince',
+  'result.lost': 'Perde',
   'result.draw': 'Pareggio',
   'result.points': {
     one: '{count} punto',
@@ -261,6 +292,28 @@ export const it = {
   'rules.foulPenalty': 'Fallo: {reason} (−{count})',
   'rules.turnTo': 'Turno a {name}',
   'rules.keepShooting': 'Continui tu',
+
+  // ------------------------------------------------------------- 8-ball
+  'rules.foulEightFirst': 'Hai colpito la nera per prima',
+  'rules.foulWrongGroup': 'Hai colpito una pallina avversaria per prima',
+  'rules.eightWon': '{name} chiude con la nera',
+  'rules.eightLost': '{name} imbuca la nera in anticipo',
+  'rules.tookSolids': '{name} prende i pieni',
+  'rules.tookStripes': '{name} prende le mezze',
+  'rules.potted': '{name} imbuca',
+  'rules.pottedMany': '{name} imbuca {count} palline',
+  'rules.foulTurnOver': 'Fallo: {reason}',
+
+  // -------------------------------------------------------------- 14.1
+  'rules.rerack': 'Si rifanno le quattordici',
+  'rules.rerackFull': 'Tavolo vuoto: castello completo',
+  'rules.solids': 'Pieni',
+  'rules.stripes': 'Mezze',
+  'rules.open': 'Aperto',
+  'rules.runOf': {
+    one: 'Serie di {count}',
+    other: 'Serie di {count}',
+  },
   'rules.winsWith': 'Vince {name} con {count} punti',
   'rules.drawAt': 'Pareggio a {count} punti',
   'rules.resumed': 'Partita ripresa',

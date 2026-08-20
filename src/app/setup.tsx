@@ -16,7 +16,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BallsIcon, ClothIcon, PocketIcon } from '@/components/ui/icons';
+import { BallsIcon, ClothIcon, CueIcon, PocketIcon } from '@/components/ui/icons';
 import { LuxeFonts } from '@/components/ui/luxe';
 import { ScreenHeader } from '@/components/ui/screen';
 import { BALL_SETS, ballSetById, colorForBallIn } from '@/constants/ball-sets';
@@ -24,6 +24,7 @@ import { CLOTH_OPTIONS, clothById, Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { locationById, LOCATIONS } from '@/game/render/locations';
+import { GameModeKind, MODE_LABELS } from '@/game/rules/types';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -153,8 +154,16 @@ export default function SetupScreen() {
   const ballSetId = useSettings((s) => s.ballSetId);
   const setBallSet = useSettings((s) => s.setBallSet);
 
-  const players = useSession((s) => s.free?.players.length ?? 2);
-  const startFree = useSession((s) => s.startFree);
+  const players = useSession((s) => s.standings.length || 2);
+  const startGame = useSession((s) => s.startGame);
+  /**
+   * Which rules the game before this screen was set up under.
+   *
+   * Restarting here has to keep them: arriving at an eight-ball table and being
+   * handed a free-play game would silently discard the choice made two screens
+   * back.
+   */
+  const kind = useSession((s) => s.match?.kind ?? GameModeKind.FREE);
   /**
    * Who is already sitting at the table.
    *
@@ -164,7 +173,7 @@ export default function SetupScreen() {
    * the computer arrived at the table as a game between people, and no machine
    * ever took a turn because there was no machine.
    */
-  const seats = useSession((s) => s.free?.players);
+  const seats = useSession((s) => s.match?.state.players);
 
   const begin = () => {
     playTap('confirm');
@@ -177,7 +186,7 @@ export default function SetupScreen() {
 
     // Restarted here rather than on the previous screen, so the table is built
     // with the cloth and room chosen on this one.
-    startFree(players, names, cpus);
+    startGame(kind, players, names, cpus);
     // Through the pause rather than straight to the table: the world is built
     // here, so the loading screen has a game to hold while it holds the quiet.
     router.replace('/loading');
@@ -298,7 +307,19 @@ export default function SetupScreen() {
           accessibilityRole="button"
           onPress={begin}
           style={({ pressed }) => [styles.go, pressed && styles.goPressed]}>
-          <Text style={styles.goLabel}>{t('setup.start')}</Text>
+          <View style={styles.goIcon}>
+            <CueIcon size={24} color={Luxe.ink} />
+          </View>
+
+          <View style={styles.goText}>
+            <Text style={styles.goLabel}>{t('setup.start')}</Text>
+            {/* Which game is about to start — the last chance to notice it is not
+                the one you meant, three screens after choosing it. */}
+            <Text style={styles.goHint} numberOfLines={1}>
+              {t(MODE_LABELS[kind])} · {t('newGame.players')} {players}
+            </Text>
+          </View>
+
           <Text style={styles.goChevron}>{'›'}</Text>
         </Pressable>
       </View>
@@ -552,11 +573,28 @@ const styles = StyleSheet.create({
   go: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+    padding: Spacing.three,
     borderRadius: 8,
     backgroundColor: Luxe.gold,
+  },
+  /** The cue in a darker inset, so it reads as set into the bar. */
+  goIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: 'rgba(8, 9, 11, 0.14)',
+  },
+  goText: {
+    flex: 1,
+    gap: 2,
+  },
+  goHint: {
+    color: 'rgba(8, 9, 11, 0.68)',
+    fontSize: 12,
+    lineHeight: 16,
   },
   goPressed: {
     backgroundColor: '#b8985a',
@@ -564,9 +602,9 @@ const styles = StyleSheet.create({
   goLabel: {
     // Ink on gold, not gold on black: a filled button carries dark type.
     color: Luxe.ink,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 2.6,
+    letterSpacing: 2.2,
     textTransform: 'uppercase',
     fontFamily: LuxeFonts.sans,
   },
@@ -580,8 +618,8 @@ const styles = StyleSheet.create({
    */
   goChevron: {
     color: 'rgba(8, 9, 11, 0.75)',
-    fontSize: 20,
-    lineHeight: 22,
-    marginTop: -2,
+    fontSize: 26,
+    lineHeight: 28,
+    marginTop: -3,
   },
 });

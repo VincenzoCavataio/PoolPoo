@@ -399,6 +399,69 @@ export class World {
     return returned;
   }
 
+  /**
+   * Puts the pocketed object balls back in a rack, leaving the table as it is.
+   *
+   * Straight pool's defining rule: when the table runs down to one ball, the
+   * other fourteen go back up and play continues from wherever the cue ball and
+   * that last ball are lying. So this cannot rebuild the world — the two balls
+   * still on the cloth have to keep their positions, which is the whole point.
+   *
+   * `keep` names the balls to leave alone. Everything else that is off the table
+   * comes back, filling the rack from the apex, and the triangle is placed with
+   * the same geometry `rack` uses so the two look identical.
+   *
+   * Returns what came back, for the caller to report.
+   */
+  rerack(keep: number[] = []): number[] {
+    const spacing = BALL_DIAMETER * 1.002;
+    const rowStep = spacing * Math.sqrt(3) * 0.5;
+    const foot = footSpot(this.table);
+    const rows = [[1], [2, 9], [10, 8, 3], [11, 4, 12, 5], [13, 6, 14, 15, 7]];
+
+    /*
+     * The rack's slots, in the order they get filled.
+     *
+     * Positions rather than numbers: which ball goes where does not matter in
+     * 14.1 — they are all worth one — so whatever is off the table drops into
+     * the next free slot from the apex back.
+     */
+    const slots: Vec2[] = [];
+    rows.forEach((row, r) => {
+      row.forEach((_, i) => {
+        slots.push({
+          x: foot.x + r * rowStep,
+          y: (i - (row.length - 1) / 2) * spacing,
+        });
+      });
+    });
+
+    const returning = this.balls.filter(
+      (b) => b.number !== 0 && !keep.includes(b.number) && (b.pocketed || b.offTable),
+    );
+
+    const returned: number[] = [];
+    returning.forEach((ball, index) => {
+      const slot = slots[index];
+      if (!slot) return;
+      ball.p.x = slot.x;
+      ball.p.y = slot.y;
+      ball.z = 0;
+      ball.vz = 0;
+      ball.v.x = 0;
+      ball.v.y = 0;
+      ball.w.x = 0;
+      ball.w.y = 0;
+      ball.w.z = 0;
+      ball.pocketed = false;
+      ball.pocketedIn = null;
+      ball.offTable = false;
+      returned.push(ball.number);
+    });
+
+    return returned;
+  }
+
   settle(): void {
     for (const b of this.balls) {
       b.v.x = 0;

@@ -201,6 +201,238 @@ export function BallsIcon({ size = 24, color = Luxe.text }: IconProps) {
   );
 }
 
+/**
+ * One icon per discipline, each drawn from what the game is actually about.
+ *
+ * Not four variations on a billiard ball. The point of these is to tell four
+ * games apart at a glance in a list, so each picks the one thing that makes its
+ * game different from the other three: free play counts, eight-ball divides the
+ * table in two, the called game names a pocket, straight pool racks again.
+ *
+ * All four are built from the same vocabulary of circles and bars as the rest of
+ * this file, at the same weight, so they read as a set.
+ */
+
+/** Free play: a scattered table. Every ball in play, none of them special. */
+export function FreePlayIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.26;
+  // Placed by hand rather than on a grid: the whole idea is that nothing is
+  // arranged, and an even spread would read as a formation.
+  const spots = [
+    { left: 0.04, top: 0.1 },
+    { left: 0.46, top: 0.02 },
+    { left: 0.7, top: 0.42 },
+    { left: 0.2, top: 0.52 },
+    { left: 0.56, top: 0.68 },
+  ];
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      {spots.map((spot, index) => (
+        <View
+          key={index}
+          style={{
+            position: 'absolute',
+            left: spot.left * size,
+            top: spot.top * size,
+            width: ball,
+            height: ball,
+            borderRadius: ball / 2,
+            // The last one hollow, so the group reads as mixed rather than as
+            // five of the same thing.
+            backgroundColor: index === 4 ? 'transparent' : color,
+            borderWidth: index === 4 ? 1.5 : 0,
+            borderColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Eight-ball: a solid and a stripe, with the black between them.
+ *
+ * The two groups and the ball that ends the game, which is the whole of what
+ * makes this game itself.
+ */
+export function EightBallIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.36;
+  const black = size * 0.3;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.03 }}>
+        {/* Solid. */}
+        <View
+          style={{
+            width: ball,
+            height: ball,
+            borderRadius: ball / 2,
+            backgroundColor: color,
+          }}
+        />
+
+        {/* The black, smaller and ringed: the one they are both playing for. */}
+        <View
+          style={{
+            width: black,
+            height: black,
+            borderRadius: black / 2,
+            borderWidth: 1.5,
+            borderColor: color,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <View
+            style={{
+              width: black * 0.34,
+              height: black * 0.34,
+              borderRadius: black * 0.17,
+              backgroundColor: color,
+            }}
+          />
+        </View>
+
+        {/* Stripe: a hollow ball with a band across its middle. */}
+        <View
+          style={{
+            width: ball,
+            height: ball,
+            borderRadius: ball / 2,
+            borderWidth: 1.5,
+            borderColor: color,
+            overflow: 'hidden',
+            justifyContent: 'center',
+          }}>
+          <View style={{ height: ball * 0.3, backgroundColor: color }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The called game: a ball, an arrow, a pocket.
+ *
+ * Saying where it is going before you send it, which is the one thing this adds
+ * to eight-ball — so the icon is that sentence, drawn.
+ */
+export function CalledIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.28;
+  const pocket = size * 0.34;
+  const weight = Math.max(1.5, size * 0.07);
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.06 }}>
+        <View
+          style={{
+            width: ball,
+            height: ball,
+            borderRadius: ball / 2,
+            backgroundColor: color,
+          }}
+        />
+
+        {/* The shaft and its head, the head built from two short bars meeting. */}
+        <View style={{ width: size * 0.2, height: ball, justifyContent: 'center' }}>
+          <View style={{ height: weight, borderRadius: weight / 2, backgroundColor: color }} />
+          <View
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: ball / 2 - weight / 2 - size * 0.055,
+              width: size * 0.11,
+              height: weight,
+              borderRadius: weight / 2,
+              backgroundColor: color,
+              transform: [{ rotate: '40deg' }],
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: ball / 2 - weight / 2 + size * 0.055,
+              width: size * 0.11,
+              height: weight,
+              borderRadius: weight / 2,
+              backgroundColor: color,
+              transform: [{ rotate: '-40deg' }],
+            }}
+          />
+        </View>
+
+        {/* The pocket: an open mouth, not a filled disc, so it reads as a hole. */}
+        <View
+          style={{
+            width: pocket,
+            height: pocket,
+            borderRadius: pocket / 2,
+            borderWidth: weight,
+            borderColor: color,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Straight pool: a triangle with an arrow curling back into it.
+ *
+ * The re-rack, which is what separates 14.1 from any other game where balls are
+ * worth a point each.
+ */
+export function StraightPoolIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.2;
+  const weight = Math.max(1.5, size * 0.07);
+  const rows = [1, 2, 3];
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      {/* The rack, apex up, sitting low so the arrow has room above it. */}
+      <View style={{ marginTop: size * 0.16, gap: -ball * 0.06 }}>
+        {rows.map((count, r) => (
+          <View key={r} style={{ flexDirection: 'row', justifyContent: 'center', gap: -ball * 0.06 }}>
+            {Array.from({ length: count }, (_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: ball,
+                  height: ball,
+                  borderRadius: ball / 2,
+                  backgroundColor: color,
+                }}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
+
+      {/*
+        The one that goes back.
+
+        A hollow ball above the apex with a short bar under it: the ball that was
+        potted, on its way to being racked again.
+      */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: size / 2 - ball * 0.6,
+          width: ball * 1.2,
+          height: ball * 1.2,
+          borderRadius: ball * 0.6,
+          borderWidth: weight * 0.8,
+          borderColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
 /** A globe, for language: an outline with two lines of latitude. */
 export function GlobeIcon({ size = 24, color = Luxe.text }: IconProps) {
   const d = size * 0.72;
