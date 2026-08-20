@@ -36,7 +36,12 @@ import { playBallast, playSwitch } from '@/game/audio/sfx';
 import { createTable } from '@/game/core/table';
 import { useRoomLight } from '@/store/room-light';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '@/game/render/ball-numbers';
-import { SPOT_RADIUS } from '@/game/render/coords';
+import { BALL_HEIGHT, sceneHeading, sceneX, sceneZ, SPOT_RADIUS } from '@/game/render/coords';
+import { placeCues } from '@/components/ui/cue-placement';
+import type { Table } from '@/game/core/table';
+import { BALL_RADIUS } from '@/game/core/constants';
+import { colorForBall } from '@/game/core/ball';
+import { useBackdropLayout } from '@/store/backdrop-layout';
 import { TableMesh } from '@/game/render/table-mesh';
 
 interface Shot {
@@ -237,7 +242,55 @@ const CUE_BANDS: [number, string][] = [
   [1.415, '#241d17'], // the bumper
 ];
 
-function RestingCue() {
+/**
+ * The cues on the cloth, one per player.
+ *
+ * Both halves of this were fixed before: one cue, at one transform picked by eye
+ * against the four balls that used to be the only thing on the table. Neither
+ * survives real positions coming through from a save — the pose lands in the
+ * pack as often as not, and one stick on a table set for four is wrong about who
+ * is playing.
+ *
+ * `placeCues` searches for poses that clear the balls, the rails and each other,
+ * and returns fewer than asked for when the cloth is too crowded to fit them.
+ * Whatever it returns is what gets drawn, including nothing.
+ */
+function RestingCues({ table }: { table: Table }) {
+  const layout = useBackdropLayout((s) => s.layout);
+  const players = useBackdropLayout((s) => s.players);
+
+  const poses = useMemo(() => {
+    // With no game on, the table is idle: one cue put down by whoever was last
+    // here, laid against the balls that are actually on the cloth.
+    const balls = layout ?? IDLE_SCATTER.map((b) => ({ number: b.number, x: -b.z, y: b.x }));
+    return placeCues(Math.max(1, players), table, balls);
+  }, [layout, players, table]);
+
+  const geometry = useCueGeometry();
+
+  return (
+    <group>
+      {poses.map((pose, index) => (
+        <group
+          key={index}
+          position={[sceneX(pose.centre), CUE_REST_HEIGHT, sceneZ(pose.centre)]}
+          // The lathe runs along local +y, so it is tipped flat first and then
+          // turned to its heading. `sceneHeading` is the same conversion the
+          // game uses to point a cue down an aim line.
+          rotation={[Math.PI / 2, 0, -sceneHeading(pose.angle)]}>
+          <mesh geometry={geometry}>
+            <meshPhysicalMaterial vertexColors roughness={0.36} clearcoat={0.55} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** How high a cue lying on its side floats above the cloth: its own thickness. */
+const CUE_REST_HEIGHT = 0.0134;
+
+function useCueGeometry() {
   /**
    * A cue as one continuous piece of wood, tapering the whole way.
    *
@@ -356,13 +409,7 @@ function RestingCue() {
     return lathe;
   }, []);
 
-  return (
-    <group position={[0.2, 0.03, 0.05]} rotation={[Math.PI / 2, 0, 0.34]}>
-      <mesh geometry={geometry}>
-        <meshPhysicalMaterial vertexColors roughness={0.36} clearcoat={0.55} />
-      </mesh>
-    </group>
-  );
+  return geometry;
 }
 
 /**
@@ -500,41 +547,75 @@ function createBackdropBallMaterial(atlas: THREE.Texture, colour: string, number
  * from every angle this scene is filmed from. Each leans by a different amount,
  * so they do not look stamped from one mould.
  */
+/**
+ * Four balls left where a shot finished, for a table nobody is playing on.
+ *
+ * Placed by hand rather than simulated: this is scenery for an idle room, and
+ * what it has to look like is plausible, not correct.
+ */
+const IDLE_SCATTER = [
+  { number: 3, x: -0.42, z: -0.62, lean: 0.6 },
+  { number: 1, x: -0.28, z: -0.48, lean: -1.1 },
+  { number: 8, x: 0.36, z: -0.71, lean: 0.25 },
+  // The cue ball, set apart from the other three the way it ends up after a
+  // shot rather than tucked in with them.
+  { number: 0, x: 0.12, z: -0.28, lean: 0.9 },
+] as const;
+
+/**
+ * The balls on the table under the menu.
+ *
+ * Two states, and which one shows is the answer to a question the player is
+ * about to ask. With a game in progress the real positions come through from the
+ * save, so the table behind "Continua" *is* the frame waiting to be resumed —
+ * the button and the room agree, and how the game stands is legible before
+ * anything is tapped. With no game, the hand-placed scatter: an idle table with
+ * a few balls left on it.
+ *
+ * Colours come from the solver's own table rather than being written again here.
+ * A menu that showed the four ball in a different orange from the game is the
+ * kind of drift that only gets noticed once it is everywhere.
+ */
 function StrayBalls() {
   const atlas = useMemo(createNumberAtlas, []);
+  const layout = useBackdropLayout((s) => s.layout);
 
-  const balls = useMemo(
-    () =>
-      (
-        [
-          [-0.42, -0.62, '#c81919', 3, 0.6],
-          [-0.28, -0.48, '#c8a519', 1, -1.1],
-          [0.36, -0.71, '#141414', 8, 0.25],
-          // The cue ball, set apart from the other three the way it ends up
-          // after a shot rather than tucked in with them.
-          [0.12, -0.28, '#f4f1e8', 0, 0.9],
-        ] as const
-      ).map(([x, z, colour, number, lean]) => ({
-        x,
-        z,
-        number,
-        lean,
-        material: createBackdropBallMaterial(atlas, colour, number),
-      })),
-    [atlas],
-  );
+  const balls = useMemo(() => {
+    if (layout && layout.length > 0) {
+      return layout.map((ball) => ({
+        key: ball.number,
+        // Through the shared mapping, so the menu's table and the game's agree
+        // on which end is which.
+        x: sceneX({ x: ball.x, y: ball.y }),
+        z: sceneZ({ x: ball.x, y: ball.y }),
+        // A fixed tilt per number rather than a random one: this is rebuilt
+        // whenever the save is re-read, and balls that reshuffle their spin on
+        // every visit to the menu would twitch.
+        lean: ball.number * 1.7,
+        material: createBackdropBallMaterial(atlas, colorForBall(ball.number), ball.number),
+      }));
+    }
+
+    return IDLE_SCATTER.map((ball) => ({
+      key: ball.number,
+      x: ball.x,
+      z: ball.z,
+      lean: ball.lean,
+      material: createBackdropBallMaterial(atlas, colorForBall(ball.number), ball.number),
+    }));
+  }, [atlas, layout]);
 
   return (
     <group>
       {balls.map((ball) => (
         <mesh
-          key={ball.number}
-          position={[ball.x, 0.0286, ball.z]}
+          key={ball.key}
+          position={[ball.x, BALL_HEIGHT, ball.z]}
           rotation={[0.5, ball.lean, 0]}
           material={ball.material}>
           {/* More segments than before: the badge is a shape read off the
               surface, and a coarse sphere gives it a visibly polygonal edge. */}
-          <sphereGeometry args={[0.0286, 20, 14]} />
+          <sphereGeometry args={[BALL_RADIUS, 20, 14]} />
         </mesh>
       ))}
     </group>
@@ -936,7 +1017,7 @@ function BackdropScene({ shot, armed }: { shot: Shot; armed: boolean }) {
       <CeilingLamp armed={armed} />
 
       <TableMesh table={table} />
-      <RestingCue />
+      <RestingCues table={table} />
       <StrayBalls />
 
       <DriftingCamera shot={shot} />

@@ -20,6 +20,7 @@ import { mergeShapes } from '../merge';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
 import { propFootprints, propParts } from '../props';
+import { CUE_LENGTH, placeCues } from '../../../components/ui/cue-placement';
 
 const CELL = 64;
 const SIZE = CELL * NUMBER_ATLAS_GRID;
@@ -922,6 +923,129 @@ suite('frame rate', () => {
     assertEqual(byId.low.fps, 30, 'low should run at 30');
     assertEqual(byId.medium.fps, 60, 'medium should run at 60');
     assertEqual(byId.high.fps, 60, 'high should run at 60');
+  });
+});
+
+
+/**
+ * Where the menu's cues are laid.
+ *
+ * The rule is easy to state and easy to get subtly wrong: a cue may not touch a
+ * ball, may not overhang a rail, may not cross another cue, and if none of that
+ * can be satisfied it must not be drawn at all. Each of those is a test.
+ */
+suite('cue placement', () => {
+  const table = createTable();
+
+  /** Distance from a point to a segment, independently of the module's own maths. */
+  const gap = (
+    px: number,
+    py: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+  ): number => {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const l2 = abx * abx + aby * aby;
+    let s = ((px - ax) * abx + (py - ay) * aby) / l2;
+    s = s < 0 ? 0 : s > 1 ? 1 : s;
+    return Math.hypot(px - (ax + abx * s), py - (ay + aby * s));
+  };
+
+  const ends = (pose: { centre: { x: number; y: number }; angle: number }) => {
+    const half = CUE_LENGTH / 2;
+    return {
+      ax: pose.centre.x - Math.cos(pose.angle) * half,
+      ay: pose.centre.y - Math.sin(pose.angle) * half,
+      bx: pose.centre.x + Math.cos(pose.angle) * half,
+      by: pose.centre.y + Math.sin(pose.angle) * half,
+    };
+  };
+
+  test('one cue per player on an empty table', () => {
+    for (let players = 1; players <= 4; players++) {
+      assertEqual(placeCues(players, table, []).length, players, `${players} players`);
+    }
+  });
+
+  test('every cue stays inside the rails', () => {
+    const poses = placeCues(4, table, []);
+    assert(poses.length > 0, 'expected at least one cue');
+
+    for (const pose of poses) {
+      const { ax, ay, bx, by } = ends(pose);
+      for (const [x, y] of [
+        [ax, ay],
+        [bx, by],
+      ]) {
+        assert(Math.abs(x) <= table.halfLength, `end at x=${x.toFixed(3)} is past the cushion`);
+        assert(Math.abs(y) <= table.halfWidth, `end at y=${y.toFixed(3)} is past the cushion`);
+      }
+    }
+  });
+
+  test('no cue lies on a ball', () => {
+    // A full rack plus the cue ball: the crowded case the fixed pose failed on.
+    const balls = [{ number: 0, x: -0.635, y: 0 }];
+    let n = 1;
+    for (let row = 0; row < 5; row++) {
+      for (let seat = 0; seat <= row; seat++) {
+        balls.push({
+          number: n++,
+          x: 0.635 + row * BALL_RADIUS * 1.74,
+          y: (seat - row / 2) * BALL_RADIUS * 2.02,
+        });
+      }
+    }
+
+    const poses = placeCues(4, table, balls);
+    for (const pose of poses) {
+      const { ax, ay, bx, by } = ends(pose);
+      for (const ball of balls) {
+        assert(
+          gap(ball.x, ball.y, ax, ay, bx, by) > BALL_RADIUS,
+          `cue passes through ball ${ball.number}`,
+        );
+      }
+    }
+  });
+
+  test('cues do not lie across each other', () => {
+    const poses = placeCues(4, table, []);
+    for (let i = 0; i < poses.length; i++) {
+      for (let j = i + 1; j < poses.length; j++) {
+        const a = ends(poses[i]);
+        const b = ends(poses[j]);
+        const closest = Math.min(
+          gap(a.ax, a.ay, b.ax, b.ay, b.bx, b.by),
+          gap(a.bx, a.by, b.ax, b.ay, b.bx, b.by),
+          gap(b.ax, b.ay, a.ax, a.ay, a.bx, a.by),
+          gap(b.bx, b.by, a.ax, a.ay, a.bx, a.by),
+        );
+        assert(closest > 0.02, `cues ${i} and ${j} are ${closest.toFixed(3)}m apart`);
+      }
+    }
+  });
+
+  test('a table with no room gets no cue rather than a bad one', () => {
+    /*
+     * Balls on a lattice fine enough that no 1.45m line can thread it.
+     *
+     * Not a realistic frame — it is the case the fallback exists for, and the
+     * only way to check that "draw nothing" actually happens is to make it the
+     * only correct answer.
+     */
+    const wall: { number: number; x: number; y: number }[] = [];
+    let n = 0;
+    for (let x = -1.2; x <= 1.2; x += 0.1) {
+      for (let y = -0.6; y <= 0.6; y += 0.1) {
+        wall.push({ number: n++, x, y });
+      }
+    }
+
+    assertEqual(placeCues(2, table, wall).length, 0, 'no cue should be placed');
   });
 });
 

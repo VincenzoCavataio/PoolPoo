@@ -38,6 +38,7 @@ import { NamePrompt } from '@/components/ui/name-prompt';
 import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
 import { GlowRule, Heading, LuxeFonts } from '@/components/ui/luxe';
 import { onRoomLit } from '@/components/ui/table-backdrop';
+import { useBackdropLayout } from '@/store/backdrop-layout';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
@@ -140,6 +141,8 @@ export default function MenuScreen() {
     opacity: 1 - stowed.value,
   }));
 
+  const setBackdropLayout = useBackdropLayout((s) => s.setLayout);
+
   const [save, setSave] = useState<SavedGame | null>(null);
   const [checked, setChecked] = useState(false);
 
@@ -151,11 +154,33 @@ export default function MenuScreen() {
         if (!active) return;
         setSave(loaded);
         setChecked(true);
+
+        /*
+         * Hand the positions to the room behind the menu.
+         *
+         * The table under these panels is the one you left, not a decorative
+         * scatter — so "Continua" has something to point at, and the state of
+         * the frame is readable before you have tapped anything. With no game in
+         * progress this clears back to `null` and the backdrop returns to its
+         * few stray balls, which is what an idle table looks like.
+         *
+         * Balls out of play are dropped rather than sent through: the backdrop
+         * draws no pockets to fall into and nowhere off-table to sit, so a
+         * potted ball would appear parked on the cloth where it was sunk.
+         */
+        setBackdropLayout(
+          loaded
+            ? loaded.world.balls
+                .filter((ball) => !ball.pocketed && !ball.offTable)
+                .map((ball) => ({ number: ball.number, x: ball.p.x, y: ball.p.y }))
+            : null,
+          loaded?.free?.players.length ?? 0,
+        );
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [setBackdropLayout]),
   );
 
   const onContinue = () => {
