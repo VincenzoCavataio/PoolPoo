@@ -141,8 +141,11 @@ export default function NewGameScreen() {
 
             <View style={styles.goText}>
               <Text style={styles.goLabel}>{t('newGame.next')}</Text>
+              {/* The same word the prompt above uses. Against the computer this
+                  count is opponents, not seats, and saying "players" here would
+                  contradict the line the player just read. */}
               <Text style={styles.goHint} numberOfLines={1}>
-                {t('newGame.players')} · {players}
+                {mode === 'cpu' ? t('newGame.opponents') : t('newGame.players')} · {players}
               </Text>
             </View>
 
@@ -165,7 +168,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(4, 5, 5, 0.95)',
   },
   /**
    * The gap under the start button, which is what lifts it off the floor.
@@ -294,7 +296,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     backgroundColor: 'rgba(201, 169, 98, 0.08)',
   },
   goText: {

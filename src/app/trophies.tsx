@@ -121,23 +121,31 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     marginTop: Spacing.one,
   },
+  /**
+   * A plaque rather than a checkbox.
+   *
+   * Square with a soft corner, not a circle: a round tick is what a form uses to
+   * say "done", and a trophy is not a completed task. The earned one is lit from
+   * within and rimmed in gold — a plate screwed to a board — while a locked one
+   * is the same plate with nothing on it yet.
+   */
   badge: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 17,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   badgeEarned: {
-    borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: 'rgba(201, 169, 98, 0.12)',
+    borderColor: 'rgba(201, 169, 98, 0.55)',
+    backgroundColor: 'rgba(201, 169, 98, 0.14)',
   },
   badgeMark: {
     color: Luxe.textFaint,
-    fontSize: 15,
+    fontSize: 16,
   },
   badgeMarkEarned: {
     color: Luxe.gold,

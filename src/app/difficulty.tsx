@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(4, 5, 5, 0.95)',
   },
   inner: {
     flex: 1,
@@ -151,8 +150,8 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    backgroundColor: '#0d1210',
+    borderColor: 'rgba(201, 169, 98, 0.28)',
+    backgroundColor: 'rgba(6, 9, 8, 0.92)',
   },
   seatLabel: {
     color: Luxe.text,
@@ -171,7 +170,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   pillSelected: {
     borderColor: 'rgba(201, 169, 98, 0.45)',

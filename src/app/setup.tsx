@@ -312,7 +312,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(31, 35, 34, 0.86)',
   },
   inner: {
     flex: 1,
@@ -335,7 +334,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   previewRail: {
     borderWidth: 8,
@@ -425,8 +424,8 @@ const styles = StyleSheet.create({
   picker: {
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    backgroundColor: '#0d1210',
+    borderColor: 'rgba(201, 169, 98, 0.28)',
+    backgroundColor: 'rgba(6, 9, 8, 0.92)',
     overflow: 'hidden',
   },
   /**

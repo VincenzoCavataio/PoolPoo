@@ -15,6 +15,7 @@
 
 import { create } from 'zustand';
 
+import { setMenuMusicMuffled } from '@/game/audio/menu-music';
 import { useTrophies } from '@/store/trophies';
 
 interface RoomLightState {
@@ -27,8 +28,21 @@ export const useRoomLight = create<RoomLightState>((set) => ({
   on: true,
   toggle: () =>
     set((state) => {
+      const next = !state.on;
+
       // Turning the room dark is the kind of thing nobody is told to try.
       if (state.on) useTrophies.getState().award('lights-out');
-      return { on: !state.on };
+
+      /*
+       * The music goes with the light.
+       *
+       * A switch that only changes what you can see is a light switch; one that
+       * also changes what you can hear is the room itself answering. The theme
+       * drops and dulls rather than stopping — it carries on somewhere else,
+       * the way it does through a door left ajar.
+       */
+      setMenuMusicMuffled(next === false);
+
+      return { on: next };
     }),
 }));

@@ -15,7 +15,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/ui/icons';
-import { Heading, Overline } from '@/components/ui/luxe';
+import { GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
@@ -58,7 +58,18 @@ export function ScreenHeader({
       </View>
 
       <View style={styles.headerText}>
-        <Heading size={22}>{title}</Heading>
+        <Heading size={26}>{title}</Heading>
+        {/*
+          A lit rule under the title rather than a box around it.
+          
+          The heading used to sit in its own bordered panel, which is what a
+          settings app does: it needs the box because it has nothing else to
+          separate a title from a list. Here the room behind is doing that, so
+          the box was only adding a rectangle — and a rectangle round a title is
+          the single most office-looking thing a screen can wear. A gold rule
+          says "heading" and lets the room show either side of it.
+        */}
+        <GlowRule width={44} color={Luxe.gold} />
         {subtitle ? <Overline>{subtitle}</Overline> : null}
       </View>
 
@@ -73,6 +84,17 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
 
   return (
     <View style={styles.root}>
+      {/*
+        The lamp's glow, up where the title is.
+        
+        The room is behind these screens rather than under a veil, and this is
+        what stops the top of the page being merely dark: the same halo the
+        splash uses, sitting behind the heading so the screen has a source of
+        light rather than an even wash. It is the cheapest thing here that makes
+        a page read as somewhere rather than as a document.
+      */}
+      <SoftHalo size={520} style={[styles.halo, { top: insets.top - 180 }]} />
+
       <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
         {/* Same header as every other screen: a drawn chevron and a serif
             title, with no rule under it. The rule was there to separate the
@@ -117,42 +139,14 @@ export function Card({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  /**
-   * A floor under these screens, rather than the drifting table.
-   *
-   * The backdrop is mounted at the root and every route is transparent, which is
-   * right for the menu — the gap between its panels is the largest view of the
-   * table anywhere in the app. It is wrong for a screen you *read*: options and
-   * trophies are long lists, and a room sliding about underneath a column of
-   * cards left them with nothing to sit on. Scrolling them felt like scrolling
-   * over a hole.
-   *
-   * A veil rather than a wall, and a *lighter* one than the cards it holds.
-   *
-   * Three things were tried before this landed. Nearly black at 94% was a wall:
-   * the room was merely rumoured behind it. Lightening the cards instead
-   * separated them and took the depth out of the screen — a card is supposed to
-   * be the dark thing. What works is the order everything else in the app uses:
-   * a lit ground with dark panels on it.
-   *
-   * The colour is a neutral grey. A green-tinted veil was tried first, on the
-   * theory that it would read as the room washed out rather than as a sheet laid
-   * over it; in practice it just looked green, and green is the cloth's colour
-   * rather than the room's. The strength is set by the worst case — with the neon lit the table underneath rises a long way,
-   * and a ground that stops separating when the light comes on is the same bug
-   * measured a different way.
-   *
-   * Darkened as far as it can go, with the card edges carrying the difference.
-   * At this depth a card's own fill is only 1.07:1 against the ground — not
-   * enough on its own — so the hairline round it is raised from 10% white to
-   * 18%. That figure is set by the *lit* case rather than the dark one: with
-   * the neon on, the ground rises and 14% fell to 1.14:1, which is the edge
-   * fading out exactly when the room brightens. At 18% it holds either way.
-   */
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(4, 5, 5, 0.95)',
+  },
+  /** Behind everything, and never in the way of a touch. */
+  halo: {
+    position: 'absolute',
+    opacity: 0.5,
   },
   inner: {
     flex: 1,
@@ -173,22 +167,25 @@ const styles = StyleSheet.create({
    * corners. The table is still seen — in the gaps between panels, which is
    * where it was always meant to show through.
    */
+  /**
+   * The title bar: a heading and a chevron, and no panel.
+   *
+   * It wore one while the screens had a veil over the room — the box was what
+   * gave the words something to sit on. With the room back, a serif title over a
+   * dark corner of it reads better than the same title in a rectangle, and the
+   * halo above is what keeps it legible. That leaves the chevron as the only
+   * thing here that needs a surface of its own.
+   */
   header: {
     flexDirection: 'row',
-    // Centred, not bottom-aligned: the three columns are a chevron, a title and
-    // a counterweight, and they sit on one line rather than on a baseline.
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    backgroundColor: '#0d1210',
+    paddingVertical: Spacing.two,
   },
   headerText: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
+    gap: Spacing.one,
   },
   /**
    * The two ends of the bar, kept the same width.
@@ -230,42 +227,27 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(201, 169, 98, 0.3)',
     backgroundColor: '#161208',
   },
+  /**
+   * A panel in the room, edged in gold.
+   *
+   * With the veil gone these sit directly on the table, and that settles what
+   * draws them: measured against an unlit table a near-black card is 1.02:1 —
+   * the fill can never separate, because both are black. It is the *edge* that
+   * makes a panel, and once the edge is doing the work it may as well be the
+   * app's own colour rather than another grey hairline.
+   *
+   * Gold at 28% holds 1.70:1 against the darkest thing behind it and turns into
+   * a lit rim when the neon comes on, which is the room lighting the furniture
+   * rather than the interface announcing itself. It is also what a rectangle
+   * needs to stop reading as a form field.
+   */
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    /**
-     * Denser than the tiles elsewhere, on purpose.
-     *
-     * A card holds paragraphs rather than a label and a line, and a moving scene
-     * showing through a block of body text is a different proposition from one
-     * showing through a heading. Still lighter than it was, so the table is
-     * visible at the edges.
-     */
-    /**
-     * Dark, and the ground behind it is what makes it read.
-     *
-     * The cards were briefly lightened to separate them from the background, and
-     * that was the wrong half of the problem: a card is meant to be dark, and
-     * lifting it took the depth out of the screen. The separation comes from the
-     * veil behind instead — the darker ground, the lighter card, in that order.
-     */
-    backgroundColor: '#0d1210',
-    /**
-     * 8, like the panels everywhere else.
-     *
-     * The radius was 4 here and 8 on every menu row, which is small enough to
-     * pass unnoticed one screen at a time and exactly the sort of thing that
-     * makes a set of screens feel assembled rather than designed.
-     */
-    borderRadius: 8,
-    padding: Spacing.three,
-    /**
-     * 16 between the things in a card, not 24.
-     *
-     * A card holds a list of settings, and at 24 the gaps grew wider than the
-     * rows themselves — the options screen came apart into floating fragments
-     * rather than reading as grouped.
-     */
+    borderWidth: 1,
+    borderColor: 'rgba(201, 169, 98, 0.28)',
+    // Darker than the room, always: the panel is a shadow the room falls on.
+    backgroundColor: 'rgba(6, 9, 8, 0.92)',
+    borderRadius: 10,
+    padding: Spacing.four,
     gap: Spacing.three,
   },
 });
