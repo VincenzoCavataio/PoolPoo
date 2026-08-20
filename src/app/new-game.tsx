@@ -24,7 +24,6 @@ import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
-import { useSession } from '@/store/session';
 
 const PLAYER_OPTIONS = [1, 2, 3, 4];
 
@@ -32,7 +31,6 @@ export default function NewGameScreen() {
   const router = useRouter();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const startFree = useSession((s) => s.startFree);
   const [players, setPlayers] = useState(2);
 
   // Carried from the mode screen. Anything else is a game between people.
@@ -51,41 +49,41 @@ export default function NewGameScreen() {
     playTap('confirm');
 
     /*
-     * Against the computer, the seats still need strengths.
+     * The seats are named on the next screen, whoever is in them.
      *
-     * The game is not started here in that case: the difficulty screen is what
-     * knows who is a machine, and starting twice would throw away its answer.
+     * The game is not started here: that screen is what knows the names — and,
+     * against the computer, who is a machine and how good — and starting twice
+     * would throw its answer away.
      */
-    if (mode === 'cpu') {
-      /*
-       * Against the computer the number chosen is the number of *opponents*.
-       *
-       * The screen counts seats when people are playing — four friends is four
-       * seats — but against machines nobody thinks of themselves as one of the
-       * entries. Picking two and getting one opponent is the bug that reading
-       * says; passing the total is what fixes it, and the seat count is one
-       * more than the choice.
-       */
-      router.push({
-        pathname: '/difficulty',
-        params: { players: String(players + 1) },
-      });
-      return;
-    }
-
-    const names = Array.from({ length: players }, (_, i) => t('rules.player', { number: i + 1 }));
-    startFree(players, names);
-    router.push('/setup');
+    /*
+     * The number chosen is the number of *opponents*, never the seats.
+     *
+     * Nobody counts themselves when asked how many they are playing against —
+     * not against machines and not against friends either. Picking two and
+     * getting one opponent is the bug that reading causes; the seat count is
+     * always one more than the choice.
+     */
+    router.push({
+      pathname: '/difficulty',
+      params: { mode, players: String(players + 1) },
+    });
   };
 
   return (
     <View style={styles.root}>
-      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <ScreenHeader title={t('newGame.title')} onBack={() => router.back()} />
+      {/* Outside the padded column, so the bar reaches both edges and runs up
+          under the status bar. */}
+      <ScreenHeader
+        title={t('newGame.title')}
+        onBack={() => router.back()}
+        topInset={insets.top}
+      />
+
+      <View style={styles.inner}>
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.centre}>
           <Text style={styles.prompt}>
-            {mode === 'cpu' ? t('newGame.opponents') : t('newGame.players')}
+            {t('newGame.opponents')}
           </Text>
 
           {/* The rack. Tapping a ball sets the count to that many. */}
@@ -114,9 +112,7 @@ export default function NewGameScreen() {
           <Text style={styles.hint}>
             {mode === 'cpu'
               ? t('newGame.cpuHint', { count: players })
-              : players === 1
-                ? t('newGame.soloHint')
-                : t('newGame.multiHint', { count: players })}
+              : t('newGame.humanHint', { count: players })}
           </Text>
         </Animated.View>
 
@@ -140,12 +136,17 @@ export default function NewGameScreen() {
             </View>
 
             <View style={styles.goText}>
-              <Text style={styles.goLabel}>{t('newGame.next')}</Text>
-              {/* The same word the prompt above uses. Against the computer this
-                  count is opponents, not seats, and saying "players" here would
-                  contradict the line the player just read. */}
+              {/* This button goes to the seats screen, not to the table — a
+                  label that names the wrong destination is worse than a vague
+                  one. */}
+              <Text style={styles.goLabel}>
+                {mode === 'cpu' ? t('newGame.nextDifficulty') : t('newGame.nextSeats')}
+              </Text>
+              {/* The same word the prompt above uses: this count is opponents,
+                  not seats, and saying "players" here would contradict the line
+                  the player just read. */}
               <Text style={styles.goHint} numberOfLines={1}>
-                {mode === 'cpu' ? t('newGame.opponents') : t('newGame.players')} · {players}
+                {t('newGame.opponents')} · {players}
               </Text>
             </View>
 
@@ -181,6 +182,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
+    // The bar above carries the safe-area inset now; this is only the gap
+    // between it and the content.
+    paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
   },
   pressed: {
@@ -273,7 +277,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: '#111716',
+    backgroundColor: '#080b0a',
     /**
      * Lifted well clear of the bottom of the screen.
      *
@@ -286,7 +290,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.six + Spacing.six,
   },
   goPressed: {
-    backgroundColor: '#1a2321',
+    backgroundColor: '#141a19',
   },
   /** The rack, small and inset — a mark on the row, not a background. */
   goIcon: {

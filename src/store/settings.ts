@@ -27,6 +27,14 @@ export const AIM_SENSITIVITY = {
 export type LanguageSetting = 'auto' | Locale;
 
 export interface SettingsState {
+  /**
+   * What to call the person playing.
+   *
+   * Empty until they have been asked, which is what the menu uses to decide
+   * whether to ask. Stored here rather than in the session because it outlives
+   * any one game — it is who you are, not who is at the table this frame.
+   */
+  playerName: string;
   language: LanguageSetting;
   clothId: string;
   ballSetId: string;
@@ -57,6 +65,7 @@ export interface SettingsState {
    */
   collisionHaptics: boolean;
 
+  setPlayerName: (value: string) => void;
   setLanguage: (value: LanguageSetting) => void;
   setCloth: (id: string) => void;
   setBallSet: (id: string) => void;
@@ -73,6 +82,8 @@ export interface SettingsState {
 }
 
 const DEFAULTS = {
+  // Empty is the signal that nobody has been asked yet.
+  playerName: '',
   language: 'auto' as LanguageSetting,
   clothId: CLOTH_OPTIONS[0].id,
   ballSetId: BALL_SETS[0].id,
@@ -92,6 +103,11 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       ...DEFAULTS,
 
+      setPlayerName: (playerName) =>
+        // Trimmed here rather than at each call site: a name that is all spaces
+        // has to read as unanswered, or the menu never asks again and every
+        // scoreboard shows a blank.
+        set({ playerName: playerName.trim().slice(0, 24) }),
       setLanguage: (language) => set({ language }),
       setCloth: (clothId) => set({ clothId }),
       setBallSet: (ballSetId) => {

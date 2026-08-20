@@ -198,8 +198,15 @@ export default function SetupScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <ScreenHeader title={t('setup.title')} onBack={() => router.back()} />
+      {/* Outside the padded column, so the bar reaches both edges and runs up
+          under the status bar. */}
+      <ScreenHeader
+        title={t('setup.title')}
+        onBack={() => router.back()}
+        topInset={insets.top}
+      />
+
+      <View style={styles.inner}>
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.stage}>
           <TablePreview locationId={locationId} clothId={clothId} ballSetId={ballSetId} />
@@ -318,6 +325,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
+    // The bar above carries the safe-area inset now; this is only the gap
+    // between it and the content.
+    paddingTop: Spacing.four,
     paddingBottom: Spacing.five,
     gap: Spacing.three,
   },
@@ -425,7 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(201, 169, 98, 0.28)',
-    backgroundColor: 'rgba(6, 9, 8, 0.92)',
+    backgroundColor: '#080b0a',
     overflow: 'hidden',
   },
   /**

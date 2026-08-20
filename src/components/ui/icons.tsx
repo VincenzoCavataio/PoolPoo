@@ -300,6 +300,77 @@ export function SoundIcon({ size = 24, color = Luxe.text }: IconProps) {
   );
 }
 
+/**
+ * Down, level, up — the three graphics presets, as a direction rather than a word.
+ *
+ * "Low / Medium / High" are already on the pills; this says the same thing in a
+ * shape, which is what lets the row be read at a glance instead of compared
+ * three times. The middle one is a bar and not a chevron on purpose: medium is
+ * not a weaker version of up, it is the absence of a direction.
+ *
+ * Built like `BackIcon` — each arm placed absolutely and then rotated, never
+ * translated after rotating, because transforms compose and a translation after
+ * a rotation runs along the rotated axis.
+ */
+export function LevelIcon({
+  direction,
+  size = 24,
+  color = Luxe.text,
+}: IconProps & { direction: 'down' | 'level' | 'up' }) {
+  const arm = size * 0.34;
+  const weight = Math.max(2, size * 0.1);
+
+  if (direction === 'level') {
+    return (
+      <View style={[styles.box, { width: size, height: size }]}>
+        <View
+          style={{
+            width: arm * 1.7,
+            height: weight,
+            borderRadius: weight / 2,
+            backgroundColor: color,
+          }}
+        />
+      </View>
+    );
+  }
+
+  // Up points the vertex at the top, so the arms fall away from it; down is the
+  // same shape mirrored.
+  const rise = direction === 'up' ? -1 : 1;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View style={{ width: arm * 1.7, height: arm }}>
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: arm / 2 - weight / 2,
+            width: arm,
+            height: weight,
+            borderRadius: weight / 2,
+            backgroundColor: color,
+            transform: [{ rotate: `${rise * 40}deg` }],
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: arm / 2 - weight / 2,
+            width: arm,
+            height: weight,
+            borderRadius: weight / 2,
+            backgroundColor: color,
+            transform: [{ rotate: `${-rise * 40}deg` }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 /** A chevron, for going back. Drawn from two bars so it keeps its weight. */
 export function BackIcon({ size = 24, color = Luxe.text }: IconProps) {
   const arm = size * 0.42;

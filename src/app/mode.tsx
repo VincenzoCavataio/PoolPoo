@@ -22,7 +22,9 @@ import { Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
 import type { MessageKey } from '@/i18n';
+import { humanNames } from '@/game/rules/player-names';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 interface Mode {
   id: 'solo' | 'cpu' | 'human';
@@ -41,6 +43,7 @@ export default function ModeScreen() {
   const router = useRouter();
   const t = useT();
   const startFree = useSession((s) => s.startFree);
+  const playerName = useSettings((s) => s.playerName);
 
   const choose = (mode: Mode['id']) => {
     playTap('confirm');
@@ -51,7 +54,7 @@ export default function ModeScreen() {
        * describe. The game is started here so the setup screen has something to
        * dress, exactly as the player-count screen does for the other two.
        */
-      startFree(1, [t('rules.player', { number: 1 })]);
+      startFree(1, humanNames(1, playerName, t));
       router.push('/setup');
       return;
     }

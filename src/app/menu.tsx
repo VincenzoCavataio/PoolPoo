@@ -18,22 +18,24 @@
  */
 
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Floating } from '@/components/ui/floating';
 import { LightSwitch } from '@/components/ui/light-switch';
+import { NamePrompt } from '@/components/ui/name-prompt';
 import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
-import { GlowRule, Heading } from '@/components/ui/luxe';
+import { GlowRule, Heading, LuxeFonts } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
-import type { Translator } from '@/i18n';
+import type { MessageKey, Translator } from '@/i18n';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 function describeSavedGame(save: SavedGame, t: Translator): string {
   const when = describeSave(save);
@@ -41,11 +43,40 @@ function describeSavedGame(save: SavedGame, t: Translator): string {
   return `${t('menu.savedFree', { count: players })}${when ? ` · ${when}` : ''}`;
 }
 
+/**
+ * Which greeting suits the hour.
+ *
+ * Four bands rather than the usual three: the small hours get their own line,
+ * because somebody opening a pool game at two in the morning is doing something
+ * a little different from somebody opening it at eight in the evening, and the
+ * app may as well notice.
+ */
+function greetingKeyFor(hour: number): MessageKey {
+  if (hour < 5) return 'greeting.night';
+  if (hour < 13) return 'greeting.morning';
+  if (hour < 18) return 'greeting.afternoon';
+  return 'greeting.evening';
+}
+
 export default function MenuScreen() {
   const router = useRouter();
   const t = useT();
   const insets = useSafeAreaInsets();
   const resume = useSession((s) => s.resume);
+
+  const playerName = useSettings((s) => s.playerName);
+
+  /**
+   * Worked out once per visit to the menu, not on every render.
+   *
+   * The hour only matters when the screen is first looked at; recomputing it as
+   * the component re-renders would be work for a string that cannot have
+   * changed, and would make the greeting flip mid-session at a band boundary.
+   */
+  const greeting = useMemo(
+    () => t(greetingKeyFor(new Date().getHours()), { name: playerName }),
+    [t, playerName],
+  );
 
   const [save, setSave] = useState<SavedGame | null>(null);
   const [checked, setChecked] = useState(false);
@@ -76,6 +107,9 @@ export default function MenuScreen() {
 
   return (
     <View style={styles.root}>
+      {/* Over everything, and only on a first visit. */}
+      <NamePrompt />
+
       <View
         style={[
           styles.inner,
@@ -103,6 +137,21 @@ export default function MenuScreen() {
             <LightSwitch />
           </Floating>
         </Animated.View>
+
+        {/*
+          Who is at the door.
+
+          Only once there is a name to use — greeting a stranger by a
+          placeholder is worse than not greeting them. It sits in a band of its
+          own under the wordmark rather than as a fourth line inside it: the
+          title says what the place is called, this says who just walked in, and
+          they are not the same sentence.
+        */}
+        {playerName ? (
+          <Animated.View entering={FadeInDown.delay(140).duration(320)} style={styles.welcome}>
+            <Text style={styles.greeting}>{greeting}</Text>
+          </Animated.View>
+        ) : null}
 
         {/* The view of the table. Nothing is drawn here on purpose. */}
         <View style={styles.window} />
@@ -224,6 +273,23 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: Spacing.two,
+  },
+  /**
+   * The greeting, sized like part of the composition.
+   *
+   * It was 12pt — smaller than the subtitle above it, which made the one line
+   * on the screen addressed to the player by name the least visible thing on it.
+   * At 26 in the serif face it answers the wordmark instead of hiding under it:
+   * two weights of the same voice, the house and then the guest.
+   */
+  welcome: {
+    marginTop: Spacing.four,
+  },
+  greeting: {
+    color: Luxe.text,
+    fontSize: 26,
+    lineHeight: 32,
+    fontFamily: LuxeFonts.serif,
   },
   subtitle: {
     color: Luxe.textMuted,

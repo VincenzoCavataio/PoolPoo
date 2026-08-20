@@ -1,19 +1,22 @@
 /**
- * How strong each computer is.
+ * Who is at the table, and how good the machines are.
  *
- * One row per machine, because the point of playing several is that they are not
- * all the same — a hard one to beat and two easy ones to stay ahead of is a
- * different evening from three mediums, and asking once for all of them would
- * throw that away.
+ * One panel per seat, because the point of playing several computers is that
+ * they need not be alike — a hard one to beat and two easy ones to stay ahead of
+ * is a different evening from three mediums, and asking once for all of them
+ * would throw that away.
+ *
+ * Every seat can be renamed, the player's included. A scoreboard reading
+ * "Computer 2 beat Player 1" is a scoreboard nobody is in; names are most of
+ * what makes a frame feel like it happened to somebody.
  *
  * The player always takes the first seat. That is not arbitrary: whoever breaks
- * has an advantage, and giving it to the person is the friendlier default. The
- * computers fill the seats after them.
+ * has an advantage, and giving it to the person is the friendlier default.
  */
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +28,7 @@ import { playTap } from '@/game/audio/sfx';
 import type { MessageKey } from '@/i18n';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 const LEVELS: { id: Difficulty; labelKey: MessageKey }[] = [
   { id: 'easy', labelKey: 'difficulty.easy' },
@@ -32,77 +36,142 @@ const LEVELS: { id: Difficulty; labelKey: MessageKey }[] = [
   { id: 'hard', labelKey: 'difficulty.hard' },
 ];
 
+/** One seat: a name that can be edited, and — for a machine — a strength. */
+interface Seat {
+  name: string;
+  level?: Difficulty;
+}
+
 export default function DifficultyScreen() {
   const router = useRouter();
   const t = useT();
   const insets = useSafeAreaInsets();
   const startFree = useSession((s) => s.startFree);
+  const playerName = useSettings((s) => s.playerName);
+  const setPlayerName = useSettings((s) => s.setPlayerName);
 
-  const params = useLocalSearchParams<{ players?: string }>();
-  // The total round the table, including the person. At least one machine.
-  const total = Math.max(2, Math.min(8, Number(params.players) || 2));
-  const cpuCount = total - 1;
+  const params = useLocalSearchParams<{ players?: string; mode?: string }>();
+  // Carried from the mode screen; anything but `cpu` is a game between people.
+  const mode = params.mode === 'cpu' ? 'cpu' : 'human';
+  // The total round the table, the person included.
+  const total = Math.max(1, Math.min(8, Number(params.players) || 2));
 
-  const [levels, setLevels] = useState<Difficulty[]>(
-    // Medium by default: an opponent that is neither a pushover nor a wall is
-    // the one most people would have picked anyway.
-    Array.from({ length: cpuCount }, () => 'medium'),
-  );
+  const [seats, setSeats] = useState<Seat[]>(() => [
+    { name: playerName || t('rules.player', { number: 1 }) },
+    ...Array.from({ length: total - 1 }, (_, index) =>
+      mode === 'cpu'
+        ? {
+            name: t('difficulty.cpuName', { number: index + 1 }),
+            // Medium by default: neither a pushover nor a wall is the one most
+            // people would have picked anyway.
+            level: 'medium' as Difficulty,
+          }
+        : { name: t('rules.player', { number: index + 2 }) },
+    ),
+  ]);
+
+  const update = (index: number, change: Partial<Seat>) => {
+    setSeats((all) => all.map((seat, i) => (i === index ? { ...seat, ...change } : seat)));
+  };
 
   const begin = () => {
     playTap('confirm');
 
-    const names = [
-      t('rules.player', { number: 1 }),
-      ...levels.map((level, i) => t('difficulty.cpuName', { number: i + 1 })),
-    ];
+    /*
+     * A renamed first seat is the player renaming themselves.
+     *
+     * Writing it back means the change sticks — the greeting on the menu and the
+     * next game both follow — rather than applying to this frame only, which
+     * would be a rename that quietly undoes itself.
+     */
+    const chosen = seats[0].name.trim();
+    if (chosen && chosen !== playerName) setPlayerName(chosen);
 
-    // Seat 0 is the person; the rest carry their difficulty.
-    startFree(total, names, [undefined, ...levels]);
+    startFree(
+      seats.length,
+      seats.map((seat, i) => seat.name.trim() || t('rules.player', { number: i + 1 })),
+      seats.map((seat) => seat.level),
+    );
     router.push('/setup');
   };
 
   return (
     <View style={styles.root}>
-      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <ScreenHeader title={t('difficulty.title')} onBack={() => router.back()} />
+      {/* Outside the padded column, so the bar reaches both edges and runs up
+          under the status bar. */}
+      <ScreenHeader
+        title={t('difficulty.title')}
+        onBack={() => router.back()}
+        topInset={insets.top}
+      />
 
+      <View style={styles.inner}>
         <View style={styles.centre}>
-          {levels.map((current, index) => (
+          {seats.map((seat, index) => (
             <Animated.View
               key={index}
               entering={FadeIn.delay(60 + index * 50).duration(260)}
               style={styles.seat}>
-              <Text style={styles.seatLabel}>
-                {t('difficulty.cpuName', { number: index + 1 })}
+              {/*
+                Who this seat is, in a word.
+
+                The first is always the person holding the phone; the rest are
+                machines or the friends passing it round, and knowing which
+                before reading the name is what makes the list scannable.
+              */}
+              <Text style={styles.seatRole}>
+                {index === 0
+                  ? t('difficulty.roleYou')
+                  : seat.level
+                    ? t('difficulty.roleCpu')
+                    : t('difficulty.rolePlayer', { number: index + 1 })}
               </Text>
 
-              <View style={styles.pills}>
-                {LEVELS.map((level) => {
-                  const selected = level.id === current;
-                  return (
-                    <Pressable
-                      key={level.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        playTap();
-                        setLevels((all) =>
-                          all.map((value, i) => (i === index ? level.id : value)),
-                        );
-                      }}
-                      style={({ pressed }) => [
-                        styles.pill,
-                        selected && styles.pillSelected,
-                        pressed && styles.pressed,
-                      ]}>
-                      <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
-                        {t(level.labelKey)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {/*
+                The name, edited in place.
+
+                A text field rather than a label with a pencil beside it: there
+                are at most a handful of these, they are all visible at once, and
+                a dialog per rename would be four taps to change a word.
+              */}
+              <TextInput
+                value={seat.name}
+                onChangeText={(name) => update(index, { name })}
+                placeholder={t('name.placeholder')}
+                placeholderTextColor={Luxe.textFaint}
+                style={styles.nameInput}
+                maxLength={24}
+                autoCorrect={false}
+                returnKeyType="done"
+              />
+
+              {/* Only a machine has a strength to set. */}
+              {seat.level ? (
+                <View style={styles.pills}>
+                  {LEVELS.map((level) => {
+                    const selected = level.id === seat.level;
+                    return (
+                      <Pressable
+                        key={level.id}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        onPress={() => {
+                          playTap();
+                          update(index, { level: level.id });
+                        }}
+                        style={({ pressed }) => [
+                          styles.pill,
+                          selected && styles.pillSelected,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
+                          {t(level.labelKey)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             </Animated.View>
           ))}
         </View>
@@ -122,13 +191,6 @@ export default function DifficultyScreen() {
 }
 
 const styles = StyleSheet.create({
-  /**
-   * The same veil the shared `Screen` wears.
-   *
-   * This screen builds its own frame rather than using that component, so it has
-   * to carry the ground itself — without it the panels float on the drifting
-   * table and the page reads as a scroll over nothing.
-   */
   root: {
     flex: 1,
     alignItems: 'center',
@@ -138,6 +200,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
+    // The bar above carries the safe-area inset now; this is only the gap
+    // between it and the content.
+    paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
   },
   centre: {
@@ -145,29 +210,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.three,
   },
+  /**
+   * One seat, given room to be read.
+   *
+   * These were tight rows of small capitals, which is the shape of a settings
+   * list — and this is not a list of settings, it is the people about to play.
+   * The name is the largest thing on the panel because it is the thing being
+   * chosen.
+   */
   seat: {
     gap: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.four,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(201, 169, 98, 0.28)',
-    backgroundColor: 'rgba(6, 9, 8, 0.92)',
+    backgroundColor: '#080b0a',
   },
-  seatLabel: {
-    color: Luxe.text,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 2,
+  seatRole: {
+    color: Luxe.gold,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2.2,
     textTransform: 'uppercase',
+  },
+  nameInput: {
+    color: Luxe.text,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.14)',
   },
   pills: {
     flexDirection: 'row',
     gap: Spacing.two,
+    marginTop: Spacing.one,
   },
   pill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.three,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.18)',
@@ -178,7 +261,7 @@ const styles = StyleSheet.create({
   },
   pillLabel: {
     color: Luxe.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -198,10 +281,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(201, 169, 98, 0.5)',
-    backgroundColor: '#111716',
+    backgroundColor: '#080b0a',
   },
   goPressed: {
-    backgroundColor: '#1a2321',
+    backgroundColor: '#141a19',
   },
   goLabel: {
     color: Luxe.gold,

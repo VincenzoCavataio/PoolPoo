@@ -137,7 +137,7 @@ suite('translation', () => {
   });
 
   test('every key renders in every language without throwing', () => {
-    const probe = { count: 2, number: 7, name: 'X', numbers: '1, 2', points: 3, balls: 2, reason: 'R', used: 1, total: 3, earned: 4, shots: 5, three: 2 };
+    const probe = { count: 2, number: 7, name: 'X', numbers: '1, 2', points: 3, balls: 2, reason: 'R', used: 1, total: 3, earned: 4, shots: 5, three: 2, version: '1.0.0' };
 
     for (const locale of LOCALES) {
       for (const key of KEYS) {

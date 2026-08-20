@@ -46,13 +46,22 @@ export function ScreenHeader({
   title,
   subtitle,
   onBack,
+  topInset = 0,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /**
+   * Height of the system's own strip at the top of the screen.
+   *
+   * Passed in rather than read here so the bar can be used inside a screen that
+   * has already accounted for it. Added as padding, which is what puts the fill
+   * behind the clock while keeping the contents below it.
+   */
+  topInset?: number;
 }) {
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: topInset + Spacing.two }]}>
       <View style={styles.headerSide}>
         {onBack ? <BackButton label="Indietro" onPress={onBack} /> : null}
       </View>
@@ -95,14 +104,40 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
       */}
       <SoftHalo size={520} style={[styles.halo, { top: insets.top - 180 }]} />
 
-      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        {/* Same header as every other screen: a drawn chevron and a serif
-            title, with no rule under it. The rule was there to separate the
-            title from a list; there is no list any more. */}
-        <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} />
+      {/*
+        The title bar, outside the content column.
+        
+        It runs the full width of the screen and up under the status bar, rather
+        than sitting inside the padded column with the content: a bar that stops
+        short of the edges is a panel, and a bar that starts below the clock
+        leaves a strip of drifting table between the two. Carrying the inset as
+        padding is what lets the fill go all the way up while the chevron and the
+        title stay clear of the hardware.
+      */}
+      <ScreenHeader
+        title={title}
+        subtitle={subtitle}
+        onBack={onBack}
+        topInset={insets.top}
+      />
 
+      <View style={styles.inner}>
+        {/*
+          The home indicator is cleared by padding *inside* the scroll view.
+          
+          It used to be a spacer view underneath one, which is a different thing
+          entirely: a box below the scroller does not scroll, so the last card
+          stopped at the top of it and everything under that was simply cut off.
+          Padding on the content grows the scrollable area instead, so the final
+          row can be brought up clear of the indicator.
+        */}
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            // A footer already clears the indicator on its own, so the scroller
+            // only has to when there is nothing pinned below it.
+            { paddingBottom: footer ? Spacing.four : insets.bottom + Spacing.six },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {children}
@@ -110,9 +145,7 @@ export function Screen({ title, subtitle, onBack, children, footer }: ScreenProp
 
         {footer ? (
           <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.four }]}>{footer}</View>
-        ) : (
-          <View style={{ height: insets.bottom + Spacing.four }} />
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -155,32 +188,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   /**
-   * The title bar, on a surface of its own.
+   * The title bar, on the same dark ground as the panels below it.
    *
-   * It used to be a heading and a chevron laid straight onto the room behind —
-   * which is the one thing every panel on these screens had already been fixed
-   * *not* to do. The scene drifts, so a rail passing under a serif title changes
-   * the contrast under it while it is being read, and the app ended up with its
-   * content on solid ground and its titles floating over moving scenery.
+   * It went bare for a while, on the reasoning that a serif title reads better
+   * over a dark corner of the room than inside a rectangle. That holds when the
+   * corner behind it happens to be dark — and the room drifts, so it often is
+   * not: the neon coming on puts a lit rail straight under the heading, and the
+   * contrast under the words changes while they are being read.
    *
-   * Same treatment as the panels below it: a dark ground, a hairline, rounded
-   * corners. The table is still seen — in the gaps between panels, which is
-   * where it was always meant to show through.
-   */
-  /**
-   * The title bar: a heading and a chevron, and no panel.
-   *
-   * It wore one while the screens had a veil over the room — the box was what
-   * gave the words something to sit on. With the room back, a serif title over a
-   * dark corner of it reads better than the same title in a rectangle, and the
-   * halo above is what keeps it legible. That leaves the chevron as the only
-   * thing here that needs a surface of its own.
+   * So it takes the same surface a `Card` does, gold edge included. The room is
+   * still seen in the gap between this and the content, which is where it was
+   * always meant to show through.
    */
   header: {
+    // Full width, and squared off: this is a bar across the top of the screen
+    // rather than a panel sitting near it, so it has no corners of its own and
+    // only one edge — the one dividing it from the room below.
+    width: '100%',
     flexDirection: 'row',
+    // Centred, not bottom-aligned: the three columns are a chevron, a title and
+    // a counterweight, and they sit on one line rather than on a baseline.
     alignItems: 'center',
     gap: Spacing.two,
-    paddingVertical: Spacing.two,
+    paddingBottom: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    /*
+     * Opaque, and no gold edge.
+     *
+     * The gold rim is the language of a *panel* — a thing sitting in the room
+     * with the room visible round it. This is not that any more: it runs to
+     * every edge and up under the clock, so it is part of the frame rather than
+     * an object in the scene, and a lit border round the whole top of the screen
+     * reads as decoration for its own sake. Solid for the same reason: a bar
+     * that the table shows through is a bar that changes brightness while you
+     * read the title under it.
+     */
+    backgroundColor: '#080b0a',
   },
   headerText: {
     flex: 1,
@@ -204,7 +247,6 @@ const styles = StyleSheet.create({
   content: {
     gap: Spacing.three,
     paddingTop: Spacing.five,
-    paddingBottom: Spacing.five,
   },
   footer: {
     gap: Spacing.two,
@@ -245,7 +287,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(201, 169, 98, 0.28)',
     // Darker than the room, always: the panel is a shadow the room falls on.
-    backgroundColor: 'rgba(6, 9, 8, 0.92)',
+    backgroundColor: '#080b0a',
     borderRadius: 10,
     padding: Spacing.four,
     gap: Spacing.three,
