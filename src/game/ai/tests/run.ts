@@ -227,6 +227,31 @@ suite('a game against the computer keeps its computers', () => {
     assertEqual(after.players[1].name, 'CPU 1', 'the names should survive too');
   });
 
+  /**
+   * Picking two opponents gets you two opponents.
+   *
+   * The player-count screen counts *seats* when people are playing — four
+   * friends is four seats — and the difficulty screen was handed that number
+   * unchanged. Against machines nobody counts themselves, so choosing two gave
+   * one opponent and a seat for yourself. The screen now passes the total.
+   */
+  test('the number of opponents chosen is the number that turn up', () => {
+    for (const chosen of [1, 2, 3, 4]) {
+      // Exactly the arithmetic the two screens do between them.
+      const total = Math.max(2, Math.min(8, chosen + 1));
+      const levels = Array.from({ length: total - 1 }, () => 'medium' as const);
+      const state = createFreeState(
+        total,
+        ['You', ...levels.map((_, i) => `CPU ${i + 1}`)],
+        [undefined, ...levels],
+      );
+
+      const machines = state.players.filter((p) => p.cpu).length;
+      assertEqual(machines, chosen, `choosing ${chosen} opponents seated ${machines}`);
+      assertEqual(state.players[0].cpu, undefined, 'the first seat is always the person');
+    }
+  });
+
   test('a game between people gains no computers', () => {
     const state = createFreeState(2, ['A', 'B']);
     assertEqual(state.players[0].cpu, undefined, 'nobody asked for a machine');

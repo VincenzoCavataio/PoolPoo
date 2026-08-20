@@ -1,24 +1,24 @@
 /**
  * Who is playing: alone, against the computer, or against people in the room.
  *
- * The first fork of a new game, and it earns being its own screen because the
- * three answers lead somewhere different. Solo needs nothing else asked — one
- * player, straight to dressing the table. The other two need a count, and the
- * computer needs a strength for each seat on top of that.
+ * The first fork of a new game, and it earns its own screen because the three
+ * answers lead somewhere different. Solo needs nothing else asked — one player,
+ * straight to dressing the table. The other two need a count, and the computer
+ * needs a strength for each seat on top of that.
  *
- * Three panels rather than a list of radio buttons: this is a choice about what
- * kind of evening it is, not a setting.
+ * Built out of `Screen` and `Card` like every other screen that asks a question,
+ * rather than out of hand-rolled panels. The first version had its own frame and
+ * its own spacing and looked adjacent to the app instead of part of it.
  */
 
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
-import { ScreenHeader } from '@/components/ui/screen';
+import { Card, Screen, SectionLabel } from '@/components/ui/screen';
 import { Luxe } from '@/constants/game-theme';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
 import type { MessageKey } from '@/i18n';
@@ -32,15 +32,14 @@ interface Mode {
 }
 
 const MODES: Mode[] = [
-  { id: 'solo', labelKey: 'mode.solo', bodyKey: 'mode.soloBody', icon: <CueIcon size={22} /> },
-  { id: 'cpu', labelKey: 'mode.cpu', bodyKey: 'mode.cpuBody', icon: <SlidersIcon size={22} /> },
-  { id: 'human', labelKey: 'mode.human', bodyKey: 'mode.humanBody', icon: <RackIcon size={22} /> },
+  { id: 'solo', labelKey: 'mode.solo', bodyKey: 'mode.soloBody', icon: <CueIcon size={20} /> },
+  { id: 'cpu', labelKey: 'mode.cpu', bodyKey: 'mode.cpuBody', icon: <SlidersIcon size={20} /> },
+  { id: 'human', labelKey: 'mode.human', bodyKey: 'mode.humanBody', icon: <RackIcon size={20} /> },
 ];
 
 export default function ModeScreen() {
   const router = useRouter();
   const t = useT();
-  const insets = useSafeAreaInsets();
   const startFree = useSession((s) => s.startFree);
 
   const choose = (mode: Mode['id']) => {
@@ -61,78 +60,59 @@ export default function ModeScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <View style={[styles.inner, { paddingTop: insets.top + Spacing.four }]}>
-        <ScreenHeader title={t('mode.title')} onBack={() => router.back()} />
+    <Screen title={t('mode.title')} onBack={() => router.back()}>
+      <SectionLabel icon={<RackIcon size={15} color={Luxe.gold} />}>
+        {t('mode.section')}
+      </SectionLabel>
 
-        <View style={styles.centre}>
-          {MODES.map((mode, index) => (
-            <Animated.View
-              key={mode.id}
-              entering={FadeInDown.delay(60 + index * 60).duration(280)}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => choose(mode.id)}
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-                <View style={styles.icon}>{mode.icon}</View>
+      <Card>
+        {MODES.map((mode, index) => (
+          <Animated.View key={mode.id} entering={FadeInDown.delay(index * 55).duration(260)}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => choose(mode.id)}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+              <View style={styles.icon}>{mode.icon}</View>
 
-                <View style={styles.text}>
-                  <Text style={styles.label}>{t(mode.labelKey)}</Text>
-                  <Text style={styles.body} numberOfLines={2}>
-                    {t(mode.bodyKey)}
-                  </Text>
-                </View>
+              <View style={styles.text}>
+                <Text style={styles.label}>{t(mode.labelKey)}</Text>
+                <Text style={styles.body} numberOfLines={2}>
+                  {t(mode.bodyKey)}
+                </Text>
+              </View>
 
-                <Text style={styles.chevron}>{'›'}</Text>
-              </Pressable>
-            </Animated.View>
-          ))}
-        </View>
-      </View>
-    </View>
+              <Text style={styles.chevron}>{'›'}</Text>
+            </Pressable>
+          </Animated.View>
+        ))}
+      </Card>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  inner: {
-    flex: 1,
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.six,
-  },
-  /** The three choices, centred in what the header leaves. */
-  centre: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: Spacing.three,
-  },
-  card: {
+  /**
+   * One row per mode, in the same shape the menu uses for Continue: an inset
+   * icon, a label with a line under it, and a chevron because it goes somewhere.
+   */
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
-    backgroundColor: '#0d1210',
+    paddingVertical: Spacing.two,
   },
-  cardPressed: {
-    backgroundColor: '#161d1a',
+  rowPressed: {
+    opacity: 0.6,
   },
   icon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Luxe.hairline,
-    backgroundColor: 'rgba(201, 169, 98, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   text: {
     flex: 1,
@@ -140,20 +120,20 @@ const styles = StyleSheet.create({
   },
   label: {
     color: Luxe.text,
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   body: {
     color: Luxe.textMuted,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 17,
   },
   chevron: {
-    color: 'rgba(201, 169, 98, 0.6)',
-    fontSize: 22,
-    lineHeight: 24,
+    color: 'rgba(201, 169, 98, 0.55)',
+    fontSize: 20,
+    lineHeight: 22,
     marginTop: -2,
   },
 });

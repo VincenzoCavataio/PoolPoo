@@ -100,11 +100,12 @@ export const it = {
   'trophy.longRunHint': 'Sei tiri di fila a segno',
 
   // ------------------------------------------------------------------- modes
+  'mode.section': 'Scegli la partita',
   'mode.title': 'Come si gioca',
   'mode.solo': 'Da solo',
   'mode.soloBody': 'Il tavolo tutto per te, senza avversari',
   'mode.cpu': 'Contro il computer',
-  'mode.cpuBody': 'Da uno a sette avversari, ognuno con la sua bravura',
+  'mode.cpuBody': 'Da uno a quattro avversari, ognuno con la sua bravura',
   'mode.human': 'Tra amici',
   'mode.humanBody': 'Più persone sullo stesso telefono, a turno',
 
@@ -133,6 +134,11 @@ export const it = {
   'newGame.freeSection': 'Partita libera',
   'newGame.freeBody':
     'Castello completo, 15 palline. Un punto per pallina imbucata, e chi imbuca continua a tirare. Bianca in buca o nessuna pallina colpita costa un punto e passa il turno.',
+  'newGame.opponents': 'Avversari',
+  'newGame.cpuHint': {
+    one: 'Un avversario controllato dal computer.',
+    other: '{count} avversari controllati dal computer.',
+  },
   'newGame.players': 'Giocatori',
   'newGame.soloHint': 'Con un solo giocatore è una sfida al punteggio.',
   'newGame.multiHint': '{count} giocatori a turno sullo stesso dispositivo.',

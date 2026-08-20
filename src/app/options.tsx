@@ -9,11 +9,9 @@ import { VolumeRow } from '@/components/ui/volume-row';
 import {
   Luxe,
   MenuPalette as Palette,
-  Radius,
 } from '@/constants/game-theme';
 import { QUALITY_PRESETS, qualityById } from '@/constants/quality';
 import { Spacing } from '@/constants/theme';
-import { LOCATIONS } from '@/game/render/locations';
 import { LOCALE_LABEL, LOCALES } from '@/i18n';
 import { useT } from '@/i18n/use-t';
 import { setMenuMusicVolume } from '@/game/audio/menu-music';
@@ -59,8 +57,6 @@ export default function OptionsScreen() {
   const router = useRouter();
   const t = useT();
   const {
-    clothId,
-    locationId,
     showAimGuide,
     showGhostBall,
     aimSensitivity,
@@ -70,8 +66,6 @@ export default function OptionsScreen() {
     collisionHaptics,
     setHaptics,
     setCollisionHaptics,
-    setCloth,
-    setLocation,
     setShowAimGuide,
     setShowGhostBall,
     setAimSensitivity,
@@ -250,6 +244,17 @@ export default function OptionsScreen() {
         />
       </Card>
 
+      <SectionLabel icon={<DiscsIcon size={15} color={Luxe.gold} />}>
+        {t('trophy.title')}
+      </SectionLabel>
+      <Card>
+        <GameButton
+          label={t('trophy.title')}
+          sublabel={t('trophy.tally', { earned: tally.earned, total: tally.total })}
+          onPress={() => router.push('/trophies')}
+        />
+      </Card>
+
       <SectionLabel icon={<DiscsIcon size={15} color={Luxe.gold} />}>{t('options.data')}</SectionLabel>
       <Card>
         <GameButton label={t('options.resetSettings')} onPress={resetSettings} />
@@ -302,17 +307,25 @@ const styles = StyleSheet.create({
    * heading and its body in a document, which is what made the screen read as a
    * form. Capitals separate them by texture instead of by weight.
    */
+  /**
+   * The label of a setting, and the line explaining it.
+   *
+   * The label used to be 11pt against a 13pt description — the heading smaller
+   * than the body beneath it, which is most of why every card read as a wall of
+   * grey with a caption on top. 13 over 12 puts them the right way round and
+   * matches the rows on the menu and the mode screen.
+   */
   rowLabel: {
     color: Luxe.text,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1.8,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   rowDescription: {
     color: Luxe.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
   },
   pillRow: {
     flexDirection: 'row',

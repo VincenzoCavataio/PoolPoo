@@ -29,7 +29,7 @@ const GROUPS: { kind: TrophyKind; labelKey: MessageKey }[] = [
   { kind: 'secret', labelKey: 'trophy.groupSecret' },
 ];
 
-function TrophyRow({ trophy }: { trophy: Trophy }) {
+function TrophyRow({ trophy, first }: { trophy: Trophy; first: boolean }) {
   const t = useT();
   const unlocked = useTrophies((s) => Boolean(s.unlocked[trophy.id]));
   const progress = useTrophies((s) => s.progress[trophy.id] ?? 0);
@@ -43,7 +43,7 @@ function TrophyRow({ trophy }: { trophy: Trophy }) {
   const counted = trophy.target !== undefined && trophy.target > 1 && !unlocked && !hidden;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, !first && styles.rowDivided]}>
       <View style={[styles.badge, unlocked && styles.badgeEarned]}>
         <Text style={[styles.badgeMark, unlocked && styles.badgeMarkEarned]}>
           {unlocked ? '★' : hidden ? '?' : '☆'}
@@ -87,8 +87,8 @@ export default function TrophiesScreen() {
           <View key={group.kind} style={styles.group}>
             <SectionLabel>{t(group.labelKey)}</SectionLabel>
             <Card>
-              {inGroup.map((trophy) => (
-                <TrophyRow key={trophy.id} trophy={trophy} />
+              {inGroup.map((trophy, index) => (
+                <TrophyRow key={trophy.id} trophy={trophy} first={index === 0} />
               ))}
             </Card>
           </View>
@@ -107,6 +107,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  /**
+   * A hairline between rows, but not above the first.
+   *
+   * Six trophies stacked in one card with nothing between them read as a
+   * paragraph rather than as a list; a rule above the top one would read as a
+   * second border a hair inside the card's own.
+   */
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Luxe.hairline,
+    paddingTop: Spacing.three,
+    marginTop: Spacing.one,
   },
   badge: {
     width: 34,

@@ -57,7 +57,19 @@ export default function NewGameScreen() {
      * knows who is a machine, and starting twice would throw away its answer.
      */
     if (mode === 'cpu') {
-      router.push({ pathname: '/difficulty', params: { players: String(players) } });
+      /*
+       * Against the computer the number chosen is the number of *opponents*.
+       *
+       * The screen counts seats when people are playing — four friends is four
+       * seats — but against machines nobody thinks of themselves as one of the
+       * entries. Picking two and getting one opponent is the bug that reading
+       * says; passing the total is what fixes it, and the seat count is one
+       * more than the choice.
+       */
+      router.push({
+        pathname: '/difficulty',
+        params: { players: String(players + 1) },
+      });
       return;
     }
 
@@ -72,7 +84,9 @@ export default function NewGameScreen() {
         <ScreenHeader title={t('newGame.title')} onBack={() => router.back()} />
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.centre}>
-          <Text style={styles.prompt}>{t('newGame.players')}</Text>
+          <Text style={styles.prompt}>
+            {mode === 'cpu' ? t('newGame.opponents') : t('newGame.players')}
+          </Text>
 
           {/* The rack. Tapping a ball sets the count to that many. */}
           <View style={styles.rack}>
@@ -98,7 +112,11 @@ export default function NewGameScreen() {
           </View>
 
           <Text style={styles.hint}>
-            {players === 1 ? t('newGame.soloHint') : t('newGame.multiHint', { count: players })}
+            {mode === 'cpu'
+              ? t('newGame.cpuHint', { count: players })
+              : players === 1
+                ? t('newGame.soloHint')
+                : t('newGame.multiHint', { count: players })}
           </Text>
         </Animated.View>
 
@@ -137,9 +155,17 @@ export default function NewGameScreen() {
 }
 
 const styles = StyleSheet.create({
+  /**
+   * The same veil the shared `Screen` wears.
+   *
+   * This screen builds its own frame rather than using that component, so it has
+   * to carry the ground itself — without it the panels float on the drifting
+   * table and the page reads as a scroll over nothing.
+   */
   root: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(4, 5, 5, 0.95)',
   },
   /**
    * The gap under the start button, which is what lifts it off the floor.

@@ -20,10 +20,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '@/components/ui/screen';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { playTap } from '@/game/audio/sfx';
 import type { Difficulty } from '@/game/ai/opponent';
-import { useT } from '@/i18n/use-t';
+import { playTap } from '@/game/audio/sfx';
 import type { MessageKey } from '@/i18n';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const LEVELS: { id: Difficulty; labelKey: MessageKey }[] = [
@@ -122,9 +122,17 @@ export default function DifficultyScreen() {
 }
 
 const styles = StyleSheet.create({
+  /**
+   * The same veil the shared `Screen` wears.
+   *
+   * This screen builds its own frame rather than using that component, so it has
+   * to carry the ground itself — without it the panels float on the drifting
+   * table and the page reads as a scroll over nothing.
+   */
   root: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(4, 5, 5, 0.95)',
   },
   inner: {
     flex: 1,

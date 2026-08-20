@@ -99,6 +99,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'trophy.longRunHint': 'Six scoring shots in a row',
 
   // ------------------------------------------------------------------- modes
+  'mode.section': 'Pick a game',
   'mode.title': 'How you play',
   'mode.solo': 'On your own',
   'mode.soloBody': 'The table to yourself, nobody to beat',
@@ -132,6 +133,11 @@ export const en: Record<keyof typeof it, Entry> = {
   'newGame.freeSection': 'Free play',
   'newGame.freeBody':
     'Full rack, 15 balls. A point for every ball potted, and potting keeps you at the table. Scratching or missing everything costs a point and hands the turn over.',
+  'newGame.opponents': 'Opponents',
+  'newGame.cpuHint': {
+    one: 'One opponent played by the computer.',
+    other: '{count} opponents played by the computer.',
+  },
   'newGame.players': 'Players',
   'newGame.soloHint': 'On your own it is a high-score run.',
   'newGame.multiHint': '{count} players taking turns on the same device.',

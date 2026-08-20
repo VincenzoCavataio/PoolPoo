@@ -117,9 +117,42 @@ export function Card({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  /**
+   * A floor under these screens, rather than the drifting table.
+   *
+   * The backdrop is mounted at the root and every route is transparent, which is
+   * right for the menu — the gap between its panels is the largest view of the
+   * table anywhere in the app. It is wrong for a screen you *read*: options and
+   * trophies are long lists, and a room sliding about underneath a column of
+   * cards left them with nothing to sit on. Scrolling them felt like scrolling
+   * over a hole.
+   *
+   * A veil rather than a wall, and a *lighter* one than the cards it holds.
+   *
+   * Three things were tried before this landed. Nearly black at 94% was a wall:
+   * the room was merely rumoured behind it. Lightening the cards instead
+   * separated them and took the depth out of the screen — a card is supposed to
+   * be the dark thing. What works is the order everything else in the app uses:
+   * a lit ground with dark panels on it.
+   *
+   * The colour is a neutral grey. A green-tinted veil was tried first, on the
+   * theory that it would read as the room washed out rather than as a sheet laid
+   * over it; in practice it just looked green, and green is the cloth's colour
+   * rather than the room's. The strength is set by the worst case — with the neon lit the table underneath rises a long way,
+   * and a ground that stops separating when the light comes on is the same bug
+   * measured a different way.
+   *
+   * Darkened as far as it can go, with the card edges carrying the difference.
+   * At this depth a card's own fill is only 1.07:1 against the ground — not
+   * enough on its own — so the hairline round it is raised from 10% white to
+   * 18%. That figure is set by the *lit* case rather than the dark one: with
+   * the neon on, the ground rises and 14% fell to 1.14:1, which is the edge
+   * fading out exactly when the room brightens. At 18% it holds either way.
+   */
   root: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(4, 5, 5, 0.95)',
   },
   inner: {
     flex: 1,
@@ -147,9 +180,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     padding: Spacing.three,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     backgroundColor: '#0d1210',
   },
   headerText: {
@@ -199,7 +232,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     /**
      * Denser than the tiles elsewhere, on purpose.
      *
@@ -208,9 +241,31 @@ const styles = StyleSheet.create({
      * showing through a heading. Still lighter than it was, so the table is
      * visible at the edges.
      */
+    /**
+     * Dark, and the ground behind it is what makes it read.
+     *
+     * The cards were briefly lightened to separate them from the background, and
+     * that was the wrong half of the problem: a card is meant to be dark, and
+     * lifting it took the depth out of the screen. The separation comes from the
+     * veil behind instead — the darker ground, the lighter card, in that order.
+     */
     backgroundColor: '#0d1210',
-    borderRadius: 4,
-    padding: Spacing.four,
-    gap: Spacing.four,
+    /**
+     * 8, like the panels everywhere else.
+     *
+     * The radius was 4 here and 8 on every menu row, which is small enough to
+     * pass unnoticed one screen at a time and exactly the sort of thing that
+     * makes a set of screens feel assembled rather than designed.
+     */
+    borderRadius: 8,
+    padding: Spacing.three,
+    /**
+     * 16 between the things in a card, not 24.
+     *
+     * A card holds a list of settings, and at 24 the gaps grew wider than the
+     * rows themselves — the options screen came apart into floating fragments
+     * rather than reading as grouped.
+     */
+    gap: Spacing.three,
   },
 });

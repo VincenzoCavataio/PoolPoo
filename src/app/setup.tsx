@@ -300,9 +300,19 @@ export default function SetupScreen() {
 }
 
 const styles = StyleSheet.create({
+  /**
+   * The same veil the options and trophy screens wear.
+   *
+   * This screen is read as much as it is looked at — a preview, a row of tabs, a
+   * paragraph about whichever room is selected — and the drifting table under
+   * all of it left the panels floating. The veil gives them a floor while
+   * leaving the room visible behind, which matters here more than anywhere:
+   * the thing being dressed is the table you can still see.
+   */
   root: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(31, 35, 34, 0.86)',
   },
   inner: {
     flex: 1,
