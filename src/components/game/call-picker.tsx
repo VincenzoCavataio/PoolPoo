@@ -23,13 +23,15 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
-import { colorForBall } from '@/game/core/ball';
+import { ballSetById, colorForBallIn } from '@/constants/ball-sets';
+import { BallKind, ballKindFor } from '@/game/core/ball';
 import type { PocketId } from '@/game/core/table';
 import { legalTargets, needsCall } from '@/game/rules/match';
 import { Phase } from '@/game/rules/types';
 import type { MessageKey } from '@/i18n';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 /**
  * Where each pocket sits on the diagram, as fractions of its box.
@@ -48,6 +50,9 @@ const SPOTS: { id: PocketId; left: number; top: number; labelKey: MessageKey }[]
   { id: 'corner-se', left: 1, top: 1, labelKey: 'call.pocketCornerSe' },
 ];
 
+/** The white a striped ball is, under its band. Matches the shader's. */
+const STRIPE_GROUND = '#f2efe6';
+
 const DIAGRAM_WIDTH = 132;
 const DIAGRAM_HEIGHT = 196;
 const HOLE = 26;
@@ -58,8 +63,18 @@ export function CallPicker() {
   const match = useSession((s) => s.match);
   const world = useSession((s) => s.world);
   const setCall = useSession((s) => s.setCall);
+  const ballSetId = useSettings((s) => s.ballSetId);
 
   const [ball, setBall] = useState<number | null>(null);
+
+  /*
+   * The set the player actually chose, not a fixed palette.
+   *
+   * The picker was reading the solver's own colours, which are the reference set
+   * and not necessarily what is on the cloth — so with any other set selected
+   * the swatches named balls by the wrong colour.
+   */
+  const set = ballSetById(ballSetId);
 
   const aiming = phase === Phase.AIMING;
   const call = match && match.kind !== 'free' ? match.state.call : null;
@@ -104,27 +119,46 @@ export function CallPicker() {
 
       {ball === null ? (
         <View style={styles.balls}>
-          {choices.map((number) => (
-            <Pressable
-              key={number}
-              accessibilityRole="button"
-              accessibilityLabel={String(number)}
-              onPress={() => {
-                playTap();
-                setBall(number);
-              }}
-              style={({ pressed }) => [
-                styles.ball,
-                { backgroundColor: colorForBall(number) },
-                pressed && styles.pressed,
-              ]}>
-              {/* A white disc behind the numeral, the way a stripe carries its
-                  number, so it stays readable on the dark colours. */}
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{number}</Text>
-              </View>
-            </Pressable>
-          ))}
+          {choices.map((number) => {
+            const colour = colorForBallIn(set, number);
+            /*
+             * Striped exactly when the ball on the table is striped.
+             *
+             * Both halves of that matter. `ballKindFor` decides which numbers
+             * are stripes — asked rather than re-derived here, so the picker
+             * cannot disagree with the solver — and the set decides whether they
+             * are drawn that way at all, because some of them are plain right
+             * through. Getting either wrong means picking the ball that looks
+             * like the one you meant and calling a different one.
+             */
+            const striped = set.striped && ballKindFor(number) === BallKind.STRIPE;
+
+            return (
+              <Pressable
+                key={number}
+                accessibilityRole="button"
+                accessibilityLabel={String(number)}
+                onPress={() => {
+                  playTap();
+                  setBall(number);
+                }}
+                style={({ pressed }) => [
+                  styles.ball,
+                  // A stripe is a white ball with a band of colour across it,
+                  // which is what the shader draws on the table.
+                  { backgroundColor: striped ? STRIPE_GROUND : colour },
+                  pressed && styles.pressed,
+                ]}>
+                {striped ? <View style={[styles.band, { backgroundColor: colour }]} /> : null}
+
+                {/* A white disc behind the numeral, the way a real ball carries
+                    its number, so it stays readable on the dark colours. */}
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{number}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       ) : (
         <View style={styles.diagramWrap}>
@@ -192,6 +226,37 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    /*
+     * Clips the stripe to the circle.
+     *
+     * The band is a full-width rectangle, so without this it runs straight out
+     * past the curve at the ball's widest point and the swatch reads as a disc
+     * with a bar through it rather than as a striped ball. The rounded corners
+     * only shape the view's own background; anything drawn inside it needs the
+     * overflow rule to be cut to the same silhouette.
+     */
+    overflow: 'hidden',
+  },
+  /**
+   * The coloured band across a stripe.
+   *
+   * Proportioned like the shader's: it turns white above latitude 0.52, which
+   * leaves a band a little under half the ball's height across its middle.
+   */
+  band: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    /*
+     * Pinned from both edges rather than given a height.
+     *
+     * An absolutely positioned child is outside the parent's `justifyContent`,
+     * so a bare height would have left the band at the top of the ball instead
+     * of across its middle. Insetting equally from top and bottom centres it by
+     * construction and keeps the proportion at any swatch size.
+     */
+    top: '27%',
+    bottom: '27%',
   },
   badge: {
     width: 20,

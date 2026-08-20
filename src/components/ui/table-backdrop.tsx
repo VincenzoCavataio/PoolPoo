@@ -40,7 +40,8 @@ import { BALL_HEIGHT, sceneHeading, sceneX, sceneZ, SPOT_RADIUS } from '@/game/r
 import { placeCues } from '@/components/ui/cue-placement';
 import type { Table } from '@/game/core/table';
 import { BALL_RADIUS } from '@/game/core/constants';
-import { colorForBall } from '@/game/core/ball';
+import { ballSetById, colorForBallIn } from '@/constants/ball-sets';
+import { useSettings } from '@/store/settings';
 import { useBackdropLayout } from '@/store/backdrop-layout';
 import { TableMesh } from '@/game/render/table-mesh';
 
@@ -579,6 +580,15 @@ const IDLE_SCATTER = [
 function StrayBalls() {
   const atlas = useMemo(createNumberAtlas, []);
   const layout = useBackdropLayout((s) => s.layout);
+  const ballSetId = useSettings((s) => s.ballSetId);
+  /*
+   * The set the player chose, not the reference palette.
+   *
+   * The menu table is the game in progress, so its balls have to be the balls
+   * that game is being played with — the four ball a different orange here from
+   * the one on the table is exactly the drift this backdrop exists to avoid.
+   */
+  const set = useMemo(() => ballSetById(ballSetId), [ballSetId]);
 
   const balls = useMemo(() => {
     if (layout && layout.length > 0) {
@@ -592,7 +602,7 @@ function StrayBalls() {
         // whenever the save is re-read, and balls that reshuffle their spin on
         // every visit to the menu would twitch.
         lean: ball.number * 1.7,
-        material: createBackdropBallMaterial(atlas, colorForBall(ball.number), ball.number),
+        material: createBackdropBallMaterial(atlas, colorForBallIn(set, ball.number), ball.number),
       }));
     }
 
@@ -601,9 +611,9 @@ function StrayBalls() {
       x: ball.x,
       z: ball.z,
       lean: ball.lean,
-      material: createBackdropBallMaterial(atlas, colorForBall(ball.number), ball.number),
+      material: createBackdropBallMaterial(atlas, colorForBallIn(set, ball.number), ball.number),
     }));
-  }, [atlas, layout]);
+  }, [atlas, layout, set]);
 
   return (
     <group>
