@@ -660,6 +660,11 @@ const litWaiters: (() => void)[] = [];
  * climbing and exists to stop the lamp re-striking on a remount. Sharing one
  * flag would mean a listener arriving inside that window was told the room was
  * still dark, having just missed the only announcement it would ever get.
+ *
+ * Also separate because `lit` is cleared every time the switch is thrown — that
+ * is what makes the tube perform its strike again — while this is not. The
+ * announcement is "the room came up, this launch", which happens once however
+ * many times somebody plays with the light.
  */
 let announced = false;
 
@@ -773,6 +778,14 @@ function CeilingLamp({ armed }: { armed: boolean }) {
 
   const on = useRoomLight((state) => state.on);
   const wasOn = useRef(on);
+  /**
+   * Whether this strike is one the player asked for.
+   *
+   * False for the one that runs on arrival, true for every re-strike after
+   * somebody works the switch. Only the first is an arrival, and only an arrival
+   * gets greeted.
+   */
+  const manual = useRef(false);
 
   useFrame((_, delta) => {
     /**
@@ -801,6 +814,9 @@ function CeilingLamp({ armed }: { armed: boolean }) {
         clock.current = 0;
         heard.current = 0;
         lit = false;
+        // Every strike from here is one the player asked for by flipping the
+        // switch, and none of them is an arrival.
+        manual.current = true;
       } else {
         lit = false;
         for (const lamp of lights.current) if (lamp) lamp.intensity = 0;
@@ -866,6 +882,19 @@ function CeilingLamp({ armed }: { armed: boolean }) {
         if (settled) {
           playBallast();
           /*
+           * Only the strike that came with the app, not the ones the player asks
+           * for.
+           *
+           * Throwing the switch clears `lit` and rebuilds the sequence, so the
+           * whole performance runs again — clicks, hum and all — and this is the
+           * frame it settles on, every time. `announceLit` is latched, so the
+           * greeting still goes out once; `manual` makes that explicit at the
+           * call site rather than leaving it to a flag three hundred lines away,
+           * because "it happens to be guarded elsewhere" is how a guard gets
+           * removed by somebody who cannot see what it was for.
+           */
+          if (!manual.current) announceLit();
+          /*
            * The banner goes with the hum, not with the end of the warm-up.
            *
            * Both mark "the tube is running", but they are half a second apart:
@@ -875,7 +904,6 @@ function CeilingLamp({ armed }: { armed: boolean }) {
            * two cues for one event read as two events. This is the frame the
            * room starts sounding lit, so it is the frame to say so.
            */
-          announceLit();
         }
         heard.current = i + 1;
       }

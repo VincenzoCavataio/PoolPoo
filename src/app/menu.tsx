@@ -18,7 +18,7 @@
  */
 
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -43,7 +43,7 @@ import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
 import { useT } from '@/i18n/use-t';
-import type { MessageKey, Translator } from '@/i18n';
+import type { Translator } from '@/i18n';
 import { describeSave, loadSavedGame, type SavedGame } from '@/store/persistence';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -55,14 +55,6 @@ function describeSavedGame(save: SavedGame, t: Translator): string {
 }
 
 /**
- * Which greeting suits the hour.
- *
- * Four bands rather than the usual three: the small hours get their own line,
- * because somebody opening a pool game at two in the morning is doing something
- * a little different from somebody opening it at eight in the evening, and the
- * app may as well notice.
- */
-/**
  * Whether this launch has already said hello.
  *
  * Outside the component because navigating back to the menu remounts it, and the
@@ -70,13 +62,6 @@ function describeSavedGame(save: SavedGame, t: Translator): string {
  * process does, which is exactly the lifetime wanted.
  */
 let greeted = false;
-
-function greetingKeyFor(hour: number): MessageKey {
-  if (hour < 5) return 'greeting.night';
-  if (hour < 13) return 'greeting.morning';
-  if (hour < 18) return 'greeting.afternoon';
-  return 'greeting.evening';
-}
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -93,7 +78,7 @@ export default function MenuScreen() {
    * the component re-renders would be work for a string that cannot have
    * changed, and would make the greeting flip mid-session at a band boundary.
    */
-  const salutation = useMemo(() => t(greetingKeyFor(new Date().getHours())), [t]);
+  const salutation = t('greeting.welcome');
 
   /**
    * The banner runs out, is read, and slides back behind the wall.
@@ -232,7 +217,7 @@ export default function MenuScreen() {
           is worse than not greeting them.
 
           The salutation and the name are set apart rather than run together as
-          one sentence. "Buonasera, Marco" on a single line is a caption, and it
+          one sentence. "Bentornato, Marco" on a single line is a caption, and it
           read like one at any size: the greeting is the long half and the name
           is the half that matters, so a line that gives them equal weight buries
           the name in the middle of it. Split, the salutation becomes a label —
