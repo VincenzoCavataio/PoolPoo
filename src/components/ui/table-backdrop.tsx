@@ -82,7 +82,31 @@ const SHOTS: Record<string, Shot> = {
    * the table is in the frame. Dead level it was a handsome shot of a dark room
    * with the one thing lighting it just above the top edge.
    */
+  /**
+   * Under the light, looking up the table from one corner. Picking an opponent.
+   *
+   * The first step off the menu, so it has to move visibly or the screen change
+   * reads as a swap of panels over a still photograph — which is what happened
+   * while this route had no entry and fell through to the menu's own framing.
+   *
+   * It moves in and around rather than simply closer: off to the near-left
+   * corner at head height, which swings the table diagonally across the frame.
+   * A shot along the same axis as the one before it, only nearer, is a zoom, and
+   * a zoom on a fixed subject is the one camera move that can be missed.
+   */
+  '/mode': { from: [-0.95, 0.95, 1.85], look: [0.15, 0.15, -0.5], drift: 0.045 },
+
   '/new-game': { from: [0.0, 0.12, 1.5], look: [0, 0.42, -0.6], drift: 0.03 },
+
+  /**
+   * Across the corner pocket at rail height. Sizing up who you are playing.
+   *
+   * Tight and low on the far side, so the frame is mostly rail and cloth with
+   * the light burning at the top — the closest the camera comes to the table in
+   * the menus, for the screen where the game stops being a number of players and
+   * becomes named people.
+   */
+  '/difficulty': { from: [0.95, 0.42, -1.35], look: [-0.15, 0.4, 0.15], drift: 0.035 },
 
   /**
    * Side on and close, raking across the bed — the cloth fills the frame.
@@ -94,6 +118,16 @@ const SHOTS: Record<string, Shot> = {
 
   /** High and back over the far end, the whole table small in the frame. */
   '/options': { from: [-0.7, 1.65, -1.9], look: [0, -0.05, 0.2], drift: 0.07 },
+
+  /**
+   * The mirror of the options shot, from the other corner and a touch higher.
+   *
+   * Trophies sit beside options on the menu and are the same kind of screen — a
+   * long list to scroll — so they get the same kind of framing: far enough back
+   * that the room is a backdrop and not a thing to look at. Coming from the
+   * opposite side keeps the two from feeling like the same screen twice.
+   */
+  '/trophies': { from: [1.05, 1.8, -1.75], look: [-0.1, -0.05, 0.25], drift: 0.065 },
 };
 
 const DEFAULT_SHOT = SHOTS['/menu'];
@@ -524,6 +558,51 @@ function StrayBalls() {
  */
 let lit = false;
 
+/**
+ * Told once, on the frame the arc takes and the ballast starts to hum.
+ *
+ * The menu's greeting banner waits on this so it does not run out over a dark
+ * room during the strike. A callback list rather than a store: `lit` is read
+ * every frame by the render loop and pushing it through React state would
+ * re-render the whole scene tree to change one boolean.
+ *
+ * Callers are dropped after firing, and anybody who subscribes once the light
+ * is already up is called immediately — so a listener can never miss the event
+ * by arriving late, which is the failure a plain event would have.
+ */
+const litWaiters: (() => void)[] = [];
+
+/**
+ * Whether the announcement has gone out.
+ *
+ * Separate from `lit`, which is set half a second later when the output finishes
+ * climbing and exists to stop the lamp re-striking on a remount. Sharing one
+ * flag would mean a listener arriving inside that window was told the room was
+ * still dark, having just missed the only announcement it would ever get.
+ */
+let announced = false;
+
+export function onRoomLit(run: () => void): () => void {
+  if (announced) {
+    run();
+    return () => {};
+  }
+  litWaiters.push(run);
+  return () => {
+    const at = litWaiters.indexOf(run);
+    if (at >= 0) litWaiters.splice(at, 1);
+  };
+}
+
+function announceLit() {
+  if (announced) return;
+  announced = true;
+  // Copied before running: a waiter is free to subscribe again from inside its
+  // own callback without walking the array being spliced underneath it.
+  const waiting = litWaiters.splice(0, litWaiters.length);
+  for (const run of waiting) run();
+}
+
 /** How long the room stays dark before the switch is thrown. */
 const DARK_HOLD = 1.0;
 
@@ -703,7 +782,20 @@ function CeilingLamp({ armed }: { armed: boolean }) {
          * Fired on the last flash, the one with no end, which is the moment the
          * light comes up and stays.
          */
-        if (settled) playBallast();
+        if (settled) {
+          playBallast();
+          /*
+           * The banner goes with the hum, not with the end of the warm-up.
+           *
+           * Both mark "the tube is running", but they are half a second apart:
+           * the arc takes and the ballast starts humming, then the output climbs
+           * to full over `WARM_UP`. Announcing at the top of that ramp put the
+           * greeting a beat behind the sound that announces the same thing, and
+           * two cues for one event read as two events. This is the frame the
+           * room starts sounding lit, so it is the frame to say so.
+           */
+          announceLit();
+        }
         heard.current = i + 1;
       }
     }

@@ -127,10 +127,10 @@ export const en: Record<keyof typeof it, Entry> = {
   'name.changeBody': 'What the scoreboard and the greeting call you.',
   'name.fallback': 'Player',
 
-  'greeting.morning': 'Good morning, {name}',
-  'greeting.afternoon': 'Good afternoon, {name}',
-  'greeting.evening': 'Good evening, {name}',
-  'greeting.night': 'Still up, {name}',
+  'greeting.morning': 'Good morning',
+  'greeting.afternoon': 'Good afternoon',
+  'greeting.evening': 'Good evening',
+  'greeting.night': 'Still up',
 
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',

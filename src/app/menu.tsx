@@ -18,9 +18,18 @@
  */
 
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Floating } from '@/components/ui/floating';
@@ -28,6 +37,7 @@ import { LightSwitch } from '@/components/ui/light-switch';
 import { NamePrompt } from '@/components/ui/name-prompt';
 import { CueIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
 import { GlowRule, Heading, LuxeFonts } from '@/components/ui/luxe';
+import { onRoomLit } from '@/components/ui/table-backdrop';
 import { Luxe } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { playTap } from '@/game/audio/sfx';
@@ -51,6 +61,15 @@ function describeSavedGame(save: SavedGame, t: Translator): string {
  * a little different from somebody opening it at eight in the evening, and the
  * app may as well notice.
  */
+/**
+ * Whether this launch has already said hello.
+ *
+ * Outside the component because navigating back to the menu remounts it, and the
+ * point is that returning from a game is not a fresh arrival. Resets when the
+ * process does, which is exactly the lifetime wanted.
+ */
+let greeted = false;
+
 function greetingKeyFor(hour: number): MessageKey {
   if (hour < 5) return 'greeting.night';
   if (hour < 13) return 'greeting.morning';
@@ -73,10 +92,53 @@ export default function MenuScreen() {
    * the component re-renders would be work for a string that cannot have
    * changed, and would make the greeting flip mid-session at a band boundary.
    */
-  const greeting = useMemo(
-    () => t(greetingKeyFor(new Date().getHours()), { name: playerName }),
-    [t, playerName],
-  );
+  const salutation = useMemo(() => t(greetingKeyFor(new Date().getHours())), [t]);
+
+  /**
+   * The banner runs out, is read, and slides back behind the wall.
+   *
+   * A greeting is a thing that happens on arrival, not a permanent fixture: left
+   * up, it is a name taking a fifth of the screen. Retracting the way it came in
+   * makes the panel read as a flag pulled out and put away rather than as UI
+   * that vanished.
+   *
+   * 0 is fully out, 1 is stowed. Driven by one value so the slide and the fade
+   * cannot come apart, and expressed as a sequence rather than a chain of
+   * callbacks so the whole gesture is legible in one place.
+   */
+  const stowed = useSharedValue(1);
+
+  /**
+   * Once a launch, and not before the light is up.
+   *
+   * Two rules, and both matter. Waiting on the lamp is because the tube spends
+   * its first second stuttering: a banner running out over a room mid-strike is
+   * two arrivals talking over each other, and the greeting loses. Once a launch
+   * is because being greeted by name every time you back out of a frame stops
+   * being a welcome and becomes something to sit through — the same reason the
+   * tube itself only strikes once. Closing the app resets both, which is right:
+   * that is a new evening.
+   */
+  useEffect(() => {
+    if (greeted || !playerName) return;
+
+    return onRoomLit(() => {
+      greeted = true;
+      stowed.value = withSequence(
+        // Out from behind the left edge, easing to a stop the way a drawn banner
+        // does.
+        withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) }),
+        // Held long enough to read a name at a glance, then away.
+        withDelay(2600, withTiming(1, { duration: 520, easing: Easing.in(Easing.cubic) })),
+      );
+    });
+  }, [stowed, playerName]);
+
+  const welcomeStyle = useAnimatedStyle(() => ({
+    // Far enough left to clear its own width at any name length.
+    transform: [{ translateX: -stowed.value * 340 }],
+    opacity: 1 - stowed.value,
+  }));
 
   const [save, setSave] = useState<SavedGame | null>(null);
   const [checked, setChecked] = useState(false);
@@ -141,15 +203,43 @@ export default function MenuScreen() {
         {/*
           Who is at the door.
 
-          Only once there is a name to use — greeting a stranger by a
-          placeholder is worse than not greeting them. It sits in a band of its
-          own under the wordmark rather than as a fourth line inside it: the
-          title says what the place is called, this says who just walked in, and
-          they are not the same sentence.
+          Only once there is a name to use — greeting a stranger by a placeholder
+          is worse than not greeting them.
+
+          The salutation and the name are set apart rather than run together as
+          one sentence. "Buonasera, Marco" on a single line is a caption, and it
+          read like one at any size: the greeting is the long half and the name
+          is the half that matters, so a line that gives them equal weight buries
+          the name in the middle of it. Split, the salutation becomes a label —
+          small gold capitals, the same voice the section headings use — and the
+          name gets the serif face, which is the grammar the wordmark above uses.
+          Two titles on the screen, in the right order: the house, then the
+          guest.
+
+          It hangs off the left edge like a flag rather than sitting inside the
+          column: the ground runs out past the padding and is cut off by the
+          screen, closed only on its right. A panel with air on both sides would
+          be one more card among the ones below; a banner nailed to the wall is a
+          fixture of the room, which is what a greeting should be.
+
+          Positioned rather than laid out, because it comes and goes: in flow, it
+          would reserve its height for the whole visit and leave a hole where it
+          had been, and the table window below would resize under the actions as
+          it left. Out of flow it slides over the room and the rest of the screen
+          never moves.
         */}
         {playerName ? (
-          <Animated.View entering={FadeInDown.delay(140).duration(320)} style={styles.welcome}>
-            <Text style={styles.greeting}>{greeting}</Text>
+          <Animated.View style={[styles.welcome, welcomeStyle]} pointerEvents="none">
+            <View style={styles.welcomePanel}>
+              <Text style={styles.salutation}>{salutation}</Text>
+              <Text
+                style={styles.guest}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}>
+                {playerName}
+              </Text>
+            </View>
           </Animated.View>
         ) : null}
 
@@ -277,18 +367,64 @@ const styles = StyleSheet.create({
   /**
    * The greeting, sized like part of the composition.
    *
-   * It was 12pt — smaller than the subtitle above it, which made the one line
-   * on the screen addressed to the player by name the least visible thing on it.
-   * At 26 in the serif face it answers the wordmark instead of hiding under it:
-   * two weights of the same voice, the house and then the guest.
+   * It was 12pt — smaller than the subtitle above it, which made the one line on
+   * the screen addressed to the player by name the least visible thing on it.
    */
   welcome: {
-    marginTop: Spacing.four,
+    /**
+     * Out past the column's padding, so the ground meets the screen edge.
+     *
+     * `alignSelf: 'flex-start'` keeps the panel only as wide as its text —
+     * without it the banner would stretch the full column and become a bar.
+     */
+    /**
+     * Centred on the screen rather than hung below the title.
+     *
+     * `top: 0, bottom: 0` with the content centred inside, so it finds the
+     * middle whatever the phone's height — a fixed offset from the wordmark put
+     * it near the top on a tall screen and over the buttons on a short one.
+     * `alignItems: 'flex-start'` keeps the panel its own width instead of
+     * stretching it across the column.
+     */
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  greeting: {
+  /** The banner itself: the ground, the edge, and the two lines of text. */
+  welcomePanel: {
+    gap: Spacing.one,
+    paddingLeft: Spacing.four,
+    paddingRight: Spacing.five,
+    paddingVertical: Spacing.three,
+    backgroundColor: '#080b0a',
+    // Closed on the right only: the other three sides run off the screen.
+    borderRightWidth: 1,
+    borderColor: 'rgba(201, 169, 98, 0.28)',
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+  },
+  /** The label half: gold capitals, the voice every heading in the app uses. */
+  salutation: {
+    color: Luxe.gold,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2.6,
+    textTransform: 'uppercase',
+  },
+  /**
+   * The name, at the size of a title.
+   *
+   * 30 rather than the wordmark's 42, so it answers the title without competing
+   * with it — and shrunk to fit rather than wrapped, because a name is a single
+   * thing and a long one broken over two lines stops looking like one.
+   */
+  guest: {
     color: Luxe.text,
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 36,
     fontFamily: LuxeFonts.serif,
   },
   subtitle: {

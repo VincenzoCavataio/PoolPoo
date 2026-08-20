@@ -128,10 +128,10 @@ export const it = {
   'name.changeBody': 'Come vieni chiamato nel tabellone e nel saluto.',
   'name.fallback': 'Giocatore',
 
-  'greeting.morning': 'Buongiorno, {name}',
-  'greeting.afternoon': 'Buon pomeriggio, {name}',
-  'greeting.evening': 'Buonasera, {name}',
-  'greeting.night': 'Ancora in piedi, {name}',
+  'greeting.morning': 'Buongiorno',
+  'greeting.afternoon': 'Buon pomeriggio',
+  'greeting.evening': 'Buonasera',
+  'greeting.night': 'Ancora in piedi',
 
   // -------------------------------------------------------------------- menu
   'menu.subtitle': 'Pool Hall',
