@@ -14,7 +14,7 @@
  */
 
 import { useFrame } from '@react-three/fiber/native';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { BallKind } from '@/game/core/ball';
@@ -53,6 +53,67 @@ const STRIPE_LATITUDE = 0.52;
 const BADGE_LATITUDE = 0.86;
 
 const SHADOW_ALPHA = 0.4;
+
+/**
+ * How fast a ball has to be going before it leaves anything behind.
+ *
+ * A ball at rest, or rolling gently into position, leaves nothing: a trail on
+ * everything that moves would be decoration, and what makes this read as speed
+ * is that it appears only when there is speed to read.
+ *
+ * 1.2 m/s is about the pace of a firm positional roll, so ordinary play stays
+ * clean and a struck ball streaks.
+ */
+const TRAIL_FROM = 1.2;
+
+/**
+ * How many ghosts follow a ball.
+ *
+ * Recorded positions rather than a stretched shape, so a ball coming off a
+ * cushion leaves a trail that turns with it instead of a straight smear through
+ * the rail.
+ *
+ * Five. The length is whatever the ball covered in that many frames, so the
+ * count sets it: at six a break-speed ball dragged a tail more than half a metre
+ * long — nine ball widths, a comet rather than a cue ball — while four left too
+ * few ghosts to read as a streak at all.
+ */
+const TRAIL_LENGTH = 5;
+
+/**
+ * Brightness of the ghost nearest the ball; the rest fade away behind it.
+ *
+ * Raised from 0.45, and the falloff straightened out at the same time. With a
+ * squared ramp across four ghosts the nearest one came out at *zero* and the
+ * next at five per cent, so the whole effect was a single faint smudge and the
+ * trail could not be seen at all. Linear from a floor keeps every ghost visible
+ * and still fades to nothing at the tail.
+ */
+const TRAIL_ALPHA = 0.7;
+
+/** The faintest a ghost is drawn, so the far end of the tail still shows. */
+const TRAIL_MIN = 0.12;
+
+/**
+ * How much light reaches a ball at the bottom of a pocket.
+ *
+ * Not zero: a pocket is open at the top, so there is some spill and a ball that
+ * vanished completely would look like it had been deleted rather than dropped.
+ * An eighth is enough to make out the colour of what went down without the ball
+ * reading as lit.
+ */
+const POCKET_SHADE = 0.13;
+
+/** How narrow the tail end of the ribbon is, as a fraction of its head. */
+const TRAIL_TAPER = 0.25;
+
+/**
+ * How high the ribbon floats above the cloth.
+ *
+ * Just clear of it. Flat on the baize would z-fight with the cloth; any higher
+ * and the streak visibly hovers above the ball it belongs to.
+ */
+const TRAIL_Y = 0.0016;
 
 /**
  * The cue ball's spot markings.
@@ -230,8 +291,47 @@ export function Balls({ world }: { world: World }) {
   const count = world.balls.length;
   const ballsRef = useRef<THREE.InstancedMesh>(null);
   const shadowsRef = useRef<THREE.InstancedMesh>(null);
+  const trailRef = useRef<THREE.InstancedMesh>(null);
+
+  /**
+   * The ribbon's quad, laid flat once.
+   *
+   * A plane stands upright in XY by default, so without this every segment
+   * would be a little wall along the ball's path. Rotating the geometry rather
+   * than each instance means the per-frame matrix only ever carries the heading
+   * the segment actually needs.
+   */
+  const trailGeometry = useCallback((geometry: THREE.PlaneGeometry | null) => {
+    geometry?.rotateX(-Math.PI / 2);
+  }, []);
+
+  /**
+   * The last few positions of every ball, oldest first.
+   *
+   * A ring would save the shifting, but at six entries a copy is cheaper than
+   * the arithmetic to avoid it, and this way the array is already in draw order.
+   */
+  const history = useMemo(
+    () =>
+      Array.from({ length: count }, () =>
+        Array.from({ length: TRAIL_LENGTH }, () => ({ x: 0, y: 0, z: 0, live: false })),
+      ),
+    [count],
+  );
 
   const ballSetId = useSettings((s) => s.ballSetId);
+  const showTrail = useSettings((s) => s.motionTrail);
+
+  /**
+   * Instances the trail needs: every ball's ghosts, all in one mesh.
+   *
+   * Allocated for the worst case rather than grown, because an instanced mesh
+   * cannot be resized without rebuilding it, and rebuilding one mid-break is the
+   * kind of hitch this effect exists to avoid.
+   */
+  // One segment per gap between recorded positions, so one fewer than the
+  // ghosts a per-position trail would have needed.
+  const trailCount = count * (TRAIL_LENGTH - 1);
   const set = useMemo(() => ballSetById(ballSetId), [ballSetId]);
 
   const numbers = useMemo(createNumberAtlas, []);
@@ -342,9 +442,19 @@ export function Balls({ world }: { world: World }) {
      * thing happening.
      */
     const replay = useSession.getState().replay;
-    const delta = replay ? frameDelta * replay.speed : frameDelta;
+    /**
+     * How fast the world being drawn is actually running, as a fraction of real
+     * time. 1 during play, the replay's own speed during one.
+     *
+     * Everything below that advances over time uses it — how far a ball has
+     * turned, and how far it is drawn out along its path — because both are
+     * about distance covered between frames, and a replay covers less.
+     */
+    const rate = replay ? replay.speed : 1;
 
-    const { object, axis, spin } = scratch;
+    const delta = frameDelta * rate;
+
+    const { object, axis, spin, color } = scratch;
 
     for (let index = 0; index < count; index++) {
       const ball = world.balls[index];
@@ -426,15 +536,33 @@ export function Balls({ world }: { world: World }) {
           }
         }
 
+        const fallY = fall.started ? fall.y : floor;
         object.scale.setScalar(resting ? 1 : 0);
         object.quaternion.copy(orientations[index]);
         object.position.set(
           fall.started ? fall.x : (resting?.[0] ?? 0),
-          fall.started ? fall.y : floor,
+          fallY,
           fall.started ? fall.z : (resting?.[1] ?? 0),
         );
         object.updateMatrix();
         mesh.setMatrixAt(index, object.matrix);
+
+        /*
+         * Darkened as it drops, because a pocket is a hole.
+         *
+         * The lamp is above the table and the ball is now under the slate, so
+         * almost nothing reaches it — but the scene lights do not know that: the
+         * cavity is open geometry with no occluder in it, so a ball at the
+         * bottom of a pocket was lit exactly as brightly as one on the cloth and
+         * sat there glowing in what should be the darkest part of the table.
+         *
+         * Scaled by depth rather than switched at the lip, so the ball dims as
+         * it falls the way it would going out of the light.
+         */
+        const depth = Math.min(1, Math.max(0, (BALL_HEIGHT - fallY) / POCKET_DEPTH));
+        color.set(colorForBallIn(set, ball.number));
+        color.multiplyScalar(1 - depth * (1 - POCKET_SHADE));
+        mesh.setColorAt(index, color);
 
         object.scale.setScalar(0);
         object.updateMatrix();
@@ -447,6 +575,18 @@ export function Balls({ world }: { world: World }) {
         falls[index].started = false;
         falls[index].done = false;
       }
+
+      /*
+       * Full brightness again, which the pocket shading above would otherwise
+       * never give back.
+       *
+       * A respotted cue ball, or the fourteen coming out of a re-rack, would
+       * arrive on the cloth still carrying whatever darkness they had at the
+       * bottom of the pocket — and nothing would ever lighten them, because the
+       * effect that sets the colours only runs when the table is rebuilt.
+       */
+      color.set(colorForBallIn(set, ball.number));
+      mesh.setColorAt(index, color);
 
       // Turned by its own angular velocity, not inferred from how fast it is
       // travelling: a ball with draw on it slides one way while spinning the
@@ -493,10 +633,145 @@ export function Balls({ world }: { world: World }) {
 
     mesh.instanceMatrix.needsUpdate = true;
     shadows.instanceMatrix.needsUpdate = true;
+    // The pocket shading is written per frame, so the colours have to be
+    // uploaded per frame too — the effect that sets them only runs on a rerack.
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+    /*
+     * The trail, drawn as ghosts of where the ball has been.
+     *
+     * Written after the balls so it reads the same positions they were drawn
+     * at. Every ghost of every ball shares one instanced mesh — the whole effect
+     * is a single draw call, which is what makes it affordable on a phone that
+     * is already drawing balls, shadows and a room.
+     */
+    const trail = trailRef.current;
+    if (trail) {
+      let slot = 0;
+
+      for (let index = 0; index < count; index++) {
+        const ball = world.balls[index];
+        const past = history[index];
+        const moving = !ball.pocketed && !ball.offTable;
+        const speed = moving ? Math.hypot(ball.v.x, ball.v.y) * rate : 0;
+
+        // Shift the record along and put the current position on the end.
+        for (let i = 0; i < TRAIL_LENGTH - 1; i++) {
+          past[i].x = past[i + 1].x;
+          past[i].y = past[i + 1].y;
+          past[i].z = past[i + 1].z;
+          past[i].live = past[i + 1].live;
+        }
+        const head = past[TRAIL_LENGTH - 1];
+        head.x = sceneX(ball.p);
+        head.y = BALL_HEIGHT + ball.z;
+        head.z = sceneZ(ball.p);
+        // Only fast enough positions are worth trailing from, so a ball that
+        // slows stops feeding the record and the trail runs out behind it.
+        head.live = showTrail && speed > TRAIL_FROM;
+
+        if (!showTrail) continue;
+
+        /*
+         * One flat segment per gap between recorded positions, joined end to
+         * end into a ribbon.
+         *
+         * It was a row of spheres, which is what a trail looks like when it is
+         * made of balls: you could count them. A quad stretched between each
+         * pair of positions reads as one continuous streak instead, and because
+         * the positions are the ball's real path the ribbon bends with it round
+         * a cushion.
+         *
+         * Laid flat on the cloth rather than upright, so it is a smear of light
+         * on the baize rather than a wall standing in the room.
+         */
+        for (let i = 0; i < TRAIL_LENGTH - 1; i++) {
+          if (!past[i].live || !past[i + 1].live || slot >= trailCount) continue;
+
+          const ax = past[i].x;
+          const az = past[i].z;
+          const bx = past[i + 1].x;
+          const bz = past[i + 1].z;
+
+          const dx = bx - ax;
+          const dz = bz - az;
+          const span = Math.hypot(dx, dz);
+          if (span < 1e-4) continue;
+
+          // 0 at the tail, 1 at the segment nearest the ball.
+          const age = i / (TRAIL_LENGTH - 2 || 1);
+
+          object.quaternion.identity();
+          object.position.set((ax + bx) / 2, TRAIL_Y, (az + bz) / 2);
+          object.rotation.set(0, Math.atan2(dx, dz), 0);
+          // Narrower towards the tail, so the streak comes to a point rather
+          // than ending in a squared-off stub.
+          object.scale.set(TRAIL_TAPER + (1 - TRAIL_TAPER) * age, 1, span);
+          object.updateMatrix();
+          trail.setMatrixAt(slot, object.matrix);
+
+          /*
+           * The ball's own colour, dimmed towards the tail.
+           *
+           * Dimming the colour rather than the opacity: these are drawn additive
+           * against a dark room, so a darker colour *is* a fainter part of the
+           * streak, and it saves sorting a pile of overlapping transparent
+           * quads.
+           */
+          color.set(colorForBallIn(set, ball.number));
+          color.multiplyScalar(TRAIL_MIN + (TRAIL_ALPHA - TRAIL_MIN) * age);
+          trail.setColorAt(slot, color);
+          slot++;
+        }
+      }
+
+      // Everything unused is parked at zero size rather than left where it was
+      // last frame, which is what would otherwise strand a ghost mid-table.
+      for (let i = slot; i < trailCount; i++) {
+        object.scale.setScalar(0);
+        object.position.set(0, -1, 0);
+        object.updateMatrix();
+        trail.setMatrixAt(i, object.matrix);
+      }
+
+      trail.count = trailCount;
+      trail.instanceMatrix.needsUpdate = true;
+      if (trail.instanceColor) trail.instanceColor.needsUpdate = true;
+    }
   });
 
   return (
     <group>
+      {/*
+        The trail, behind everything and lighting rather than occluding.
+
+        Additive and depth-write off: a ghost is a smear of light where a ball
+        was, not an object in the room, and writing depth would let it hide the
+        ball it belongs to.
+      */}
+      <instancedMesh ref={trailRef} args={[undefined, undefined, trailCount]} frustumCulled={false}>
+        {/*
+          A unit quad lying on the cloth, scaled to span each gap.
+
+          Two triangles per segment instead of a 12x8 sphere: the ribbon is both
+          cheaper than the row of balls it replaces and the thing that was
+          actually wanted.
+        */}
+        <planeGeometry args={[BALL_RADIUS * 1.7, 1]} ref={trailGeometry} />
+        {/*
+          No `vertexColors` here, and that is the whole reason the trail was
+          invisible.
+
+          `vertexColors` tells the shader to read a `color` attribute off the
+          *geometry* — which the shadow quad next door does define, and a plain
+          sphere does not. The shader then sampled an attribute that was not
+          there, every ghost came out black, and black added to a dark room is
+          nothing at all. Per-instance colours set with `setColorAt` need no flag
+          at all: three.js compiles them in when `instanceColor` exists.
+        */}
+        <meshBasicMaterial transparent depthWrite={false} blending={THREE.AdditiveBlending} />
+      </instancedMesh>
+
       <instancedMesh ref={shadowsRef} args={[shadowGeometry, undefined, count]} frustumCulled={false}>
         <meshBasicMaterial color="#000000" transparent depthWrite={false} vertexColors />
       </instancedMesh>

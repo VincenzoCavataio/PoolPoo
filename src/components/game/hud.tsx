@@ -10,13 +10,17 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { GameButton } from '@/components/ui/button';
-import { Palette, Radius } from '@/constants/game-theme';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+
+import { LuxeFonts } from '@/components/ui/luxe';
+import { Luxe, Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { GameModeKind, Phase } from '@/game/rules/types';
-import { currentCall, winningSeats } from '@/game/rules/match';
 import type { PocketId } from '@/game/core/table';
+import { currentCall, winningSeats } from '@/game/rules/match';
+import { GameModeKind, Phase } from '@/game/rules/types';
 import type { MessageKey } from '@/i18n';
+import { useMessageRenderer, useT } from '@/i18n/use-t';
+import { useSession } from '@/store/session';
 
 /** How each pocket is named in the ticker. Shared with the call picker's labels. */
 const POCKET_LABELS: Record<PocketId, MessageKey> = {
@@ -27,8 +31,6 @@ const POCKET_LABELS: Record<PocketId, MessageKey> = {
   'side-n': 'call.pocketSideN',
   'side-s': 'call.pocketSideS',
 };
-import { useMessageRenderer, useT } from '@/i18n/use-t';
-import { useSession } from '@/store/session';
 
 /**
  * The panel colours the top HUD is built from.
@@ -231,7 +233,11 @@ export function GameOverOverlay() {
 
   return (
     <View style={styles.overlay}>
-      <View style={styles.overlayCard}>
+      <Animated.View entering={FadeInDown.duration(340)} style={styles.overlayCard}>
+        {/*
+          The frame's own heading, in the face the wordmark uses.
+        */}
+        <Text style={styles.overlayKicker}>{t('result.frameOver')}</Text>
         <Text style={styles.overlayTitle}>
           {won.length === 1
             ? t('result.winner', { name: table.find((row) => row.id === won[0])?.name ?? '' })
@@ -245,27 +251,48 @@ export function GameOverOverlay() {
               : t('result.draw')}
         </Text>
 
+        <View style={styles.overlayRule} />
+
         <View style={styles.resultTable}>
-          {ranked.map((row) => (
-            <View key={row.id} style={styles.resultRow}>
-              <Text style={styles.resultName}>{row.name}</Text>
-              <Text style={styles.resultScore}>
-                {row.score === undefined
-                  ? t(won.includes(row.id) ? 'result.won' : 'result.lost')
-                  : t('result.points', { count: row.score })}
-              </Text>
-            </View>
-          ))}
+          {ranked.map((row) => {
+            const winner = won.includes(row.id);
+            return (
+              <View key={row.id} style={[styles.resultRow, winner && styles.resultRowWon]}>
+                {/*
+                  A gold marker on the winning rows rather than a colour change
+                  alone: which side won is the one thing this panel exists to
+                  say, and it should survive being glanced at.
+                */}
+                <View style={[styles.resultMark, winner && styles.resultMarkWon]} />
+                <Text style={[styles.resultName, winner && styles.resultNameWon]} numberOfLines={1}>
+                  {row.name}
+                </Text>
+                <Text style={[styles.resultScore, winner && styles.resultScoreWon]}>
+                  {row.score === undefined
+                    ? t(winner ? 'result.won' : 'result.lost')
+                    : t('result.points', { count: row.score })}
+                </Text>
+              </View>
+            );
+          })}
         </View>
 
-        <GameButton
-          label={t('result.newGame')}
-          variant="primary"
+        {/* Filled gold, like every other control that commits: the way on. */}
+        <Pressable
+          accessibilityRole="button"
           // The same people, the same rules, a fresh rack.
           onPress={() => startGame(match.kind, table.length, table.map((row) => row.name))}
-        />
-        <GameButton label={t('common.menu')} variant="ghost" onPress={goToMenu} />
-      </View>
+          style={({ pressed }) => [styles.again, pressed && styles.againPressed]}>
+          <Text style={styles.againLabel}>{t('result.newGame')}</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={goToMenu}
+          style={({ pressed }) => [styles.leave, pressed && styles.pressedQuiet]}>
+          <Text style={styles.leaveLabel}>{t('common.menu')}</Text>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }
@@ -401,13 +428,23 @@ const styles = StyleSheet.create({
     color: Palette.text,
     fontSize: 12,
   },
+  /**
+   * The result, in the shell's own language rather than the table's.
+   *
+   * It was a grey card with the in-game palette on it, which is right for a HUD
+   * that has to sit over green baize and wrong for the one panel that is not
+   * part of play. This is where a frame is settled, so it wears what the menus
+   * wear: near-black ground, a gold edge, the serif face for the name, and gold
+   * on the row that won.
+   */
   overlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(6, 10, 8, 0.82)',
+    // Darker than before: the table underneath was competing with the panel.
+    backgroundColor: 'rgba(4, 6, 5, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.four,
@@ -415,53 +452,124 @@ const styles = StyleSheet.create({
   overlayCard: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.large,
+    backgroundColor: '#080b0a',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Palette.border,
+    borderColor: 'rgba(201, 169, 98, 0.28)',
     padding: Spacing.four,
     gap: Spacing.three,
   },
-  overlayTitle: {
-    color: Palette.text,
-    fontSize: 26,
+  overlayKicker: {
+    color: Luxe.gold,
+    fontSize: 10,
     fontWeight: '800',
+    letterSpacing: 2.6,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  overlayTitle: {
+    color: Luxe.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontFamily: LuxeFonts.serif,
     textAlign: 'center',
   },
+  /** A lit rule under the title, the same mark the wordmark carries. */
+  overlayRule: {
+    alignSelf: 'center',
+    width: 52,
+    height: 1,
+    backgroundColor: Luxe.gold,
+    opacity: 0.65,
+  },
   overlayDetail: {
-    color: Palette.textMuted,
+    color: Luxe.textMuted,
     fontSize: 14,
     textAlign: 'center',
   },
   stars: {
-    color: Palette.gold,
+    color: Luxe.gold,
     fontSize: 34,
     textAlign: 'center',
     letterSpacing: 4,
   },
   starsEmpty: {
-    color: Palette.border,
+    color: 'rgba(255, 255, 255, 0.14)',
   },
   resultTable: {
-    gap: Spacing.two,
+    gap: Spacing.one,
   },
   resultRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.two,
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    borderRadius: Radius.small,
-    backgroundColor: Palette.surfaceRaised,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+  },
+  resultRowWon: {
+    borderColor: 'rgba(201, 169, 98, 0.45)',
+    backgroundColor: 'rgba(201, 169, 98, 0.08)',
+  },
+  resultMark: {
+    width: 3,
+    height: 20,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  resultMarkWon: {
+    backgroundColor: Luxe.gold,
   },
   resultName: {
-    color: Palette.text,
-    fontSize: 15,
-    fontWeight: '600',
+    flex: 1,
+    color: Luxe.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  resultNameWon: {
+    color: Luxe.text,
   },
   resultScore: {
-    color: Palette.accent,
-    fontSize: 15,
-    fontWeight: '700',
+    color: Luxe.textMuted,
+    fontSize: 13,
     fontVariant: ['tabular-nums'],
+  },
+  resultScoreWon: {
+    color: Luxe.gold,
+    fontWeight: '800',
+  },
+  again: {
+    alignItems: 'center',
+    paddingVertical: Spacing.three,
+    borderRadius: 8,
+    backgroundColor: Luxe.gold,
+    marginTop: Spacing.one,
+  },
+  againPressed: {
+    backgroundColor: '#b8985a',
+  },
+  againLabel: {
+    color: Luxe.ink,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+  leave: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+  },
+  leaveLabel: {
+    color: Luxe.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+  },
+  pressedQuiet: {
+    opacity: 0.6,
   },
 });

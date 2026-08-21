@@ -48,6 +48,16 @@ const FLOOR_DROP = -0.78;
 const FLOOR_RESTITUTION = 0.28;
 
 /**
+ * How much of its speed a ball keeps off a wall.
+ *
+ * Much livelier than the floor, and that difference is the point: a skirting
+ * board is painted wood and a ball that runs into one comes back, while a
+ * carpet is specifically the thing you put down to stop that happening. Sharing
+ * one figure made a ball reach the wall and stop dead.
+ */
+const WALL_RESTITUTION = 0.55;
+
+/**
  * How quickly a ball on the floor stops rolling and spinning.
  *
  * Set by how far it needs to travel, not by feel: at 2.2 a ball leaving the
@@ -57,6 +67,30 @@ const FLOOR_RESTITUTION = 0.28;
  * without turning into a ball that rolls for ten seconds.
  */
 const FLOOR_DRAG = 1.2;
+
+/**
+ * Friction between a ball and the carpet, as a deceleration in m/s².
+ *
+ * Carpet is far grabbier than baize — this is roughly ten times the cloth's
+ * rolling resistance — and that is what turns a ball that lands sliding into a
+ * ball that is rolling within a few centimetres.
+ *
+ * It replaces the exponential drag *while the ball is still sliding*. The drag
+ * remains for the rolling phase, where all it has to do is bring a rolling ball
+ * to a stop over a few metres.
+ */
+const FLOOR_FRICTION = 6;
+
+/**
+ * How much of its horizontal speed a ball loses through the air.
+ *
+ * Small, because a pool ball is heavy and the drop is under a metre: a ball
+ * leaving the table at 4 m/s arrives at the floor at about 3.9. It is here
+ * because *nothing at all* was wrong in a visible way — a ball crossing a metre
+ * of empty air at a perfectly constant speed reads as a sprite being moved
+ * rather than an object falling.
+ */
+const AIR_DRAG = 0.06;
 
 export interface BallLayout {
   number: number;
@@ -730,6 +764,21 @@ export class World {
         // This expression conserves it to the last bit.
         b.z += b.vz * h - 0.5 * g * h * h;
         b.vz -= g * h;
+
+        /*
+         * A little air resistance on the way down.
+         *
+         * Tiny — a ball falling off the table arrives a couple of per cent
+         * slower than it left — but a ball crossing a metre of empty space at
+         * an exactly constant speed does not read as falling, it reads as being
+         * slid across the screen. Applied only while airborne, since on the
+         * ground the carpet dominates by two orders of magnitude.
+         */
+        if (b.offTable && b.z > FLOOR_DROP) {
+          const air = Math.max(0, 1 - AIR_DRAG * h);
+          b.v.x *= air;
+          b.v.y *= air;
+        }
       }
 
       /**
@@ -744,15 +793,30 @@ export class World {
       if (b.offTable && b.z <= FLOOR_DROP) {
         b.z = FLOOR_DROP;
 
-        // The room has walls, and a ball on the carpet has to stop at them
-        // rather than rolling out of the building.
+        /*
+         * The room has walls, and a ball on the carpet has to stop at them
+         * rather than rolling out of the building.
+         *
+         * The bounce used `FLOOR_RESTITUTION`, which is how much of a *drop* a
+         * carpet gives back — barely a quarter, because a carpet is what you put
+         * down to stop things bouncing. A skirting board is not a carpet: it is
+         * painted wood, and a ball that runs into one comes back. Using the
+         * floor's figure made a ball hit the wall and stop almost dead, which is
+         * the unnatural part.
+         *
+         * The spin has to turn round with it. Left alone, a ball rebounding off
+         * a wall carries on rotating the way it was going before, so it rolls
+         * backwards while spinning forwards — the same mismatch the landing had.
+         */
         if (Math.abs(b.p.x) > PHYSICS.roomHalfX) {
           b.p.x = Math.sign(b.p.x) * PHYSICS.roomHalfX;
-          b.v.x = -b.v.x * FLOOR_RESTITUTION;
+          b.v.x = -b.v.x * WALL_RESTITUTION;
+          b.w.y = b.v.x / BALL_RADIUS;
         }
         if (Math.abs(b.p.y) > PHYSICS.roomHalfY) {
           b.p.y = Math.sign(b.p.y) * PHYSICS.roomHalfY;
-          b.v.y = -b.v.y * FLOOR_RESTITUTION;
+          b.v.y = -b.v.y * WALL_RESTITUTION;
+          b.w.x = -b.v.y / BALL_RADIUS;
         }
 
         this.bounceOffFurniture(b);
@@ -761,12 +825,59 @@ export class World {
           const bounce = -b.vz * FLOOR_RESTITUTION;
           b.vz = bounce < PHYSICS.restVerticalSpeed ? 0 : bounce;
         }
-        // Carpet, not cloth: it scrubs off travel and spin together.
+
+        /**
+         * The carpet turns a sliding ball into a rolling one.
+         *
+         * This was two independent exponentials, one on the travel and one on
+         * the spin, and that is why a ball on the floor never looked right: it
+         * arrived sliding at four metres a second with 144 rad/s of spin on it —
+         * eight metres a second worth of rotation — and the two then decayed
+         * separately for ever. Nothing ever made them agree, so the ball
+         * pirouetted while it drifted, and the harder it was hit the worse the
+         * mismatch.
+         *
+         * What a real ball does is exactly what the cloth pass above already
+         * models: friction acts at the contact point, slowing the centre and
+         * spinning the ball up until the two meet at `v = ωR`. The same maths,
+         * with the carpet's much larger friction, so the transition takes a few
+         * centimetres instead of a couple of metres.
+         */
+        const slipX = b.v.x - BALL_RADIUS * b.w.y;
+        const slipY = b.v.y + BALL_RADIUS * b.w.x;
+        const slip = Math.hypot(slipX, slipY);
+
+        if (slip > 1e-6) {
+          // Capped at the step that lands exactly on rolling, for the same
+          // reason the cloth's is: past that point friction starts adding
+          // energy instead of removing it.
+          const step = Math.min(FLOOR_FRICTION * h, slip / SLIP_DECAY);
+          const dirX = slipX / slip;
+          const dirY = slipY / slip;
+
+          b.v.x -= step * dirX;
+          b.v.y -= step * dirY;
+          // The same impulse twists the ball. Signs exactly as the cloth pass
+          // uses them: the contact point is *below* the centre, so the lever
+          // arm flips the cross product, and writing it the intuitive way round
+          // spins the ball up instead of into agreement.
+          const twist = (5 * step) / (2 * BALL_RADIUS);
+          b.w.x -= twist * dirY;
+          b.w.y += twist * dirX;
+        } else {
+          // Rolling now: hold the constraint exactly, so the ball cannot drift
+          // back out of it through accumulated rounding.
+          b.w.x = -b.v.y / BALL_RADIUS;
+          b.w.y = b.v.x / BALL_RADIUS;
+        }
+
+        // Rolling resistance, which is all the drag has left to do: bring a
+        // rolling ball to rest over a few metres of carpet.
         const drag = Math.max(0, 1 - FLOOR_DRAG * h);
         b.v.x *= drag;
         b.v.y *= drag;
-        b.w.x *= drag;
-        b.w.y *= drag;
+        // English about the vertical still just bleeds away; nothing couples it
+        // to travel.
         b.w.z *= drag;
 
         /**
@@ -1193,12 +1304,27 @@ export class World {
       const escapeX = reachX - Math.abs(dx);
       const escapeY = reachY - Math.abs(dy);
 
+      /*
+       * Pushed out of the nearest face, with the spin turned round to match.
+       *
+       * A ball that rebounds off a bookcase while still rotating the way it
+       * arrived rolls backwards and spins forwards, which reads as the ball
+       * being dragged rather than bouncing. Resetting the rolling constraint on
+       * the reversed axis is enough: the other axis is untouched, so a glancing
+       * hit still keeps the spin it had along the face.
+       */
       if (escapeX < escapeY) {
         b.p.x = o.x + Math.sign(dx || 1) * reachX;
-        if (b.v.x * Math.sign(dx || 1) < 0) b.v.x = -b.v.x * o.restitution;
+        if (b.v.x * Math.sign(dx || 1) < 0) {
+          b.v.x = -b.v.x * o.restitution;
+          b.w.y = b.v.x / BALL_RADIUS;
+        }
       } else {
         b.p.y = o.y + Math.sign(dy || 1) * reachY;
-        if (b.v.y * Math.sign(dy || 1) < 0) b.v.y = -b.v.y * o.restitution;
+        if (b.v.y * Math.sign(dy || 1) < 0) {
+          b.v.y = -b.v.y * o.restitution;
+          b.w.x = -b.v.y / BALL_RADIUS;
+        }
       }
     }
   }

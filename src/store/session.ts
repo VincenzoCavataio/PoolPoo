@@ -122,9 +122,26 @@ const REPLAY_LEAD = 0.85;
 const REPLAY_TRAIL = 0.55;
 /** Longer tail for a ball going off the table: the fall is the whole point. */
 const REPLAY_FALL_TRAIL = 1.5;
-const REPLAY_TARGET_SECONDS = 2.6;
-const REPLAY_MIN_SPEED = 0.12;
-const REPLAY_MAX_SPEED = 0.85;
+/**
+ * How long a replay should last, and how much longer a busy one gets.
+ *
+ * A single pot and a shot that drops four both used to be squeezed into the same
+ * 2.6 seconds, which meant the busy one — the one actually worth watching — ran
+ * fastest. The target now grows with the number of moments, so a treble is given
+ * the time to be read as three separate things rather than a blur.
+ */
+const REPLAY_TARGET_SECONDS = 3.2;
+const REPLAY_SECONDS_PER_EXTRA_MOMENT = 0.7;
+const REPLAY_MAX_TARGET_SECONDS = 5;
+
+/**
+ * The floor was 0.12 — an eighth of real time, which is not slow motion so much
+ * as a still picture, and it was reached often because the window before the
+ * first pot is frequently short. Raising it means a tight window plays at a
+ * readable crawl instead of appearing to freeze.
+ */
+const REPLAY_MIN_SPEED = 0.22;
+const REPLAY_MAX_SPEED = 0.8;
 
 /**
  * How much of a settled shot's tail is run out in one frame.
@@ -282,7 +299,28 @@ export const useSession = create<SessionState>((set, get) => {
     };
   };
 
+  /**
+   * Whether the shot just watched was the one that ended the game.
+   *
+   * Set when the rules say so and read once the replay is over, because the two
+   * are no longer the same moment: the frame ends, the replay of it plays, and
+   * only then does the board go up.
+   */
+  let gameEnded = false;
+
   const finishTurn = () => {
+    /*
+     * A finished game goes to the result rather than back to the table.
+     *
+     * Reached from the end of the replay as well as directly, which is the whole
+     * point: the winning shot gets watched first.
+     */
+    if (gameEnded) {
+      gameEnded = false;
+      set({ phase: Phase.GAME_OVER, replay: null });
+      return;
+    }
+
     /**
      * Balls that were driven off the table come back here rather than the moment
      * the shot settles.
@@ -483,7 +521,7 @@ export const useSession = create<SessionState>((set, get) => {
      * the tail is trimmed to what the slowest allowed speed can still show at the
      * target length, and what is cut is the part after the ball has landed.
      */
-    const longest = REPLAY_MAX_SPEED * REPLAY_TARGET_SECONDS;
+    const longest = REPLAY_MAX_SPEED * REPLAY_MAX_TARGET_SECONDS;
     const wanted = moments[moments.length - 1].t + trail;
     const until = Math.min(wanted, from + longest);
 
@@ -500,11 +538,20 @@ export const useSession = create<SessionState>((set, get) => {
      * best that can be done with it. The long end no longer needs guarding
      * because the window above is already trimmed to fit.
      */
-    const span = Math.max(0.05, until - from);
-    const speed = Math.min(
-      REPLAY_MAX_SPEED,
-      Math.max(REPLAY_MIN_SPEED, span / REPLAY_TARGET_SECONDS),
+    /*
+     * A busy shot is given longer than a quiet one.
+     *
+     * Four balls dropping in the same window is the replay most worth watching
+     * and, on a fixed target, the one that played fastest. Each moment past the
+     * first buys a little more time.
+     */
+    const target = Math.min(
+      REPLAY_MAX_TARGET_SECONDS,
+      REPLAY_TARGET_SECONDS + (moments.length - 1) * REPLAY_SECONDS_PER_EXTRA_MOMENT,
     );
+
+    const span = Math.max(0.05, until - from);
+    const speed = Math.min(REPLAY_MAX_SPEED, Math.max(REPLAY_MIN_SPEED, span / target));
 
     replayAccumulator = 0;
     return { world, until, moments, speed };
@@ -701,18 +748,27 @@ export const useSession = create<SessionState>((set, get) => {
       celebration,
     });
 
+    /*
+     * The winning shot is watched before the board goes up.
+     *
+     * It used to cut straight to the result, on the reasoning that the panel
+     * matters more — which had it exactly backwards. The shot that wins the
+     * frame is the one replay anybody would actually want, and skipping it meant
+     * the only pot never shown was the best one. So the game ending is recorded
+     * now and acted on when the replay finishes.
+     */
     if (finished) {
-      // The result panel matters more than a replay does.
-      set({ phase: Phase.GAME_OVER, replay: null });
       void clearSavedGame();
-      return;
+      gameEnded = true;
     }
 
     const replay = buildReplay(moments);
     if (replay) {
       set({ phase: Phase.REPLAY, replay });
-      const save = buildSave();
-      if (save) void saveGame(save);
+      if (!finished) {
+        const save = buildSave();
+        if (save) void saveGame(save);
+      }
       return;
     }
 
@@ -740,6 +796,9 @@ export const useSession = create<SessionState>((set, get) => {
     startGame: (kind, playerCount, names, cpus) => {
       accumulator = 0;
       pending = null;
+      // A stale flag would send the next shot straight to a result screen for a
+      // game that had not finished.
+      gameEnded = false;
       trophyRun = emptyRunState();
       // The cloth is a physics choice, not only a colour, so the table is built
       // with the profile the player picked.
@@ -773,6 +832,9 @@ export const useSession = create<SessionState>((set, get) => {
 
       accumulator = 0;
       pending = null;
+      // A stale flag would send the next shot straight to a result screen for a
+      // game that had not finished.
+      gameEnded = false;
       trophyRun = emptyRunState();
       set({
         mode: save.mode,
@@ -921,6 +983,9 @@ export const useSession = create<SessionState>((set, get) => {
     leaveGame: () => {
       accumulator = 0;
       pending = null;
+      // A stale flag would send the next shot straight to a result screen for a
+      // game that had not finished.
+      gameEnded = false;
       trophyRun = emptyRunState();
       cancelCpuTurn();
       set({

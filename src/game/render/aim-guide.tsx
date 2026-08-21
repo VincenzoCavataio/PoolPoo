@@ -10,7 +10,7 @@
 
 import { useFrame } from '@react-three/fiber/native';
 import { useMemo, useRef } from 'react';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 
 import { BALL_RADIUS } from '@/game/core/constants';
 import { predictAim } from '@/game/core/predict';
@@ -25,6 +25,17 @@ import { CameraMode, rig } from './camera';
 import { BALL_HEIGHT, sceneHeading, sceneX, sceneZ } from './coords';
 
 const GUIDE_Y = BALL_RADIUS * 0.9;
+
+/**
+ * The colour of every aiming mark.
+ *
+ * The app's gold. The guide used white for the line and the ghost, which is the
+ * colour of the cue ball itself — so the line leaving the ball looked like part
+ * of the ball, and the ghost sitting on an object ball hid it. One colour, used
+ * nowhere else on the table, keeps all three marks legible as *aids* rather than
+ * as things on the cloth.
+ */
+const GUIDE_COLOR = '#c9a962';
 const TARGET_LINE_LENGTH = 0.32;
 const CUE_LENGTH = 0.9;
 
@@ -168,7 +179,9 @@ export function AimGuide() {
 
     if (ghostBall.current) {
       ghostBall.current.visible = showGhost;
-      if (showGhost) ghostBall.current.position.set(stopX, BALL_HEIGHT, stopZ);
+      // Flat on the cloth, not at the ball's centre: it is a ring marking a
+      // place on the table now, not a sphere standing in for a ball.
+      if (showGhost) ghostBall.current.position.set(stopX, GUIDE_Y * 0.12, stopZ);
     }
 
     if (targetLine.current) {
@@ -204,19 +217,59 @@ export function AimGuide() {
         </group>
       </group>
 
+      {/*
+        The aim line, in the app's gold rather than plain white.
+​
+        White is the colour of the cue ball, so a white line leaving a white ball
+        read as part of it. Gold is what this app uses for the thing you are
+        about to do, and on green baize it separates cleanly from both the cloth
+        and the balls.
+​
+        Additive and depth-write off, like the trail: these are marks of light
+        laid over the table, not objects standing on it, and writing depth let
+        them z-fight with the cloth at glancing angles.
+      */}
       <mesh ref={guideLine}>
-        <boxGeometry args={[0.006, 0.002, 1]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.42} />
+        <boxGeometry args={[0.004, 0.001, 1]} />
+        <meshBasicMaterial
+          color={GUIDE_COLOR}
+          transparent
+          opacity={0.55}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
 
-      <mesh ref={ghostBall}>
-        <sphereGeometry args={[BALL_RADIUS, 16, 12]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.22} depthWrite={false} />
+      {/*
+        The ghost ball, as a ring rather than a solid sphere.
+​
+        A translucent white sphere sitting on the object ball hid the ball it was
+        pointing at — worst of all at close range, where the two coincide and the
+        guide appeared to stop working. A thin ring drawn flat on the cloth marks
+        the same contact point while leaving everything behind it visible.
+      */}
+      <mesh ref={ghostBall} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[BALL_RADIUS * 0.82, BALL_RADIUS, 28]} />
+        <meshBasicMaterial
+          color={GUIDE_COLOR}
+          transparent
+          opacity={0.7}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
 
+      {/* Where the struck ball goes: brighter, because it is the answer. */}
       <mesh ref={targetLine}>
-        <boxGeometry args={[0.005, 0.002, 1]} />
-        <meshBasicMaterial color="#ffc857" transparent opacity={0.55} />
+        <boxGeometry args={[0.005, 0.001, 1]} />
+        <meshBasicMaterial
+          color={GUIDE_COLOR}
+          transparent
+          opacity={0.85}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
     </group>
   );

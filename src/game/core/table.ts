@@ -69,11 +69,35 @@ export interface Table {
 const HALF_LENGTH = 1.27;
 const HALF_WIDTH = 0.635;
 
-/** How far from each corner the cushion stops, leaving the pocket mouth. */
-const CORNER_GAP = 0.06;
-/** Half-width of a side pocket mouth. */
+/**
+ * How far from each corner the cushion stops, leaving the pocket mouth.
+ *
+ * The jaws sit at `(-hx + gap, -hy)` and `(-hx, -hy + gap)`, so the mouth they
+ * leave between them is `gap × √2`. The WPA specification puts a corner pocket
+ * mouth at 4.5 to 4.625 inches — 114.3 to 117.5 mm — measured between the tips
+ * of the cushion noses, so the middle of that range wants 81.95 mm of gap.
+ *
+ * It was 0.06, which is a mouth of 84.9 mm: a third narrower than the narrowest
+ * legal pocket, and much the largest departure from the specification anywhere
+ * on this table. Corner pots were correspondingly harder than they should be.
+ */
+const CORNER_GAP = 0.08195;
+
+/**
+ * Half-width of a side pocket mouth.
+ *
+ * WPA gives 5 to 5.125 inches, 127 to 130.2 mm, so half of it is 63.5 to 65.1 —
+ * this sits at the top of the range and needs no change.
+ */
 const SIDE_GAP = 0.065;
 
+/**
+ * How close a ball's centre must come to be captured.
+ *
+ * Not the mouth: the mouth is the gap between the cushion noses above, while
+ * this is the radius of the hole behind it. A ball whose centre reaches inside
+ * this has passed the point where the slate stops supporting it.
+ */
 const CORNER_POCKET_RADIUS = 0.062;
 const SIDE_POCKET_RADIUS = 0.065;
 

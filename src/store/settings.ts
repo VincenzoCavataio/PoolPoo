@@ -46,6 +46,13 @@ export interface SettingsState {
   showAimGuide: boolean;
   /** Draw the ghost ball and the predicted path of the struck ball. */
   showGhostBall: boolean;
+  /**
+   * Leave a short trail behind a moving ball, in the ball's own colour.
+   *
+   * Only while it is moving, and only above a walking pace: the effect is a
+   * sense of speed, so a ball at rest leaves nothing.
+   */
+  motionTrail: boolean;
   /** Radians of aim change per pixel dragged. */
   aimSensitivity: number;
   /**
@@ -73,6 +80,7 @@ export interface SettingsState {
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
   setShowGhostBall: (value: boolean) => void;
+  setMotionTrail: (value: boolean) => void;
   setAimSensitivity: (value: number) => void;
   setMusicVolume: (value: number) => void;
   setSfxVolume: (value: number) => void;
@@ -91,6 +99,7 @@ const DEFAULTS = {
   locationId: LOCATIONS[0].id,
   showAimGuide: true,
   showGhostBall: true,
+  motionTrail: true,
   aimSensitivity: AIM_SENSITIVITY.default,
   musicVolume: 0.55,
   sfxVolume: 0.8,
@@ -127,6 +136,7 @@ export const useSettings = create<SettingsState>()(
       },
       setShowAimGuide: (showAimGuide) => set({ showAimGuide }),
       setShowGhostBall: (showGhostBall) => set({ showGhostBall }),
+      setMotionTrail: (motionTrail) => set({ motionTrail }),
       setAimSensitivity: (value) =>
         set({
           aimSensitivity: Math.min(AIM_SENSITIVITY.max, Math.max(AIM_SENSITIVITY.min, value)),

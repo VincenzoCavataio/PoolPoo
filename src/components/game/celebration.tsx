@@ -15,7 +15,8 @@ import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut, Keyframe } from 'react-native-reanimated';
 
-import { Palette, Radius } from '@/constants/game-theme';
+import { LuxeFonts } from '@/components/ui/luxe';
+import { Luxe, Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { Phase } from '@/game/rules/types';
 import type { Message } from '@/i18n';
@@ -25,7 +26,13 @@ import { useSession } from '@/store/session';
 const CONFETTI_COLORS = ['#ffc857', '#3ddc84', '#ff53d8', '#5cf0ff', '#ff6b5e', '#f2f0e6'];
 const CONFETTI_COUNT = 26;
 
-const POT_DURATION = 2600;
+/**
+ * How long the pot banner stays up.
+ *
+ * 2600 was most of the replay it plays over, which made it scenery. A reaction
+ * should be over while the thing it is reacting to is still happening.
+ */
+const POT_DURATION = 1500;
 const FOUL_DURATION = 1700;
 
 function Confetti({ seed }: { seed: number }) {
@@ -41,8 +48,16 @@ function Confetti({ seed }: { seed: number }) {
           color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
           width: 6 + (i % 3) * 4,
           height: 10 + (i % 4) * 3,
-          delay: (i % 9) * 80,
-          duration: 1500 + (i % 5) * 280,
+          /*
+           * Nearly all of it arrives at once.
+           *
+           * The delays ran to 720ms, so the last of the confetti appeared long
+           * after the ball had dropped and the burst read as a slow drizzle.
+           * A fifth of that keeps the ragged edge that stops it looking
+           * mechanical, without any of it turning up late to its own party.
+           */
+          delay: (i % 9) * 16,
+          duration: 1100 + (i % 5) * 240,
           drift: ((i % 5) - 2) * 30,
           spin: (i % 2 === 0 ? 1 : -1) * (400 + (i % 3) * 200),
         };
@@ -93,6 +108,19 @@ function Confetti({ seed }: { seed: number }) {
   );
 }
 
+/**
+ * The pot, announced like something that just happened.
+ *
+ * It used to fade in over 220ms and sit there. A fade is how you introduce a
+ * label; it is not how a thing that just happened arrives, and that is the whole
+ * of why potting felt announced rather than *felt*. What lands is a hit: the
+ * banner arrives already too big and snaps down to size inside a fifth of a
+ * second, and a flash of light goes off behind it on the same frame.
+ *
+ * The sound and the vibration already fire on the pocketed event, so all three
+ * now coincide. Simultaneity is most of the effect — the same three cues spread
+ * over half a second read as three separate notifications.
+ */
 function PotBanner({ balls }: { balls: number[] }) {
   const t = useT();
   const title =
@@ -100,16 +128,42 @@ function PotBanner({ balls }: { balls: number[] }) {
       ? t('celebration.potMany', { count: balls.length })
       : t('celebration.potOne', { number: balls[0] });
 
+  /*
+   * Overshoot and settle, rather than grow into place.
+   *
+   * 1.35 down to 1 with a single bounce past it. The whole move is 260ms: long
+   * enough to read as a movement, short enough that it is over before you have
+   * decided to look at it, which is what makes it feel like impact rather than
+   * animation.
+   */
+  const slam = new Keyframe({
+    0: { opacity: 0, transform: [{ scale: 1.35 }] },
+    45: { opacity: 1, transform: [{ scale: 0.94 }] },
+    70: { opacity: 1, transform: [{ scale: 1.03 }] },
+    100: { opacity: 1, transform: [{ scale: 1 }] },
+  });
+
   return (
-    <Animated.View
-      entering={FadeIn.duration(220)}
-      exiting={FadeOut.duration(260)}
-      style={styles.bannerWrap}
-      pointerEvents="none">
-      <View style={styles.potBanner}>
-        <Text style={styles.potTitle}>{title}</Text>
-      </View>
-    </Animated.View>
+    <View style={styles.bannerWrap} pointerEvents="none">
+      {/*
+        A flash behind the banner, gone almost before it registers.
+
+        Not a glow that lingers: the eye reads a brief full-frame lift as impact
+        and a slow one as a state change, and this is an impact.
+      */}
+      <Animated.View
+        entering={FadeIn.duration(60)}
+        exiting={FadeOut.duration(320)}
+        style={styles.potFlash}
+      />
+
+      <Animated.View entering={slam.duration(260)} exiting={FadeOut.duration(220)}>
+        <View style={styles.potBanner}>
+          <Text style={styles.potTitle}>{title}</Text>
+          <View style={styles.potRule} />
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -204,47 +258,88 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+/**
+   * The flash behind the pot. Gold, and gone almost before it registers.
+   *
+   * It was the in-game accent green, which is the colour of the cloth and of
+   * every control on the table. Gold is what this app uses for the things that
+   * matter, and a flash in the accent colour read as the table lighting up
+   * rather than as something having happened on it.
+   */
+  potFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(201, 169, 98, 0.16)',
+  },
+  /**
+   * The pot banner, in the shell's own language.
+   *
+   * Near-black with a gold edge and a serif line, exactly like every panel in
+   * the menus. It used to be a green-bordered box in the HUD palette — correct
+   * for a control that sits over baize, wrong for the one moment the game stops
+   * to tell you something.
+   */
   potBanner: {
-    backgroundColor: 'rgba(12, 19, 16, 0.86)',
-    borderWidth: 2,
-    borderColor: Palette.accent,
-    borderRadius: Radius.large,
-    paddingHorizontal: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: '#080b0a',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 169, 98, 0.45)',
+    borderRadius: 12,
+    paddingHorizontal: Spacing.five,
     paddingVertical: Spacing.three,
   },
   potTitle: {
-    color: Palette.accent,
+    color: Luxe.text,
     fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: 1,
+    lineHeight: 32,
+    fontFamily: LuxeFonts.serif,
+    textAlign: 'center',
   },
+  /** The lit rule the wordmark carries, so the banner belongs to the same set. */
+  potRule: {
+    width: 44,
+    height: 1,
+    backgroundColor: Luxe.gold,
+    opacity: 0.7,
+  },
+  /**
+   * The foul wash. The danger tone, not a blue one.
+   *
+   * Blue was doing the job of "cold" by being a different hue entirely, which
+   * meant a foul used a colour the app uses nowhere else. The danger tone is
+   * already the app's word for a cost, and it is the one the reset section
+   * wears.
+   */
   foulWash: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(28, 46, 74, 0.34)',
+    backgroundColor: 'rgba(217, 117, 107, 0.16)',
   },
   foulBanner: {
-    backgroundColor: 'rgba(10, 14, 20, 0.88)',
+    backgroundColor: '#080b0a',
     borderWidth: 1,
-    borderColor: Palette.danger,
-    borderRadius: Radius.medium,
-    paddingHorizontal: Spacing.four,
+    borderColor: 'rgba(217, 117, 107, 0.5)',
+    borderRadius: 12,
+    paddingHorizontal: Spacing.five,
     paddingVertical: Spacing.three,
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing.two,
   },
   foulTitle: {
-    color: Palette.danger,
-    fontSize: 24,
+    color: Luxe.danger,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 2,
+    letterSpacing: 2.6,
+    textTransform: 'uppercase',
   },
   foulReason: {
-    color: Palette.textMuted,
-    fontSize: 13,
+    color: Luxe.text,
+    fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   foulPenalty: {
     color: Palette.danger,

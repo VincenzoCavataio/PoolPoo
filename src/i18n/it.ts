@@ -285,6 +285,8 @@ export const it = {
   'options.aimLineBody': 'Mostra dove arriva la bianca prima di toccare qualcosa.',
   'options.ghostBall': 'Pallina fantasma',
   'options.ghostBallBody': 'Aggiunge il punto d’impatto e la direzione della pallina colpita.',
+  'options.motionTrail': 'Scia',
+  'options.motionTrailBody': 'Le palline veloci lasciano una breve scia del loro colore.',
   'options.sensitivity': 'Sensibilità della mira',
   'options.sensitivityBody':
     'Quanto ruota il tiro per ogni trascinamento. In vista mira il trascinamento verticale alza e abbassa l’occhio, e la pizzicata lo avvicina alla bianca.',
@@ -354,6 +356,7 @@ export const it = {
 
   // ----------------------------------------------------------------- results
   'result.winner': 'Vince {name}',
+  'result.frameOver': 'Partita finita',
   'result.winners': 'Vincono {names}',
   'result.won': 'Vince',
   'result.lost': 'Perde',

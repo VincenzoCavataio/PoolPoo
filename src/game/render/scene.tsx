@@ -195,9 +195,47 @@ function CameraRig({ table }: { table: Table }) {
           const outX = px / length;
           const outZ = pz / length;
 
+          /*
+           * Swung along the rail, which is what the side pockets need.
+           *
+           * Straight outward from the table's centre is a good angle for a
+           * corner, where that direction is diagonal and a ball arrives roughly
+           * towards you. It is the worst possible angle for a side pocket: there
+           * the outward direction is square to the long rail, so the camera ends
+           * up looking straight across the table and the ball crosses the frame
+           * sideways rather than coming at you. You see it arrive and vanish,
+           * never the drop.
+           *
+           * Offsetting along the rail turns the view up the table instead, so a
+           * ball rolling into a middle pocket is coming towards the lens. Which
+           * way to swing is decided by where the ball is arriving from, so a pot
+           * from either end is filmed from the side it came.
+           */
+          const isSide = pocket.id === 'side-n' || pocket.id === 'side-s';
+
+          let camX = px + outX * 0.52;
+          let camZ = pz + outZ * 0.52;
+          let lookX = px - outX * 0.14;
+          let lookZ = pz - outZ * 0.14;
+
+          if (isSide) {
+            const ball = replay.world.balls.find((b) => b.number === target.ball);
+            // The rail runs along z here, so the swing is along z as well. Sign
+            // from which half of the table the ball is coming from.
+            const from = ball ? sceneZ(ball.p) : 0;
+            const swing = from >= 0 ? 1 : -1;
+
+            camX = px + outX * 0.34;
+            camZ = pz + swing * 0.72;
+            // Aimed a little past the pocket, so the ball runs into frame rather
+            // than sitting in the middle of it the whole way.
+            lookX = px - outX * 0.1;
+            lookZ = pz - swing * 0.12;
+          }
+
           // Just outside the pocket, low, looking back along the ball's path.
-          wanted.set(px + outX * 0.52, 0.3, pz + outZ * 0.52);
-          wantedLook.set(px - outX * 0.14, -0.03, pz - outZ * 0.14);
+          wanted.set(camX, 0.3, camZ);
+          wantedLook.set(lookX, -0.03, lookZ);
           damping = REPLAY_DAMPING;
         } else {
           tableView();

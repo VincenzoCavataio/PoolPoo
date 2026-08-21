@@ -102,6 +102,8 @@ export default function OptionsScreen() {
   const {
     playerName,
     setPlayerName,
+    motionTrail,
+    setMotionTrail,
     showAimGuide,
     showGhostBall,
     aimSensitivity,
@@ -292,6 +294,14 @@ export default function OptionsScreen() {
           })}
         </View>
         <Text style={styles.rowDescription}>{t(qualityById(quality).feelKey)}</Text>
+
+        {/* Under graphics because that is what it is: a look, not an aid. */}
+        <ToggleRow
+          label={t('options.motionTrail')}
+          description={t('options.motionTrailBody')}
+          value={motionTrail}
+          onChange={setMotionTrail}
+        />
 
         <View style={styles.divider} />
 

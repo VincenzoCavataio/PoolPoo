@@ -284,6 +284,8 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.aimLineBody': 'Shows where the cue ball reaches before it touches anything.',
   'options.ghostBall': 'Ghost ball',
   'options.ghostBallBody': 'Adds the contact point and the direction the struck ball takes.',
+  'options.motionTrail': 'Trail',
+  'options.motionTrailBody': 'Fast balls leave a short trail in their own colour.',
   'options.sensitivity': 'Aim sensitivity',
   'options.sensitivityBody':
     'How far the shot turns for each drag. In the cue view a vertical drag raises and lowers the eye, and a pinch brings it closer to the ball.',
@@ -353,6 +355,7 @@ export const en: Record<keyof typeof it, Entry> = {
 
   // ----------------------------------------------------------------- results
   'result.winner': '{name} wins',
+  'result.frameOver': 'Frame over',
   'result.winners': '{names} win',
   'result.won': 'Won',
   'result.lost': 'Lost',
