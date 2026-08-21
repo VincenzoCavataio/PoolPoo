@@ -40,7 +40,18 @@ export const chargeValue = makeMutable(0);
  * and a firm positional shot are only a couple of hundred milliseconds apart, so
  * the charge has to be readable rather than a reflex.
  */
-export const CHARGE_MS = 1400;
+/**
+ * How long a full charge takes.
+ *
+ * Shortened from 1400 when the charge stopped being linear. An accelerating
+ * curve spends most of its time at the bottom, so the same total made the low
+ * end sluggish — a quarter charge took nearly nine hundred milliseconds, which
+ * is a long wait for a soft shot. At 1067 the scale reaches a quarter in about
+ * 650 ms and full power at 1.3 s, while the stretch from full to the miscue line
+ * lasts under two hundred: quick where it should be quick, and dangerous where
+ * it should be dangerous.
+ */
+export const CHARGE_MS = 1067;
 
 /**
  * How long the overcharge runs past a full charge.

@@ -83,17 +83,27 @@ export function ChargeRing() {
     }
 
     /*
-     * Winds to full, then on into the overcharge and stops.
+     * Winds to the ceiling, getting faster as it goes.
      *
-     * One timing to the ceiling rather than two in sequence: the rate is the
-     * same either side of full, so the charge does not visibly change gear at
-     * the moment it becomes dangerous — what changes is the colour, and that is
-     * the warning.
+     * Not linear. A charge that climbs at a steady rate is easy: the last tenth
+     * takes as long as the first, so stopping on the mark is only a matter of
+     * counting. Accelerating means the top of the scale arrives faster than the
+     * bottom did — the harder you are trying to hit it, the less time you have
+     * to stop — and overshooting into the miscue stops being carelessness and
+     * becomes a real risk that has to be played around.
+     *
+     * A gentle quadratic rather than anything steeper: `Easing.in(Easing.quad)`
+     * makes the second half about three times quicker than the first, which is
+     * enough to feel without making the low end sluggish to reach.
+     *
+     * One timing to the ceiling rather than two in sequence, so the charge does
+     * not visibly change gear at the moment it becomes dangerous — what changes
+     * is the colour, and that is the warning.
      */
     charge.value = 0;
     charge.value = withTiming(MAX_CHARGE, {
       duration: CHARGE_MS + OVERCHARGE_MS,
-      easing: Easing.linear,
+      easing: Easing.in(Easing.quad),
     });
 
     sampler.current = setInterval(() => setCharge(charge.value), 40);

@@ -119,7 +119,10 @@ export default function DifficultyScreen() {
         topInset={insets.top}
       />
 
-      <View style={styles.inner}>
+      {/* The home indicator's strip is added to the padding rather than being
+          part of it, so the button sits the same distance above the *usable*
+          bottom of every screen — which is the distance a thumb feels. */}
+      <View style={[styles.inner, { paddingBottom: Spacing.six + insets.bottom }]}>
         {/*
           Scrolls once the seats outgrow the screen.
 

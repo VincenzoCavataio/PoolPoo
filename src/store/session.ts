@@ -242,6 +242,16 @@ export interface SessionState {
   lastOutcome: ShotOutcome | null;
   /** Bumped when the ball set changes, so the scene remounts. */
   gameId: number;
+  /**
+   * Whether the table is held still.
+   *
+   * Set while a panel is open over the game. The solver is not stepped and the
+   * clock does not run, so a shot in flight resumes exactly where it was left
+   * rather than having quietly played on behind the panel — which would mean
+   * opening the scoreboard could cost you the frame.
+   */
+  paused: boolean;
+  setPaused: (value: boolean) => void;
 
   /**
    * Starts a game under the given rules.
@@ -834,6 +844,8 @@ export const useSession = create<SessionState>((set, get) => {
     phase: Phase.AIMING,
     match: null,
     standings: [],
+    // A pause is only ever held by a panel, and no panel survives leaving.
+    paused: false,
     puzzle: null,
     levelId: null,
     aimAngle: 0,
@@ -1024,9 +1036,19 @@ export const useSession = create<SessionState>((set, get) => {
 
     dismissCelebration: () => set({ celebration: null }),
 
+    setPaused: (paused) => {
+      // The accumulator is dropped rather than carried: it holds the time owed
+      // since the last tick, and paying that debt after the pause would fast
+      // forward the shot by however long the panel was open.
+      if (!paused) accumulator = 0;
+      set({ paused });
+    },
+
     stepSimulation: (delta) => {
-      const { world, phase, replay } = get();
+      const { world, phase, replay, paused } = get();
       if (!world) return;
+      // Held still while a panel is open over the table.
+      if (paused) return;
 
       if (phase === Phase.REPLAY && replay) {
         replayAccumulator = Math.min(replayAccumulator + delta * replay.speed, MAX_ACCUMULATED);
@@ -1106,6 +1128,8 @@ export const useSession = create<SessionState>((set, get) => {
         phase: Phase.AIMING,
         match: null,
     standings: [],
+    // A pause is only ever held by a panel, and no panel survives leaving.
+    paused: false,
         replay: null,
         celebration: null,
         messages: [],

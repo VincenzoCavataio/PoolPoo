@@ -215,7 +215,10 @@ export default function SetupScreen() {
         topInset={insets.top}
       />
 
-      <View style={styles.inner}>
+      {/* The home indicator's strip is added to the padding rather than being
+          part of it, so the button sits the same distance above the *usable*
+          bottom of every screen — which is the distance a thumb feels. */}
+      <View style={[styles.inner, { paddingBottom: Spacing.six + insets.bottom }]}>
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.stage}>
           <TablePreview locationId={locationId} clothId={clothId} ballSetId={ballSetId} />
@@ -349,7 +352,7 @@ const styles = StyleSheet.create({
     // The bar above carries the safe-area inset now; this is only the gap
     // between it and the content.
     paddingTop: Spacing.four,
-    paddingBottom: Spacing.five,
+    paddingBottom: Spacing.six,
     gap: Spacing.three,
   },
   pressed: {

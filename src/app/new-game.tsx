@@ -83,7 +83,10 @@ export default function NewGameScreen() {
         topInset={insets.top}
       />
 
-      <View style={styles.inner}>
+      {/* The home indicator's strip is added to the padding rather than being
+          part of it, so the button sits the same distance above the *usable*
+          bottom of every screen — which is the distance a thumb feels. */}
+      <View style={[styles.inner, { paddingBottom: Spacing.six + insets.bottom }]}>
 
         <Animated.View entering={FadeIn.duration(260)} style={styles.centre}>
           <Text style={styles.prompt}>
@@ -279,16 +282,6 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: 8,
     backgroundColor: Luxe.gold,
-    /**
-     * Lifted well clear of the bottom of the screen.
-     *
-     * `marginBottom`, not the `top: -64` that was here: the button is in normal
-     * flow, where `top` shifts it visually but leaves its original box in the
-     * layout — so the space it vacated stayed empty and the gap below was really
-     * the offset plus the container's padding. A margin moves the box itself,
-     * which is the same lift expressed once instead of twice.
-     */
-    marginBottom: Spacing.six + Spacing.six,
   },
   goPressed: {
     backgroundColor: '#b8985a',

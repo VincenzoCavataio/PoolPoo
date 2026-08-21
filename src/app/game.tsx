@@ -24,7 +24,7 @@ import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
 import { CallPicker } from '@/components/game/call-picker';
-import { GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
+import { FullBoard, GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
 import { MusicHud } from '@/components/game/music-hud';
 import { TrophyBanner } from '@/components/game/trophy-banner';
 import { Palette, Radius } from '@/constants/game-theme';
@@ -94,6 +94,10 @@ export default function GameScreen() {
         <CallPicker />
         <GameControls />
       </View>
+
+      {/* At the root, so it covers the table rather than being clipped to the
+          header the button lives in. */}
+      <FullBoard />
 
       <TrophyBanner />
       <MusicHud />
