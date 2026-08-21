@@ -30,6 +30,15 @@ import { useSettings } from '@/store/settings';
 const SPREAD = 14;
 
 /**
+ * The button's own corner radius, so the ring follows its shape.
+ *
+ * Matched to the button rather than guessed: a ring with a different radius
+ * traces a shape the button does not have, which reads as a misaligned outline
+ * rather than as the button glowing.
+ */
+const BUTTON_RADIUS = 10;
+
+/**
  * How often the button buzzes, at rest and at full charge.
  *
  * Speeding up rather than getting stronger: `expo-haptics` offers a few fixed
@@ -60,6 +69,15 @@ export function ChargeRing() {
    * the cue can shake by and the release can read. Sixty store writes a second
    * would re-render the control tree every frame.
    */
+  /*
+   * Whether this mount actually wound the charge up.
+   *
+   * Without it there is no way to tell "the player let go" from "the panel was
+   * rebuilt with an old value still on the shared gauge", and only the first
+   * should animate.
+   */
+  const hadCharge = useRef(false);
+
   const sampler = useRef<ReturnType<typeof setInterval> | null>(null);
   const buzzer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,10 +95,34 @@ export function ChargeRing() {
 
     if (!charging) {
       cancelAnimation(charge);
-      charge.value = withTiming(0, { duration: 160 });
+
+      /*
+       * Eased down on release, but snapped to zero when there was nothing to
+       * release.
+       *
+       * The gauge unwinding is the right picture for a shot just played: the
+       * charge you built visibly spends itself. But `chargeValue` is shared and
+       * outlives the shot, so when the panel comes *back* — after a replay, or
+       * a turn — this effect runs again with a stale value still on it and eases
+       * that down from wherever it stopped. What you see is the bar sliding
+       * backwards a moment after it appears, for a shot that finished a while
+       * ago.
+       *
+       * Animating only when there is something to animate away from fixes both:
+       * a release still unwinds, a re-entry starts at zero.
+       */
+      if (charge.value > 0.001 && hadCharge.current) {
+        charge.value = withTiming(0, { duration: 160 });
+      } else {
+        charge.value = 0;
+      }
+
+      hadCharge.current = false;
       stopTimers();
       return;
     }
+
+    hadCharge.current = true;
 
     /*
      * Winds to the ceiling, getting faster as it goes.
@@ -170,7 +212,14 @@ export function ChargeRing() {
       // Spreads outward, which is what makes it read as a charge escaping the
       // button rather than a border being restyled.
       margin: -(filled * SPREAD + over * SPREAD * 0.5),
-      borderRadius: 8 + filled * SPREAD,
+      /*
+       * Kept round as it spreads.
+       *
+       * The button is a disc, so the ring has to be one too — and the radius has
+       * to grow with the margin, or a ring pushed 14pt outward with a fixed
+       * radius turns into a rounded square around a circle.
+       */
+      borderRadius: BUTTON_RADIUS + filled * SPREAD,
     };
   });
 
@@ -187,7 +236,7 @@ const styles = StyleSheet.create({
    */
   ring: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 8,
+    borderRadius: BUTTON_RADIUS,
     borderWidth: 0,
   },
 });

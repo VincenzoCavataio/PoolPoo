@@ -289,10 +289,12 @@ export const it = {
   // ----------------------------------------------------------------- options
   'options.title': 'Opzioni',
   'options.aimHelpers': 'Aiuti di mira',
-  'options.aimLine': 'Linea di mira',
-  'options.aimLineBody': 'Mostra dove arriva la bianca prima di toccare qualcosa.',
-  'options.ghostBall': 'Pallina fantasma',
-  'options.ghostBallBody': 'Aggiunge il punto d’impatto e la direzione della pallina colpita.',
+  'options.aimLine': 'Traiettoria',
+  'options.aimLineBody':
+    'Mostra il percorso della bianca, il punto d’impatto e la direzione della pallina colpita.',
+  'options.spinTarget': 'Bersaglio dell’effetto',
+  'options.spinTargetBody':
+    'Durante la carica segna sulla bianca il punto in cui colpirai, con mirino e croce di riferimento.',
   'options.motionTrail': 'Scia',
   'options.motionTrailBody': 'Le palline veloci lasciano una breve scia del loro colore.',
   'options.sensitivity': 'Sensibilità della mira',
@@ -310,7 +312,7 @@ export const it = {
   'quality.high': 'Alta',
   'quality.highFeel': '60 fps. Tutte le luci, riflessi e panno con la sua peluria.',
 
-  'options.audio': 'Audio',
+  'options.audio': 'Audio e vibrazione',
   'options.haptics': 'Vibrazione',
   'options.hapticsBody': 'Un colpetto quando tiri, uno diverso quando imbuchi.',
   'options.collisionHaptics': 'Vibrazione sulle collisioni',
@@ -319,6 +321,7 @@ export const it = {
   'options.language': 'Lingua',
   'options.you': 'Tu e il tuo telefono',
   'options.play': 'Come si gioca',
+  'options.graphics': 'Grafica',
   'options.languageAuto': 'Auto',
   'options.languageBody': 'Automatica segue la lingua del telefono.',
   'options.resetSettings': 'Ripristina le opzioni',
@@ -343,7 +346,6 @@ export const it = {
   'game.aimRight': 'Ruota la mira a destra',
   'game.shoot': 'TIRA',
   'game.goAim': 'MIRA',
-  'game.shootBlocked': 'Dall’alto puoi solo guardare: torna in mira per tirare',
   'game.shootLabel': 'Tira',
   'game.goAimLabel': 'Torna in vista mira per tirare',
   'game.spin': 'effetto',

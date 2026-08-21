@@ -676,6 +676,116 @@ export function BackButton({ onPress, label }: { onPress: () => void; label: str
   );
 }
 
+/**
+ * A ball with a dotted line leaving it: the aim line.
+ *
+ * The dashes are the point — a solid line would read as a cue or a rail, while
+ * a broken one reads as a path something is going to take.
+ */
+export function AimLineIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.3;
+  const dash = size * 0.12;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View style={[styles.row, { alignItems: 'center', gap: size * 0.07 }]}>
+        <View
+          style={{
+            width: ball,
+            height: ball,
+            borderRadius: ball / 2,
+            borderWidth: 1.5,
+            borderColor: color,
+          }}
+        />
+        {[0.9, 0.65, 0.4].map((opacity, i) => (
+          <View
+            key={i}
+            style={{ width: dash, height: 1.5, backgroundColor: color, opacity }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A ball with a mark off centre: the contact point.
+ *
+ * The mark sits high and to one side rather than in the middle, because centred
+ * is precisely the state that means *no* english — an icon showing it would be
+ * the icon for the feature switched off.
+ */
+export function SpinIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const ball = size * 0.74;
+  const mark = size * 0.16;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View
+        style={{
+          width: ball,
+          height: ball,
+          borderRadius: ball / 2,
+          borderWidth: 1.5,
+          borderColor: color,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: mark,
+          height: mark,
+          borderRadius: mark / 2,
+          backgroundColor: color,
+          transform: [{ translateX: ball * 0.22 }, { translateY: -ball * 0.22 }],
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * A film camera: body with a lens barrel off one side.
+ *
+ * Drawn rather than set as a glyph so it keeps the weight of the icons beside
+ * it — a text character picks up the font's own stroke and sits on a baseline,
+ * which is why the old one looked like a typo next to the others.
+ */
+export function CameraIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const body = size * 0.6;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View style={[styles.row, { alignItems: 'center' }]}>
+        <View
+          style={{
+            width: body,
+            height: body * 0.72,
+            borderRadius: size * 0.08,
+            borderWidth: 1.5,
+            borderColor: color,
+          }}
+        />
+        {/* The barrel, a stubby triangle pointing away from the body. */}
+        <View
+          style={{
+            width: 0,
+            height: 0,
+            marginLeft: -1.5,
+            borderTopWidth: body * 0.24,
+            borderBottomWidth: body * 0.24,
+            borderLeftWidth: body * 0.28,
+            borderTopColor: 'transparent',
+            borderBottomColor: 'transparent',
+            borderLeftColor: color,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   backButton: {
     width: 40,

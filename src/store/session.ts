@@ -154,15 +154,6 @@ const REPLAY_MAX_SPEED = 0.8;
 const FAST_FORWARD_TICKS = 600;
 
 /**
- * How long the table is held still while a mishit swing plays.
- *
- * The animation is the entire event, so this is simply its length. Two seconds
- * is long enough to see which way the cue went and to register that it missed —
- * a miscue that flashed past would leave the player wondering what happened.
- */
-const MISCUE_HOLD_MS = 2000;
-
-/**
  * A moment in a shot worth replaying.
  *
  * Either a ball dropping into a pocket or one leaving the table altogether.
@@ -323,15 +314,6 @@ export const useSession = create<SessionState>((set, get) => {
    * gone.
    */
   let lastMiscue: 'rushed' | 'snatched' | null = null;
-
-  /**
-   * When the miscue swing finishes, as a wall-clock time.
-   *
-   * The shot phase is held open until then. Wall clock rather than sim time
-   * because the swing is an animation and has nothing to do with how far the
-   * solver has stepped — on a miscue it has not stepped at all.
-   */
-  let miscueUntil = 0;
 
   const buildSave = (): SavedGame | null => {
     const { mode, world, match } = get();
@@ -1009,18 +991,18 @@ export const useSession = create<SessionState>((set, get) => {
       pending = { snapshot: world.serialize(), angle, power: struck, spin };
 
       accumulator = 0;
-      miscueUntil = lastMiscue ? Date.now() + MISCUE_HOLD_MS : 0;
       world.shoot(angle, struck, spin);
       set({
         phase: Phase.SIMULATING,
         /*
-         * A miscue stays behind the cue.
+         * A mishit does not cut to the overhead view.
          *
-         * Pulling back to the overhead view is right for a real shot — the table
-         * is where everything is about to happen. On a mishit nothing happens on
-         * the table at all: the ball moves two centimetres, and the only thing
-         * worth seeing is the cue going through and missing it. Cutting to the
-         * ceiling put that where nobody could watch it.
+         * Pulling back is right for a real shot: the table is where everything
+         * is about to happen. On a miscue nothing happens there at all — the
+         * ball does not move — so the shot ends almost immediately and the
+         * camera rises and drops again within a few frames. That flash is the
+         * only thing the change achieves, and it reads as a glitch. Staying put
+         * costs nothing, because there is nothing to pull back and look at.
          */
         cameraMode: lastMiscue ? CameraMode.CUE : CameraMode.TABLE,
         messages: [],
@@ -1096,18 +1078,6 @@ export const useSession = create<SessionState>((set, get) => {
           if (world.time > PHYSICS.maxShotSeconds) break;
         }
       }
-
-      /*
-       * A mishit is held open long enough to be watched.
-       *
-       * Nothing moves on a miscue — the cue goes past the ball and the ball stays
-       * exactly where it was — so the solver is at rest before a single frame has
-       * been drawn, and the shot would end the instant it began. The swing is the
-       * only thing that happens, and it needs the phase to stay put while it
-       * plays.
-       */
-      if (miscueUntil > 0 && Date.now() < miscueUntil) return;
-      miscueUntil = 0;
 
       if (world.atRest || world.time > PHYSICS.maxShotSeconds) {
         settleShot();

@@ -20,6 +20,7 @@ import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AidToggles } from '@/components/game/aid-toggles';
 import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
@@ -84,6 +85,7 @@ export default function GameScreen() {
             than the screen's, and the celebration reads as happening on the
             board. */}
         <ShotNote />
+        <AidToggles />
         <CameraControls />
         <Celebration />
       </View>

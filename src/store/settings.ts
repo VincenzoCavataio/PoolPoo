@@ -42,10 +42,26 @@ export interface SettingsState {
   quality: QualityLevel;
   /** Which room the table stands in. */
   locationId: string;
-  /** Draw the line from the cue ball to its first contact. */
+  /**
+   * Draw the predicted trajectory: the cue ball's path, the contact point, and
+   * where the struck ball goes.
+   *
+   * One switch rather than two. The ghost ball used to have its own, but it was
+   * only ever drawn when the aim line was on — it marks the contact point *of
+   * that line* — so half the combinations did nothing and the pair read as two
+   * independent choices when they were one.
+   */
   showAimGuide: boolean;
-  /** Draw the ghost ball and the predicted path of the struck ball. */
-  showGhostBall: boolean;
+  /**
+   * Mark the contact point on the cue ball while winding up a shot.
+   *
+   * Separate from the other two aids because it answers a different question:
+   * they say where the ball will *go*, this says where the tip will *land*.
+   * A player who wants no help reading the table may still want to see the
+   * english they are dialling in, since there is nowhere else to read it now
+   * that the spin control is gone.
+   */
+  showSpinTarget: boolean;
   /**
    * Leave a short trail behind a moving ball, in the ball's own colour.
    *
@@ -79,7 +95,7 @@ export interface SettingsState {
   setQuality: (value: QualityLevel) => void;
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
-  setShowGhostBall: (value: boolean) => void;
+  setShowSpinTarget: (value: boolean) => void;
   setMotionTrail: (value: boolean) => void;
   setAimSensitivity: (value: number) => void;
   setMusicVolume: (value: number) => void;
@@ -98,7 +114,7 @@ const DEFAULTS = {
   quality: QUALITY_PRESETS[2].id,
   locationId: LOCATIONS[0].id,
   showAimGuide: true,
-  showGhostBall: true,
+  showSpinTarget: true,
   motionTrail: true,
   aimSensitivity: AIM_SENSITIVITY.default,
   musicVolume: 0.55,
@@ -135,7 +151,7 @@ export const useSettings = create<SettingsState>()(
         set({ locationId });
       },
       setShowAimGuide: (showAimGuide) => set({ showAimGuide }),
-      setShowGhostBall: (showGhostBall) => set({ showGhostBall }),
+      setShowSpinTarget: (showSpinTarget) => set({ showSpinTarget }),
       setMotionTrail: (motionTrail) => set({ motionTrail }),
       setAimSensitivity: (value) =>
         set({

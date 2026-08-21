@@ -288,10 +288,12 @@ export const en: Record<keyof typeof it, Entry> = {
   // ----------------------------------------------------------------- options
   'options.title': 'Options',
   'options.aimHelpers': 'Aiming aids',
-  'options.aimLine': 'Aim line',
-  'options.aimLineBody': 'Shows where the cue ball reaches before it touches anything.',
-  'options.ghostBall': 'Ghost ball',
-  'options.ghostBallBody': 'Adds the contact point and the direction the struck ball takes.',
+  'options.aimLine': 'Trajectory',
+  'options.aimLineBody':
+    'Shows the cue ball’s path, the contact point, and the direction the struck ball takes.',
+  'options.spinTarget': 'Spin target',
+  'options.spinTargetBody':
+    'While winding up, marks where the tip will strike the cue ball, with a sight and reference cross.',
   'options.motionTrail': 'Trail',
   'options.motionTrailBody': 'Fast balls leave a short trail in their own colour.',
   'options.sensitivity': 'Aim sensitivity',
@@ -309,7 +311,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'quality.high': 'High',
   'quality.highFeel': '60fps. Every light, reflections, and cloth with its sheen.',
 
-  'options.audio': 'Audio',
+  'options.audio': 'Audio and vibration',
   'options.haptics': 'Vibration',
   'options.hapticsBody': 'A tap when you shoot, a different one when you pot.',
   'options.collisionHaptics': 'Vibration on collisions',
@@ -318,6 +320,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'options.language': 'Language',
   'options.you': 'You and your phone',
   'options.play': 'How it plays',
+  'options.graphics': 'Graphics',
   'options.languageAuto': 'Auto',
   'options.languageBody': 'Automatic follows the phone’s language.',
   'options.resetSettings': 'Reset options',
@@ -342,7 +345,6 @@ export const en: Record<keyof typeof it, Entry> = {
   'game.aimRight': 'Turn the aim right',
   'game.shoot': 'SHOOT',
   'game.goAim': 'AIM',
-  'game.shootBlocked': 'From above you can only look: go back to the cue view to shoot',
   'game.shootLabel': 'Shoot',
   'game.goAimLabel': 'Go back to the cue view to shoot',
   'game.spin': 'spin',

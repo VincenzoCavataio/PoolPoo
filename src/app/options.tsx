@@ -3,7 +3,15 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
-import { CueIcon, DiscsIcon, LevelIcon, RackIcon, SlidersIcon } from '@/components/ui/icons';
+import {
+  BallsIcon,
+  CueIcon,
+  DiscsIcon,
+  LevelIcon,
+  RackIcon,
+  SlidersIcon,
+  SoundIcon,
+} from '@/components/ui/icons';
 import { Card, Screen, SectionLabel } from '@/components/ui/screen';
 import { VolumeRow } from '@/components/ui/volume-row';
 import {
@@ -105,7 +113,7 @@ export default function OptionsScreen() {
     motionTrail,
     setMotionTrail,
     showAimGuide,
-    showGhostBall,
+    showSpinTarget,
     aimSensitivity,
     haptics,
     language,
@@ -114,7 +122,7 @@ export default function OptionsScreen() {
     setHaptics,
     setCollisionHaptics,
     setShowAimGuide,
-    setShowGhostBall,
+    setShowSpinTarget,
     setAimSensitivity,
     resetSettings,
   } = useSettings();
@@ -230,10 +238,10 @@ export default function OptionsScreen() {
           onChange={setShowAimGuide}
         />
         <ToggleRow
-          label={t('options.ghostBall')}
-          description={t('options.ghostBallBody')}
-          value={showGhostBall}
-          onChange={setShowGhostBall}
+          label={t('options.spinTarget')}
+          description={t('options.spinTargetBody')}
+          value={showSpinTarget}
+          onChange={setShowSpinTarget}
         />
         <View>
           <Text style={styles.rowLabel}>{t('options.sensitivity')}</Text>
@@ -261,8 +269,21 @@ export default function OptionsScreen() {
           </View>
         </View>
 
-        <View style={styles.divider} />
+      </Card>
 
+      {/*
+        Graphics, under its own heading rather than buried in how it plays.
+
+        Nothing here changes the game — the same shot goes in at every preset.
+        Filed with the aiming aids it read as though it might, and the card ran
+        long enough that the audio controls at its foot had no visible relation
+        to the heading at its top. Three short cards, each answering one
+        question, beat one card answering three.
+      */}
+      <SectionLabel icon={<BallsIcon size={15} color={Luxe.gold} />}>
+        {t('options.graphics')}
+      </SectionLabel>
+      <Card>
         <Text style={styles.groupLabel}>{t('quality.section')}</Text>
         <View style={styles.pillRow}>
           {QUALITY_PRESETS.map((preset) => {
@@ -303,9 +324,13 @@ export default function OptionsScreen() {
           onChange={setMotionTrail}
         />
 
-        <View style={styles.divider} />
+      </Card>
 
-        <Text style={styles.groupLabel}>{t('options.audio')}</Text>
+      {/* What you hear and what you feel: both are the phone answering back. */}
+      <SectionLabel icon={<SoundIcon size={15} color={Luxe.gold} />}>
+        {t('options.audio')}
+      </SectionLabel>
+      <Card>
         <ToggleRow
           label={t('options.haptics')}
           description={t('options.hapticsBody')}

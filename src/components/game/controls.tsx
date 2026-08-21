@@ -12,10 +12,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import { SpinControl } from '@/components/game/spin-control';
+import { ShootButton } from '@/components/game/shoot-button';
 import { Luxe, Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
-import { ChargeRing } from '@/components/game/charge-ring';
 import { CameraMode } from '@/game/render/camera';
 import { Phase } from '@/game/rules/types';
 import { currentCall, currentCpu, isFinished, needsCall } from '@/game/rules/match';
@@ -24,15 +23,6 @@ import { useSession } from '@/store/session';
 import { chargeValue, MAX_CHARGE, MISCUE_OVER, useSwing } from '@/store/swing';
 
 /** One tap of the fine-aim buttons, in radians — a touch over half a degree. */
-/**
- * How long the shoot button must be held before the swing meter opens.
- *
- * Long enough that an ordinary tap never sees it, short enough that reaching for
- * it does not feel like waiting. A quarter second is about the boundary between
- * a press and a hold.
- */
-const HOLD_MS = 250;
-
 const FINE_AIM_STEP = 0.01;
 /**
  * The rolling scale: how far apart the marks are, and how many turns of the cue
@@ -305,7 +295,6 @@ export function GameControls() {
   const t = useT();
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
-  const takeShot = useSession((s) => s.takeShot);
   const nudgeAim = useSession((s) => s.nudgeAim);
   const setCameraMode = useSession((s) => s.setCameraMode);
 
@@ -320,15 +309,22 @@ export function GameControls() {
     return Boolean(match && needsCall(match) && !currentCall(match));
   });
 
-  const startCharge = useSwing((s) => s.start);
-  const releaseCharge = useSwing((s) => s.release);
-  const tapCharge = useSwing((s) => s.tap);
   const cancelCharge = useSwing((s) => s.cancel);
-
-  /** Counts the hold. Cleared on release, so a tap never starts a charge. */
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const miscue = useSwing((s) => s.miscue);
 
   const aiming = phase === Phase.AIMING;
+
+  /*
+   * A mishit leaves the panel where it is.
+   *
+   * The controls hide during a shot, which is right when there is a shot to
+   * watch: the balls are moving and there is nothing to command. A miscue moves
+   * nothing at all, so it is over within a few frames — and hiding the panel for
+   * those few frames only flashes the screen to bare table and back. Holding it
+   * through the mishit means the one thing that visibly changes is the message
+   * saying what went wrong.
+   */
+  const mishit = miscue !== null && !aiming;
 
   /*
    * A charge left running by anything but a release has to be stopped.
@@ -336,15 +332,14 @@ export function GameControls() {
    * The phase changes under it when the computer takes over, or when the player
    * backs out to the menu mid-hold, and a button still winding up over a table
    * that is no longer being aimed at is both wrong and impossible to discharge.
+   *
+   * The button owns the hold timer now; this only has to discharge the store.
    */
   useEffect(() => {
     if (aiming) return;
-    if (holdTimer.current) {
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
     cancelCharge();
   }, [aiming, cancelCharge]);
+
   const fromCue = cameraMode === CameraMode.CUE;
   /*
    * A shot still owed a call cannot be taken.
@@ -355,7 +350,19 @@ export function GameControls() {
    */
   const canShoot = aiming && fromCue && !awaitingCall;
 
-  if (!aiming) return null;
+  /*
+   * The overhead view hides the panel outright.
+   *
+   * From above you are looking, not playing: the shot cannot be taken from
+   * here, and a full set of controls that all refuse is worse than no controls
+   * — it invites the tap and then explains why it did nothing. Taking them away
+   * makes the camera button the obvious next move, which is the only move there
+   * is. It also replaces the line of text that used to say so, which was an
+   * apology for a state that did not need to exist.
+   */
+  if (!fromCue) return null;
+
+  if (!aiming && !mishit) return null;
 
   return (
     <View style={styles.container}>
@@ -392,95 +399,27 @@ export function GameControls() {
           </Pressable>
         </View>
 
-        <View style={styles.row}>
-          <SpinControl />
+        {/*
+          Power across the full width, the button beneath it.
 
-          {/*
-            A reading, not a control.
+          The spin control is gone from this row: its job moved onto the button,
+          where it is set by sliding the thumb during the charge. That freed the
+          left of the row, and the power gauge took it — a scale is easier to
+          read the longer it is, and this one is now the width of the screen.
 
-            The slider is gone: power comes from how long the shoot button is
-            held, so there is nothing here to drag any more. What is left is the
-            number, which sits at zero until the button is pressed and then
-            climbs with the charge — the same information the ring gives, for
-            anybody who would rather have the figure.
-          */}
-          <PowerReadout />
+          The button sits centred under it rather than at one end, because it is
+          no longer one control among three. It is the control.
+        */}
+        <PowerReadout />
 
-          {/*
-            Tap to shoot, hold to gamble.
-
-            A press that ends quickly plays the shot exactly as it always did, at
-            the power on the slider. A press held past the threshold opens the
-            swing meter instead, and letting go stops the marker — land it in the
-            middle and the shot comes out closer to what you asked for, miss and
-            the cue is snatched and the ball struck harder than you meant.
-
-            Both live on one button on purpose: a separate control would make the
-            meter a mode to enter rather than a risk to take, and the whole point
-            is that it is the same action, held.
-          */}
-          <Pressable
-            accessibilityLabel={
-              awaitingCall
-                ? t('game.callFirst')
-                : canShoot
-                  ? t('game.shootLabel')
-                  : t('game.goAimLabel')
-            }
-            onPressIn={() => {
-              if (!canShoot) return;
-              // Armed rather than started: a quick tap must not light the ring
-              // on its way to an ordinary shot.
-              holdTimer.current = setTimeout(startCharge, HOLD_MS);
-            }}
-            onPressOut={() => {
-              if (holdTimer.current) {
-                clearTimeout(holdTimer.current);
-                holdTimer.current = null;
-              }
-              if (!canShoot) return;
-
-              /*
-               * Charging means the hold ran long enough for the ring to light,
-               * so this release plays whatever was wound on.
-               *
-               * Otherwise it was a tap — a charge of zero, which is a miscue at
-               * the bottom of the scale just as holding too long is one at the
-               * top. `tap()` records it so the banner can say what happened;
-               * without that the shot would trickle away with nothing to explain
-               * why.
-               */
-              takeShot(useSwing.getState().charging ? releaseCharge() : tapCharge());
-            }}
-            onPress={
-              // The tap is handled in `onPressOut`, which is the event that also
-              // ends a hold — one path for both, so a shot cannot fire twice.
-              awaitingCall || canShoot ? undefined : () => setCameraMode(CameraMode.CUE)
-            }
-            style={({ pressed }) => [
-              styles.shoot,
-              !canShoot && styles.shootBlocked,
-              pressed && (canShoot ? styles.shootPressed : styles.pressed),
-            ]}>
-            <Text style={[styles.shootLabel, !canShoot && styles.shootLabelBlocked]}>
-              {/* The short form on the face; the accessibility label above
-                  carries the whole sentence. */}
-              {awaitingCall
-                ? t('game.callFirstShort')
-                : canShoot
-                  ? t('game.shoot')
-                  : t('game.goAim')}
-            </Text>
-
-            {/* Inside the button so it tracks its box, and over the label so the
-                glow reads as coming off the button rather than behind it. */}
-            <ChargeRing />
-          </Pressable>
+        <View style={styles.shootRow}>
+          <ShootButton
+            canShoot={canShoot}
+            awaitingCall={awaitingCall}
+            onBlocked={() => setCameraMode(CameraMode.CUE)}
+          />
         </View>
 
-        {!fromCue ? (
-          <Text style={styles.hint}>{t('game.shootBlocked')}</Text>
-        ) : null}
       </View>
     </View>
   );
@@ -507,6 +446,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  /** The button, centred under the power scale. */
+  shootRow: {
+    alignItems: 'center',
+    marginTop: Spacing.two,
   },
   strip: {
     flex: 1,
@@ -700,39 +644,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /**
-   * Waiting on something — the overhead view, or a call not yet made.
-   *
-   * Hollow rather than merely darker: an unfilled disc reads as "not yet"
-   * without going grey, which on a dark HUD is indistinguishable from disabled.
-   */
-  shootBlocked: {
-    backgroundColor: 'rgba(8, 11, 10, 0.85)',
-    borderWidth: 2,
-    borderColor: 'rgba(201, 169, 98, 0.5)',
-  },
-  /** Pressed: sunk a shade, the way the menu's gold bars do. */
-  shootPressed: {
-    backgroundColor: '#b8985a',
-  },
-  shootLabel: {
-    color: Luxe.ink,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textAlign: 'center',
-  },
-  shootLabelBlocked: {
-    color: Luxe.gold,
-    fontSize: 11,
-    letterSpacing: 1,
-  },
   pressed: {
     opacity: 0.7,
-  },
-  hint: {
-    color: Palette.gold,
-    fontSize: 11,
-    textAlign: 'center',
   },
 });
