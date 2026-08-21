@@ -108,23 +108,3 @@ export function useTableGestures(): ComposedGesture {
     return Gesture.Exclusive(pinch, drag, tap);
   }, []);
 }
-
-/**
- * Power slider drag. `width` is the measured track width; the value goes
- * straight to the session so the bar and the shot cannot disagree.
- */
-export function usePowerGesture(width: number) {
-  return useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .minDistance(0)
-        .onBegin((event) => {
-          if (width > 0) useSession.getState().setPower(event.x / width);
-        })
-        .onUpdate((event) => {
-          if (width > 0) useSession.getState().setPower(event.x / width);
-        }),
-    [width],
-  );
-}

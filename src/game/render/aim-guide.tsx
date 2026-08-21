@@ -19,6 +19,7 @@ import type { Table } from '@/game/core/table';
 import type { Vec2 } from '@/game/core/vec';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
+import { shakeFor, useSwing } from '@/store/swing';
 import { useSettings } from '@/store/settings';
 
 import { CameraMode, rig } from './camera';
@@ -36,6 +37,15 @@ const GUIDE_Y = BALL_RADIUS * 0.9;
  * as things on the cloth.
  */
 const GUIDE_COLOR = '#c9a962';
+
+/**
+ * How far the cue wanders while the swing meter is open, in metres.
+ *
+ * Four millimetres at its worst. Small in absolute terms — the tip is only a
+ * couple of centimetres across — but from behind the ball it is plainly visible,
+ * which is the point: you should be able to see that your hand is not steady.
+ */
+const CUE_SHAKE = 0.004;
 const TARGET_LINE_LENGTH = 0.32;
 const CUE_LENGTH = 0.9;
 
@@ -152,7 +162,36 @@ export function AimGuide() {
       const drawn = Math.max(0.02, length);
       cueGroup.current.visible = visible;
       cueStick.current.scale.set(1, drawn / CUE_LENGTH, 1);
-      cueStick.current.position.set(0, 0, -(pullBack + drawn / 2 + BALL_RADIUS));
+
+      /*
+       * The cue shakes as the charge builds, and hardest at the top of it.
+       *
+       * The same rule the ring follows: the further the charge is wound, the
+       * less steady the hand. Shown on the cue as well as the button because the
+       * shake is supposed to make the *shot* feel risky, and a glowing button
+       * over a rock-steady cue reads as a UI effect rather than as somebody
+       * winding up to snatch at it.
+       *
+       * Sideways and along, not vertical: a cue lifting off the ball would read
+       * as a miscue rather than as an unsteady bridge.
+       */
+      const swing = useSwing.getState();
+      let jitterX = 0;
+      let jitterZ = 0;
+      if (swing.charging) {
+        const strength = shakeFor(swing.charge);
+        if (strength > 0) {
+          const now = performance.now();
+          jitterX = Math.sin(now / 19) * CUE_SHAKE * strength;
+          jitterZ = Math.cos(now / 13) * CUE_SHAKE * 0.6 * strength;
+        }
+      }
+
+      cueStick.current.position.set(
+        jitterX,
+        0,
+        -(pullBack + drawn / 2 + BALL_RADIUS) + jitterZ,
+      );
       if (cueTilt.current) cueTilt.current.rotation.x = elevation;
     }
 

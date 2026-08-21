@@ -61,6 +61,7 @@ import {
   type Standing,
 } from '@/game/rules/types';
 
+import { powerFor, wildnessFor } from './swing';
 import { clearSavedGame, SAVE_VERSION, saveGame, type SavedGame } from './persistence';
 import { useSettings } from './settings';
 
@@ -254,7 +255,14 @@ export interface SessionState {
   setPower: (power: number) => void;
   setSpin: (spin: ShotSpin) => void;
   setCameraMode: (mode: CameraMode) => void;
-  takeShot: () => void;
+  /**
+   * Plays the shot.
+   *
+   * `charge` is how long the shoot button was held: 1 is a full wind-up, above
+   * that is an overcharge, and 0 means nothing was charged — which is how the
+   * computer plays, since it has no button to hold and sets `power` directly.
+   */
+  takeShot: (charge?: number) => void;
   skipReplay: () => void;
   dismissCelebration: () => void;
   /** Called from `useFrame`; does not touch React state until something ends. */
@@ -888,7 +896,7 @@ export const useSession = create<SessionState>((set, get) => {
       set({ match: withCall(match, call) });
     },
 
-    takeShot: () => {
+    takeShot: (charge = 0) => {
       const { world, phase, aimAngle, power, spin, cameraMode, match } = get();
       if (!world || phase !== Phase.AIMING) return;
       // Shooting from the overhead view is deliberately not allowed: you line a
@@ -904,10 +912,36 @@ export const useSession = create<SessionState>((set, get) => {
        */
       if (match && needsCall(match) && !currentCall(match)) return;
 
-      pending = { snapshot: world.serialize(), angle: aimAngle, power, spin };
+      /*
+       * The charge decides the shot.
+       *
+       * `charge` is how long the button was held, where 1 is a full wind-up and
+       * anything above it is an overcharge. The computer passes its own power
+       * through unchanged — it has no button to hold — which is why this falls
+       * back to `power` when nothing was charged.
+       */
+      const struck = charge > 0 ? powerFor(charge) : power;
+
+      /*
+       * An overcharged cue does not merely hit harder, it hits *badly*.
+       *
+       * Full power is full power; there is nowhere above it for speed to go. So
+       * what the overcharge buys is error: the tip lands off where it was aimed,
+       * and a hard shot struck off-line is what actually sends a ball over a
+       * rail. Adding speed alone would have been a harder shot, not a wilder
+       * one.
+       *
+       * Deterministic in the shot's own terms rather than random, so a replay of
+       * it plays back identically.
+       */
+      const wild = wildnessFor(charge);
+      const skew = wild === 0 ? 0 : (((world.balls.length * 7919) % 17) / 17 - 0.5) * wild * 0.09;
+      const angle = aimAngle + skew;
+
+      pending = { snapshot: world.serialize(), angle, power: struck, spin };
 
       accumulator = 0;
-      world.shoot(aimAngle, power, spin);
+      world.shoot(angle, struck, spin);
       set({
         phase: Phase.SIMULATING,
         cameraMode: CameraMode.TABLE,

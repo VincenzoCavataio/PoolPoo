@@ -200,7 +200,12 @@ export const en: Record<keyof typeof it, Entry> = {
 
   // ------------------------------------------------------------------ call
   'call.pickBall': 'Which ball',
-  'game.callFirst': 'Call it',
+  'game.callFirst': 'Name the shot before you play it',
+  'game.callFirstShort': 'CALL',
+  'game.power': 'POWER',
+  'miscue.title': 'Miscue',
+  'miscue.rushed': 'Rushed it — the tip skidded off the cue ball.',
+  'miscue.snatched': 'Snatched at it — the cue never struck cleanly.',
   'call.pickPocket': 'The {number} into which pocket',
   'call.pocketCornerNw': 'Top left corner',
   'call.pocketCornerNe': 'Top right corner',

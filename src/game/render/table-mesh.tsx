@@ -15,6 +15,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { clothById, Palette } from '@/constants/game-theme';
+import { BALL_DIAMETER, CUSHION_NOSE_HEIGHT } from '@/game/core/constants';
 import { footSpot, headSpot, type Table } from '@/game/core/table';
 import { add, dist, dot, normalize, perp, scale, sub } from '@/game/core/vec';
 import { qualityById } from '@/constants/quality';
@@ -26,9 +27,34 @@ import { POCKET_DEPTH, sceneX, sceneZ } from './coords';
 import { FLOOR_Y } from './locations';
 
 const CUSHION_WIDTH = 0.02;
-const CUSHION_HEIGHT = 0.04;
+
+/**
+ * The cushion you see, tied to the one that bounces.
+ *
+ * It was 40 mm, chosen by eye, while the solver turns balls back at
+ * `CUSHION_NOSE_HEIGHT` — 36.3 mm, which is the 63.5% of a ball's diameter the
+ * WPA specification asks for. Nearly four millimetres apart, so the rubber drawn
+ * on screen was not the rubber the ball hit: a ball skimming the top was turned
+ * back below what looked like the edge, and one that hopped the rail cleared a
+ * nose lower than the one in the picture.
+ *
+ * Reading the constant instead means the two cannot drift, and the height is now
+ * regulation by construction rather than by coincidence.
+ */
+const CUSHION_HEIGHT = CUSHION_NOSE_HEIGHT;
+
 const RAIL_WIDTH = 0.075;
-const RAIL_TOP = 0.055;
+
+/**
+ * Top of the wooden rail behind the cushion.
+ *
+ * Above the nose, as it is on a real table: the rail is what your hand rests on
+ * and the cushion is set into its inner face, so a rail level with the rubber
+ * would leave nothing to bridge on. Kept a shade proud of the balls, which is
+ * what makes the table read as a box holding them rather than a tray they sit
+ * on.
+ */
+const RAIL_TOP = BALL_DIAMETER * 1.12;
 /**
  * How far the cloth continues past the playing edge. Exactly the width of the
  * cushion plus the rail, so the cloth reaches the rail's outer face: without it

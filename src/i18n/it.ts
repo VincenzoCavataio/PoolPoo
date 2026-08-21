@@ -201,7 +201,12 @@ export const it = {
 
   // ------------------------------------------------------------------ call
   'call.pickBall': 'Quale pallina',
-  'game.callFirst': 'Dichiara',
+  'game.callFirst': 'Dichiara il tiro prima di tirare',
+  'game.callFirstShort': 'CHIAMA',
+  'game.power': 'POTENZA',
+  'miscue.title': 'Steccata',
+  'miscue.rushed': 'Hai tirato di fretta: la punta è scivolata sulla bianca.',
+  'miscue.snatched': 'Hai strappato il colpo: la stecca non ha preso bene.',
   'call.pickPocket': 'La {number} in quale buca',
   'call.pocketCornerNw': 'Angolo in alto a sinistra',
   'call.pocketCornerNe': 'Angolo in alto a destra',

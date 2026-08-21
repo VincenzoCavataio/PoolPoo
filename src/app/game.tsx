@@ -25,6 +25,7 @@ import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
 import { CallPicker } from '@/components/game/call-picker';
 import { GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
+import { MiscueBanner } from '@/components/game/miscue-banner';
 import { MusicHud } from '@/components/game/music-hud';
 import { TrophyBanner } from '@/components/game/trophy-banner';
 import { Palette, Radius } from '@/constants/game-theme';
@@ -85,6 +86,8 @@ export default function GameScreen() {
             board. */}
         <ShotNote />
         <CameraControls />
+        {/* Inside the stage, so a miscue is reported over the table it spoiled. */}
+        <MiscueBanner />
         <Celebration />
       </View>
 
