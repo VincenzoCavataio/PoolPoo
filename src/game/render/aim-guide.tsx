@@ -91,6 +91,90 @@ function layoutSegment(
   object.visible = length > 2e-3;
 }
 
+/**
+ * How long the miscue swing takes to play out.
+ *
+ * Matches the hold the session puts on the phase for exactly this. Nothing at
+ * all moves on a miscue — the ball does not shift a pixel — so the swing is the
+ * whole event, and it is given the time to be seen rather than being squeezed
+ * into however long the solver happens to take.
+ */
+const MISCUE_SWING_MS = 2000;
+
+/**
+ * The cue lunging through and missing the ball.
+ *
+ * Three things happen at once, and all three are what a real miscue looks like:
+ * the cue drives forward past where the ball is, it slides off to one side (or
+ * rides up over the top), and it turns as it goes because the hand has lost the
+ * line. Then it stops, short and dead, rather than following through.
+ *
+ * Driven from an elapsed fraction rather than an animation, because the caller
+ * is already a frame loop and a second clock would only be another thing that
+ * could fall out of step with the shot.
+ */
+function drawMiscueSwing(
+  refs: {
+    cueGroup: React.RefObject<THREE.Group | null>;
+    cueTilt: React.RefObject<THREE.Group | null>;
+    cueStick: React.RefObject<THREE.Mesh | null>;
+  },
+  ballAt: Vec2,
+  aimAngle: number,
+  slip: 'left' | 'right' | 'high',
+  progress: number,
+): void {
+  const { cueGroup, cueTilt, cueStick } = refs;
+  if (!cueGroup.current || !cueStick.current) return;
+
+  cueGroup.current.visible = true;
+  cueGroup.current.position.set(sceneX(ballAt), BALL_HEIGHT, sceneZ(ballAt));
+  cueGroup.current.rotation.set(0, sceneHeading(aimAngle), 0);
+
+  /*
+   * Fast out, then held.
+   *
+   * The lunge takes the first fifth of the window and the rest is the cue
+   * sitting where it ended up. That pause is what sells it as a failure rather
+   * than a stroke: a stroke follows through and recovers, a miscue stops dead
+   * and leaves you looking at where the tip went.
+   */
+  const drive = Math.min(1, progress * 5);
+  const eased = 1 - (1 - drive) * (1 - drive);
+
+  // Through the ball rather than up to it: the tip ends past where it should
+  // have struck, which is the whole point.
+  const forward = MISCUE_THROUGH * eased;
+  const sideways = slip === 'high' ? 0 : (slip === 'left' ? -1 : 1) * MISCUE_ASIDE * eased;
+  const lift = slip === 'high' ? MISCUE_LIFT * eased : 0;
+
+  cueStick.current.position.set(sideways, lift, -(CUE_LENGTH / 2 + BALL_RADIUS) + forward);
+  /*
+   * Back to full length for the swing.
+   *
+   * Aiming shortens the cue on the Y axis so it fits between the camera and the
+   * rail; leaving that scale in place would send a stub through the ball instead
+   * of a cue. The lathe runs along local Y, which is why the length lives there
+   * and not on Z.
+   */
+  cueStick.current.scale.set(1, 1, 1);
+
+  if (cueTilt.current) {
+    // Turned off the line as it slides, and tipped up if it rode over the ball.
+    cueTilt.current.rotation.set(
+      slip === 'high' ? -MISCUE_TWIST * eased : 0,
+      slip === 'high' ? 0 : (slip === 'left' ? -1 : 1) * MISCUE_TWIST * eased,
+      0,
+    );
+  }
+}
+
+/** How far the tip travels past the ball, and how far off line it ends up. */
+const MISCUE_THROUGH = 0.12;
+const MISCUE_ASIDE = 0.05;
+const MISCUE_LIFT = 0.045;
+const MISCUE_TWIST = 0.22;
+
 export function AimGuide() {
   const cueGroup = useRef<THREE.Group>(null);
   const cueTilt = useRef<THREE.Group>(null);
@@ -108,6 +192,46 @@ export function AimGuide() {
 
     const cue = world?.cueBall();
     const aiming = phase === Phase.AIMING && !!world && !!cue && !cue.pocketed;
+
+    /*
+     * The miscue swing: the cue goes through and misses the ball.
+     *
+     * Played over the first moments of the shot, while the phase is SIMULATING
+     * and the cue would otherwise have simply disappeared. Nothing about the
+     * physics is involved — the solver has already been told to barely move the
+     * ball — so this is purely the picture of what went wrong, which is the part
+     * that was missing.
+     */
+    const miscue = useSwing.getState().miscue;
+    /*
+     * Not gated on the phase.
+     *
+     * Requiring SIMULATING was a race: on a mishit the solver is already at rest
+     * — the ball does not move at all — so the phase can advance out from under
+     * the animation between one frame and the next, and the cue disappears
+     * mid-lunge. The elapsed time is the only clock this needs, and the store
+     * holds the record until the next shot is wound up.
+     */
+    if (miscue && world && cue && !cue.pocketed) {
+      const elapsed = Date.now() - miscue.id;
+      // Bounded both ways: a record left over from a previous shot must not
+      // start a swing, and `elapsed` is negative only if the clock went
+      // backwards.
+      if (elapsed >= 0 && elapsed < MISCUE_SWING_MS) {
+        drawMiscueSwing(
+          { cueGroup, cueTilt, cueStick },
+          cue.p,
+          aimAngle,
+          miscue.slip,
+          elapsed / MISCUE_SWING_MS,
+        );
+        // Everything else stays hidden: there is no shot to guide.
+        for (const ref of [guideLine, ghostBall, targetLine]) {
+          if (ref.current) ref.current.visible = false;
+        }
+        return;
+      }
+    }
 
     if (!aiming) {
       for (const ref of hidden) {

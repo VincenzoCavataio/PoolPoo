@@ -14,12 +14,20 @@
 
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
-export type EffectName = 'ball-hit' | 'cushion' | 'cue' | 'pocket' | 'needle' | 'ballast';
+export type EffectName =
+  | 'ball-hit'
+  | 'cushion'
+  | 'cue'
+  | 'miscue'
+  | 'pocket'
+  | 'needle'
+  | 'ballast';
 
 const SOURCES: Record<EffectName, number> = {
   'ball-hit': require('../../../assets/sfx/ball-hit.wav') as number,
   cushion: require('../../../assets/sfx/cushion.wav') as number,
   cue: require('../../../assets/sfx/cue.wav') as number,
+  miscue: require('../../../assets/sfx/miscue.wav') as number,
   pocket: require('../../../assets/sfx/pocket.wav') as number,
   needle: require('../../../assets/sfx/needle.wav') as number,
   ballast: require('../../../assets/sfx/ballast.wav') as number,
@@ -30,6 +38,8 @@ const VOICE_COUNT: Record<EffectName, number> = {
   'ball-hit': 5,
   cushion: 3,
   cue: 2,
+  // One at a time: two miscues cannot overlap, there is only one cue.
+  miscue: 1,
   pocket: 2,
   needle: 1,
   ballast: 1,
@@ -40,6 +50,7 @@ const MIN_GAP_MS: Record<EffectName, number> = {
   'ball-hit': 22,
   cushion: 35,
   cue: 0,
+  miscue: 0,
   pocket: 60,
   needle: 0,
   ballast: 0,
@@ -178,6 +189,18 @@ export function playSwitch(kind: 'strike' | 'settle' = 'strike'): void {
  * Very quiet on purpose. It should be the thing you notice only once the room
  * has gone quiet again, not a layer over the music.
  */
+/**
+ * The cue skidding off the ball.
+ *
+ * Its own sound rather than a quieter `cue`, because a miscue is not a weak
+ * strike — it is a different event, and telling the player so with the same
+ * knock at lower volume would say "you hit it softly" when what happened is
+ * "you did not hit it".
+ */
+export function playMiscue(): void {
+  playEffect('miscue', 0.85);
+}
+
 export function playBallast(): void {
   playEffect('ballast', 0.2);
 }

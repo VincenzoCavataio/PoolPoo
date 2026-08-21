@@ -322,6 +322,7 @@ export function GameControls() {
 
   const startCharge = useSwing((s) => s.start);
   const releaseCharge = useSwing((s) => s.release);
+  const tapCharge = useSwing((s) => s.tap);
   const cancelCharge = useSwing((s) => s.cancel);
 
   /** Counts the hold. Cleared on release, so a tap never starts a charge. */
@@ -439,10 +440,17 @@ export function GameControls() {
               }
               if (!canShoot) return;
 
-              // Charging means the hold ran long enough for the ring to light,
-              // so this release plays whatever was wound on. Otherwise it was a
-              // tap, and a tap adds nothing.
-              takeShot(useSwing.getState().charging ? releaseCharge() : 0);
+              /*
+               * Charging means the hold ran long enough for the ring to light,
+               * so this release plays whatever was wound on.
+               *
+               * Otherwise it was a tap — a charge of zero, which is a miscue at
+               * the bottom of the scale just as holding too long is one at the
+               * top. `tap()` records it so the banner can say what happened;
+               * without that the shot would trickle away with nothing to explain
+               * why.
+               */
+              takeShot(useSwing.getState().charging ? releaseCharge() : tapCharge());
             }}
             onPress={
               // The tap is handled in `onPressOut`, which is the event that also

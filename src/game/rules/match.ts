@@ -23,6 +23,7 @@ import {
   onTheEight as eightOnTheEight,
   resolveEightShot,
   type EightState,
+  type Group,
 } from './eight-ball';
 import { createFreeState, resolveFreeShot, type FreeState } from './free';
 import {
@@ -127,7 +128,21 @@ export function seatName(match: Match, seat: number): string {
  * because "which row is lit" is the one thing every renderer of this needs and
  * the one most easily got wrong by comparing the wrong index.
  */
-export function standings(match: Match): Standing[] {
+/**
+ * Which balls of a group are already off the table.
+ *
+ * Eight-ball has no per-player record to read, so this compares the group
+ * against what is still in play. Needs the world for that, which is why
+ * `standings` takes one.
+ */
+function pottedOfGroup(match: Match, world: World | null, group: Group | null): number[] {
+  if (!group || !world) return [];
+  const onTable = new Set(world.remainingObjectBalls().map((ball) => ball.number));
+  const all = group === 'solids' ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
+  return all.filter((n) => !onTable.has(n));
+}
+
+export function standings(match: Match, world: World | null = null): Standing[] {
   switch (match.kind) {
     case GameModeKind.EIGHT:
     case GameModeKind.EIGHT_CALLED:
@@ -136,6 +151,14 @@ export function standings(match: Match): Standing[] {
         name: player.name,
         team: player.team,
         group: match.state.teams[player.team]?.group ?? null,
+        /*
+         * The seat's own group, minus whatever is still on the table.
+         *
+         * Eight-ball keeps no per-player tally — the group is the team's and the
+         * table says what is left — so this is derived rather than stored. An
+         * open table shows nothing, because nobody owns a group yet.
+         */
+        potted: pottedOfGroup(match, world, match.state.teams[player.team]?.group ?? null),
         isCurrent: player.id === match.state.current,
         cpu: player.cpu !== undefined,
       }));
@@ -156,6 +179,7 @@ export function standings(match: Match): Standing[] {
         id: player.id,
         name: player.name,
         score: player.score,
+        potted: player.potted,
         isCurrent: player.id === match.state.current,
         cpu: player.cpu !== undefined,
       }));

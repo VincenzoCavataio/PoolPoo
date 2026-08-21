@@ -28,7 +28,7 @@ import { NO_SPIN, World, type SerializedWorld, type ShotSpin } from '@/game/core
 import { planShot, type Difficulty } from '@/game/ai/opponent';
 import { detectShot, emptyRunState, type TrophyRunState } from '@/game/trophies/detect';
 import { useTrophies } from '@/store/trophies';
-import type { Message } from '@/i18n';
+import { msg, type Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
 import {
   createMatch,
@@ -61,7 +61,7 @@ import {
   type Standing,
 } from '@/game/rules/types';
 
-import { powerFor, wildnessFor } from './swing';
+import { isMiscue, powerFor, wildnessFor } from './swing';
 import { clearSavedGame, SAVE_VERSION, saveGame, type SavedGame } from './persistence';
 import { useSettings } from './settings';
 
@@ -152,6 +152,15 @@ const REPLAY_MAX_SPEED = 0.8;
  * frame at the moment the shot ends, against several seconds of waiting.
  */
 const FAST_FORWARD_TICKS = 600;
+
+/**
+ * How long the table is held still while a mishit swing plays.
+ *
+ * The animation is the entire event, so this is simply its length. Two seconds
+ * is long enough to see which way the cue went and to register that it missed —
+ * a miscue that flashed past would leave the player wondering what happened.
+ */
+const MISCUE_HOLD_MS = 2000;
 
 /**
  * A moment in a shot worth replaying.
@@ -259,8 +268,9 @@ export interface SessionState {
    * Plays the shot.
    *
    * `charge` is how long the shoot button was held: 1 is a full wind-up, above
-   * that is an overcharge, and 0 means nothing was charged — which is how the
-   * computer plays, since it has no button to hold and sets `power` directly.
+   * that an overcharge, and 0 a tap — which is a miscue, the same as holding too
+   * long. Omitted entirely by the computer, which has no button to hold and sets
+   * `power` directly.
    */
   takeShot: (charge?: number) => void;
   skipReplay: () => void;
@@ -294,6 +304,24 @@ export const useSession = create<SessionState>((set, get) => {
     }
     set({ aimAngle: angleOf(sub(nearest.p, cue.p)) });
   };
+
+  /**
+   * Whether the shot now being played was mishit, and which way.
+   *
+   * Set when the shot is struck and read when it settles, because the ticker
+   * only speaks between shots — by which time the charge that caused it is long
+   * gone.
+   */
+  let lastMiscue: 'rushed' | 'snatched' | null = null;
+
+  /**
+   * When the miscue swing finishes, as a wall-clock time.
+   *
+   * The shot phase is held open until then. Wall clock rather than sim time
+   * because the swing is an animation and has nothing to do with how far the
+   * solver has stepped — on a miscue it has not stepped at all.
+   */
+  let miscueUntil = 0;
 
   const buildSave = (): SavedGame | null => {
     const { mode, world, match } = get();
@@ -592,6 +620,9 @@ export const useSession = create<SessionState>((set, get) => {
       })
       .sort((a, b) => a.t - b.t);
 
+    const miscued = lastMiscue;
+    lastMiscue = null;
+
     let outcome: ShotOutcome | null = null;
     let finished = false;
     /*
@@ -629,7 +660,7 @@ export const useSession = create<SessionState>((set, get) => {
         reracked = true;
       }
 
-      set({ match: next, standings: standings(next) });
+      set({ match: next, standings: standings(next, world) });
     }
 
     /**
@@ -649,7 +680,7 @@ export const useSession = create<SessionState>((set, get) => {
        * that happens in a game you win by potting the black.
        */
       const seat = currentSeat(match);
-      const table = standings(match);
+      const table = standings(match, world);
       const shooter = table[seat];
       const runnerUp = table
         .filter((_, i) => i !== seat)
@@ -751,7 +782,21 @@ export const useSession = create<SessionState>((set, get) => {
         : null;
 
     set({
-      messages: outcome?.messages ?? [],
+      /*
+       * The miscue is told here, not by a banner of its own.
+       *
+       * It was a third component reporting the same shot: the miscue banner at
+       * contact, the foul banner when the balls stopped, and this ticker after
+       * — three panels in three styles for one bad shot. Folding it into the
+       * message list means it arrives through the channel the game already uses
+       * to say what happened, in the one style that channel has.
+       *
+       * Last in the list, because the ticker shows the last line: the miscue is
+       * *why* the shot went wrong, and it should be the thing left on screen.
+       */
+      messages: miscued
+        ? [...(outcome?.messages ?? []), msg(miscued === 'rushed' ? 'miscue.rushed' : 'miscue.snatched')]
+        : (outcome?.messages ?? []),
       lastOutcome: outcome,
       celebration,
     });
@@ -818,7 +863,7 @@ export const useSession = create<SessionState>((set, get) => {
         world,
         phase: Phase.AIMING,
         match,
-        standings: standings(match),
+        standings: standings(match, world),
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -844,16 +889,20 @@ export const useSession = create<SessionState>((set, get) => {
       // game that had not finished.
       gameEnded = false;
       trophyRun = emptyRunState();
+      // Built first: the standings read the table to work out which balls of a
+      // group are already down.
+      const restored = World.deserialize(
+        save.world,
+        furnishedTable(),
+        clothProfile(useSettings.getState().clothId),
+      );
+
       set({
         mode: save.mode,
-        world: World.deserialize(
-          save.world,
-          furnishedTable(),
-          clothProfile(useSettings.getState().clothId),
-        ),
+        world: restored,
         phase: Phase.AIMING,
         match: save.match,
-        standings: standings(save.match),
+        standings: standings(save.match, restored),
         power: DEFAULT_POWER,
         spin: NO_SPIN,
         cameraMode: CameraMode.CUE,
@@ -896,7 +945,7 @@ export const useSession = create<SessionState>((set, get) => {
       set({ match: withCall(match, call) });
     },
 
-    takeShot: (charge = 0) => {
+    takeShot: (charge) => {
       const { world, phase, aimAngle, power, spin, cameraMode, match } = get();
       if (!world || phase !== Phase.AIMING) return;
       // Shooting from the overhead view is deliberately not allowed: you line a
@@ -913,14 +962,21 @@ export const useSession = create<SessionState>((set, get) => {
       if (match && needsCall(match) && !currentCall(match)) return;
 
       /*
-       * The charge decides the shot.
+       * The charge decides the shot — including when there was none.
        *
        * `charge` is how long the button was held, where 1 is a full wind-up and
-       * anything above it is an overcharge. The computer passes its own power
-       * through unchanged — it has no button to hold — which is why this falls
-       * back to `power` when nothing was charged.
+       * anything above it is an overcharge. A tap is a charge of zero, and zero
+       * is inside the miscue band at the bottom: jabbing at the ball without
+       * drawing the cue back is as much a mishit as snatching at it, and the two
+       * now behave the same way. `powerFor` already knows this.
+       *
+       * `undefined` is what the computer passes, because it has no button to
+       * hold and sets `power` directly. That is the one case that falls through.
        */
-      const struck = charge > 0 ? powerFor(charge) : power;
+      const struck = charge === undefined ? power : powerFor(charge);
+      // Remembered for the ticker, which reports it once the balls have stopped.
+      lastMiscue =
+        charge === undefined || !isMiscue(charge) ? null : charge === 0 ? 'rushed' : 'snatched';
 
       /*
        * An overcharged cue does not merely hit harder, it hits *badly*.
@@ -934,17 +990,27 @@ export const useSession = create<SessionState>((set, get) => {
        * Deterministic in the shot's own terms rather than random, so a replay of
        * it plays back identically.
        */
-      const wild = wildnessFor(charge);
+      const wild = charge === undefined ? 0 : wildnessFor(charge);
       const skew = wild === 0 ? 0 : (((world.balls.length * 7919) % 17) / 17 - 0.5) * wild * 0.09;
       const angle = aimAngle + skew;
 
       pending = { snapshot: world.serialize(), angle, power: struck, spin };
 
       accumulator = 0;
+      miscueUntil = lastMiscue ? Date.now() + MISCUE_HOLD_MS : 0;
       world.shoot(angle, struck, spin);
       set({
         phase: Phase.SIMULATING,
-        cameraMode: CameraMode.TABLE,
+        /*
+         * A miscue stays behind the cue.
+         *
+         * Pulling back to the overhead view is right for a real shot — the table
+         * is where everything is about to happen. On a mishit nothing happens on
+         * the table at all: the ball moves two centimetres, and the only thing
+         * worth seeing is the cue going through and missing it. Cutting to the
+         * ceiling put that where nobody could watch it.
+         */
+        cameraMode: lastMiscue ? CameraMode.CUE : CameraMode.TABLE,
         messages: [],
         lastOutcome: null,
         celebration: null,
@@ -1008,6 +1074,18 @@ export const useSession = create<SessionState>((set, get) => {
           if (world.time > PHYSICS.maxShotSeconds) break;
         }
       }
+
+      /*
+       * A mishit is held open long enough to be watched.
+       *
+       * Nothing moves on a miscue — the cue goes past the ball and the ball stays
+       * exactly where it was — so the solver is at rest before a single frame has
+       * been drawn, and the shot would end the instant it began. The swing is the
+       * only thing that happens, and it needs the phase to stay put while it
+       * plays.
+       */
+      if (miscueUntil > 0 && Date.now() < miscueUntil) return;
+      miscueUntil = 0;
 
       if (world.atRest || world.time > PHYSICS.maxShotSeconds) {
         settleShot();

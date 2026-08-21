@@ -8,12 +8,15 @@
  */
 
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { LuxeFonts } from '@/components/ui/luxe';
+import { ballSetById, colorForBallIn } from '@/constants/ball-sets';
 import { Luxe, Palette, Radius } from '@/constants/game-theme';
+import { BallKind, ballKindFor } from '@/game/core/ball';
 import { Spacing } from '@/constants/theme';
 import type { PocketId } from '@/game/core/table';
 import { currentCall, winningSeats } from '@/game/rules/match';
@@ -21,6 +24,19 @@ import { GameModeKind, Phase } from '@/game/rules/types';
 import type { MessageKey } from '@/i18n';
 import { useMessageRenderer, useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
+
+/**
+ * How long the foul panel stays up.
+ *
+ * Long enough to read a short sentence twice over, and no longer: it is a
+ * notice, not a state, and the table underneath it is what the player wants
+ * back.
+ */
+const FOUL_NOTICE_MS = 2600;
+
+/** The white a striped ball is under its band. Matches the shader's. */
+const STRIPE_GROUND = '#f2efe6';
 
 /** How each pocket is named in the ticker. Shared with the call picker's labels. */
 const POCKET_LABELS: Record<PocketId, MessageKey> = {
@@ -83,6 +99,46 @@ function BackButton() {
  * Scores use tabular figures so a number does not shift sideways as it ticks
  * past nine, the same treatment the power readout gets.
  */
+/**
+ * The balls a seat has taken, as small coloured discs.
+ *
+ * No numbers on them. At this size a numeral is a smudge, and the number is not
+ * what is being asked anyway — what a player wants from a glance at the
+ * scoreboard is *which* are gone, and colour plus solid-or-striped answers that
+ * without anything to read.
+ *
+ * Striped balls are drawn the way the table draws them: a pale disc with a band
+ * of colour across the middle, from the same ball set, so a ball here and the
+ * same ball on the cloth are recognisably one object.
+ */
+function PottedBalls({ balls }: { balls: number[] }) {
+  const ballSetId = useSettings((s) => s.ballSetId);
+  const set = ballSetById(ballSetId);
+
+  if (balls.length === 0) return null;
+
+  return (
+    <View style={styles.potted}>
+      {balls.map((number) => {
+        const colour = colorForBallIn(set, number);
+        // A set without stripes draws every object ball solid, exactly as the
+        // table does — asked of `ballKindFor` rather than re-derived here.
+        const striped = set.striped && ballKindFor(number) === BallKind.STRIPE;
+
+        return (
+          <View
+            key={number}
+            style={[styles.pottedBall, { backgroundColor: striped ? STRIPE_GROUND : colour }]}>
+            {striped ? (
+              <View style={[styles.pottedBand, { backgroundColor: colour }]} />
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function Scoreboard() {
   const t = useT();
   const table = useSession((s) => s.standings);
@@ -117,6 +173,9 @@ function Scoreboard() {
         <Text style={styles.playerScore}>{current ? badge(current) : ''}</Text>
       </View>
 
+      {/* What this seat has taken off the table. */}
+      {current?.potted?.length ? <PottedBalls balls={current.potted} /> : null}
+
       {/* The run, which is the whole point of 14.1 and meaningless elsewhere. */}
       {mode === GameModeKind.STRAIGHT && current?.run ? (
         <Text style={styles.runLine}>{t('rules.runOf', { count: current.run })}</Text>
@@ -138,9 +197,12 @@ function Scoreboard() {
       {others.length > 0 ? (
         <View style={styles.otherRow}>
           {others.map((row) => (
-            <Text key={row.id} style={styles.otherPlayer} numberOfLines={1}>
-              {row.name} <Text style={styles.otherScore}>{badge(row)}</Text>
-            </Text>
+            <View key={row.id} style={styles.otherRowLine}>
+              <Text style={styles.otherPlayer} numberOfLines={1}>
+                {row.name} <Text style={styles.otherScore}>{badge(row)}</Text>
+              </Text>
+              {row.potted?.length ? <PottedBalls balls={row.potted} /> : null}
+            </View>
           ))}
         </View>
       ) : null}
@@ -171,23 +233,76 @@ export function GameHud() {
  * it costs nothing when there is nothing to say.
  */
 export function ShotNote() {
+  const t = useT();
   const render = useMessageRenderer();
   const messages = useSession((s) => s.messages);
   const phase = useSession((s) => s.phase);
   const lastOutcome = useSession((s) => s.lastOutcome);
 
   const note = phase === Phase.AIMING ? messages[messages.length - 1] : undefined;
+  const isFoul = lastOutcome?.foul === true;
+
+  /**
+   * The foul panel takes itself down after a few seconds.
+   *
+   * It used to sit there until the next shot was played, which is fine for the
+   * small turn message in the corner — that is a status line, and a status line
+   * should say what the status is. A foul is an *event*: it happened, it is
+   * announced, and then it is over. Left up, a large card in the middle of the
+   * table becomes something you have to shoot around.
+   *
+   * Keyed on the outcome object rather than on a flag, so two fouls in a row
+   * each get their own countdown; without that the second would inherit
+   * whatever was left of the first.
+   */
+  const [foulShown, setFoulShown] = useState(true);
+
+  useEffect(() => {
+    if (!isFoul) return;
+    setFoulShown(true);
+    const timer = setTimeout(() => setFoulShown(false), FOUL_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [isFoul, lastOutcome]);
+
   if (!note) return null;
 
-  const isFoul = lastOutcome?.foul === true;
+  /*
+   * A foul is not a note.
+   *
+   * Both used to arrive as the same small strip in the bottom corner — the right
+   * weight for "your turn", and far too little for "you have just given away a
+   * point". The two are different kinds of statement and now look it: a turn
+   * message stays where it was, and a foul is centred over the table with the
+   * word itself above the reason.
+   *
+   * Still one component, because it is still one channel. What changed is how
+   * loudly it speaks, not how many voices there are.
+   */
+  /*
+   * Once the foul notice has had its time, it is finished — not demoted.
+   *
+   * Falling through to the small corner note would show the same sentence a
+   * second time in a quieter style, which is the duplication this whole thing
+   * was untangled to remove.
+   */
+  if (isFoul) {
+    if (!foulShown) return null;
+
+    return (
+      <View style={styles.foulLayer} pointerEvents="none">
+        <Animated.View entering={FadeInDown.duration(220)} style={styles.foulCard}>
+          <Text style={styles.foulWord}>{t('celebration.foul')}</Text>
+          <Text style={styles.foulLine}>{render(note)}</Text>
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.noteLayer} pointerEvents="none">
-      <View style={[styles.note, isFoul && styles.noteFoul]}>
-        {/* A stripe down the leading edge, so a foul is distinguishable from an
-            ordinary turn message without reading the words. */}
-        <View style={[styles.noteAccent, isFoul && styles.noteAccentFoul]} />
-        <Text style={[styles.noteLabel, isFoul && styles.noteLabelFoul]} numberOfLines={1}>
+      <View style={styles.note}>
+        <View style={styles.noteAccent} />
+        <Text style={styles.noteLabel} numberOfLines={1}>
           {render(note)}
         </Text>
       </View>
@@ -369,6 +484,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
+  /** The row of discs. Wraps, because fifteen balls will not fit on one line. */
+  potted: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+    marginTop: 3,
+  },
+  /**
+   * One ball. Round, small, and clipped.
+   *
+   * `overflow: hidden` is what keeps a stripe's band inside the circle — the
+   * radius only shapes the view's own background, so anything drawn inside it
+   * runs straight out past the curve without this.
+   */
+  pottedBall: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  pottedBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '27%',
+    bottom: '27%',
+  },
+  otherRowLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
   /** The standing call, under the name. Called modes only. */
   callLine: {
     color: Palette.textMuted,
@@ -386,6 +534,44 @@ const styles = StyleSheet.create({
     color: Palette.text,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
+  },
+  /**
+   * The foul, over the middle of the table.
+   *
+   * High enough to clear the controls and low enough to sit on the cloth rather
+   * than over the scoreboard, which is where the eye already is after a shot.
+   */
+  foulLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '32%',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.four,
+  },
+  foulCard: {
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: Spacing.five,
+    paddingVertical: Spacing.three,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 117, 107, 0.5)',
+    backgroundColor: 'rgba(8, 11, 10, 0.94)',
+  },
+  /** The word, in the danger tone: read before the sentence under it. */
+  foulWord: {
+    color: Luxe.danger,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+  },
+  foulLine: {
+    color: Luxe.text,
+    fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   noteLayer: {
     position: 'absolute',
@@ -410,19 +596,10 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     overflow: 'hidden',
   },
-  noteFoul: {
-    borderColor: 'rgba(255, 107, 94, 0.5)',
-  },
   noteAccent: {
     width: 3,
     alignSelf: 'stretch',
     backgroundColor: Palette.accent,
-  },
-  noteAccentFoul: {
-    backgroundColor: Palette.danger,
-  },
-  noteLabelFoul: {
-    color: Palette.danger,
   },
   noteLabel: {
     color: Palette.text,

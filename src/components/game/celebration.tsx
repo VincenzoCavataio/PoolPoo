@@ -19,8 +19,7 @@ import { LuxeFonts } from '@/components/ui/luxe';
 import { Luxe, Palette, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { Phase } from '@/game/rules/types';
-import type { Message } from '@/i18n';
-import { useMessageRenderer, useT } from '@/i18n/use-t';
+import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 
 const CONFETTI_COLORS = ['#ffc857', '#3ddc84', '#ff53d8', '#5cf0ff', '#ff6b5e', '#f2f0e6'];
@@ -33,7 +32,8 @@ const CONFETTI_COUNT = 26;
  * should be over while the thing it is reacting to is still happening.
  */
 const POT_DURATION = 1500;
-const FOUL_DURATION = 1700;
+/** A foul's celebration is only the dismissal timer now; the ticker speaks. */
+const FOUL_DURATION = 1200;
 
 function Confetti({ seed }: { seed: number }) {
   const { height } = useWindowDimensions();
@@ -167,35 +167,6 @@ function PotBanner({ balls }: { balls: number[] }) {
   );
 }
 
-function FoulBanner({ reason, penalty }: { reason: Message | null; penalty: number }) {
-  const t = useT();
-  const render = useMessageRenderer();
-  const sink = new Keyframe({
-    0: { opacity: 0, transform: [{ translateY: -14 }] },
-    30: { opacity: 1, transform: [{ translateY: 0 }] },
-    100: { opacity: 0, transform: [{ translateY: 18 }] },
-  });
-
-  return (
-    <View style={styles.bannerWrap} pointerEvents="none">
-      {/* A cold wash instead of a bright one — the opposite of the confetti. */}
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(300)}
-        style={styles.foulWash}
-      />
-      <Animated.View entering={sink.duration(FOUL_DURATION)} style={styles.foulBanner}>
-        <Text style={styles.foulTitle}>{t('celebration.foul')}</Text>
-        {reason ? <Text style={styles.foulReason}>{render(reason)}</Text> : null}
-        {/* The cost, spelled out: a foul the player cannot price is just a telling-off. */}
-        {penalty > 0 ? (
-          <Text style={styles.foulPenalty}>{t('celebration.penalty', { count: penalty })}</Text>
-        ) : null}
-      </Animated.View>
-    </View>
-  );
-}
-
 export function Celebration() {
   const t = useT();
   const celebration = useSession((s) => s.celebration);
@@ -224,9 +195,15 @@ export function Celebration() {
         </>
       ) : null}
 
-      {celebration?.kind === 'foul' ? (
-        <FoulBanner reason={celebration.reason} penalty={celebration.penalty} />
-      ) : null}
+      {/*
+        A foul says itself once, through the shot ticker.
+
+        There used to be a panel here as well, and the two carried the same
+        sentence in two different styles a second apart — the rules already put
+        the reason and the cost into the message list, and the ticker is where
+        the game says what happened. A second announcement of one event is not
+        emphasis, it is a stutter.
+      */}
 
       {/* Anywhere on screen cuts the replay short. */}
       {replaying ? (
@@ -301,52 +278,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Luxe.gold,
     opacity: 0.7,
-  },
-  /**
-   * The foul wash. The danger tone, not a blue one.
-   *
-   * Blue was doing the job of "cold" by being a different hue entirely, which
-   * meant a foul used a colour the app uses nowhere else. The danger tone is
-   * already the app's word for a cost, and it is the one the reset section
-   * wears.
-   */
-  foulWash: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(217, 117, 107, 0.16)',
-  },
-  foulBanner: {
-    backgroundColor: '#080b0a',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 117, 107, 0.5)',
-    borderRadius: 12,
-    paddingHorizontal: Spacing.five,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  foulTitle: {
-    color: Luxe.danger,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 2.6,
-    textTransform: 'uppercase',
-  },
-  foulReason: {
-    color: Luxe.text,
-    fontSize: 15,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  foulPenalty: {
-    color: Palette.danger,
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginTop: 2,
   },
   skipWrap: {
     position: 'absolute',

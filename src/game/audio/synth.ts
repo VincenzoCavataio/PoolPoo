@@ -343,10 +343,84 @@ export function ballastHum(): Float32Array {
   return normalise(output, 0.55);
 }
 
+/**
+ * A miscue: the tip skidding off the ball instead of striking it.
+ *
+ * The opposite of `cueStrike` in every way that matters, and that contrast is
+ * the point — a clean hit is a short bright knock with a defined pitch, so a
+ * miscue has to be dull, longer, and pitchless or it will read as a quiet good
+ * shot rather than a bad one.
+ *
+ * Three things layered. A scrape: filtered noise that rises and falls over a
+ * tenth of a second, which is leather dragging across phenolic. A dead thud
+ * under it, heavily damped, because the shaft still has to hit *something*. And
+ * a faint squeak on top, the one part of a real miscue that makes people wince.
+ */
+export function cueMiscue(): Float32Array {
+  const length = seconds(0.26);
+  const output = new Float32Array(length);
+  const noise = createNoise(0x5ab3e7);
+
+  let scrapeFiltered = 0;
+  let bodyFiltered = 0;
+  let squeakPhase = 0;
+
+  for (let i = 0; i < length; i++) {
+    const time = i / SAMPLE_RATE;
+
+    /*
+     * The scrape, swelling and dying.
+     *
+     * A triangle envelope rather than a decay: a skid has a *middle* — it starts
+     * as the tip catches, peaks as it slides, and stops when it leaves. An
+     * exponential decay would be a knock again, which is what this is not.
+     */
+    const scrapeAt = 0.045;
+    const scrapeEnv =
+      time < scrapeAt
+        ? time / scrapeAt
+        : Math.max(0, 1 - (time - scrapeAt) / 0.085);
+
+    // Low-passed hard, and the cutoff falls as it goes: the contact loses its
+    // bite as the tip slides off.
+    const cutoff = 0.22 - 0.12 * Math.min(1, time / 0.13);
+    scrapeFiltered += (noise() - scrapeFiltered) * cutoff;
+
+    /*
+     * The body knock, dull and immediate.
+     *
+     * Present but damped almost out of existence: the cue is still moving and
+     * still meets the ball's edge, so there is an impact — it just has none of
+     * the ring a square hit gives.
+     */
+    const bodyEnv = Math.exp(-time / 0.012);
+    bodyFiltered += (noise() - bodyFiltered) * 0.06;
+
+    /*
+     * The squeak: a short high tone that slides downward.
+     *
+     * The unmistakable part. Kept quiet and brief, because it is a detail rather
+     * than the sound itself, and it starts a little after the contact — the tip
+     * has to be moving across the ball before it can sing.
+     */
+    const squeakEnv = time < 0.02 ? 0 : Math.exp(-(time - 0.02) / 0.05) * 0.1;
+    const squeakHz = 2100 - 900 * Math.min(1, time / 0.12);
+    squeakPhase += (squeakHz * Math.PI * 2) / SAMPLE_RATE;
+
+    output[i] =
+      scrapeFiltered * scrapeEnv * 1.5 +
+      bodyFiltered * bodyEnv * 2.2 +
+      Math.sin(squeakPhase) * squeakEnv;
+  }
+
+  return normalise(output, 0.72);
+}
+
 export const EFFECTS = {
   'ball-hit': ballHit,
   cushion: cushionHit,
   cue: cueStrike,
+  miscue: cueMiscue,
   pocket: pocketDrop,
   needle: needleDrop,
   ballast: ballastHum,

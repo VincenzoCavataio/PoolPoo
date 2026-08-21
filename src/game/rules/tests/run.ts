@@ -139,8 +139,8 @@ suite('free play scoring', () => {
     const tied: FreeState = {
       ...createFreeState(2, names(2)),
       players: [
-        { id: 0, name: 'A', score: 4, ballsPocketed: 4 },
-        { id: 1, name: 'B', score: 5, ballsPocketed: 5 },
+        { id: 0, name: 'A', score: 4, ballsPocketed: 4, potted: [1, 2, 3, 4] },
+        { id: 1, name: 'B', score: 5, ballsPocketed: 5, potted: [5, 6, 7, 9, 10] },
       ],
     };
     const { state } = resolveFreeShot(tied, world, [hit(0, 1), pot(1)]);

@@ -241,7 +241,20 @@ function CameraRig({ table }: { table: Table }) {
           tableView();
         }
       }
-    } else if (cameraMode === CameraMode.CUE && phase === Phase.AIMING) {
+    } else if (
+      /*
+       * Behind the cue while aiming, and while a mishit plays out.
+       *
+       * The phase check used to be `AIMING` alone, so the instant a shot began
+       * the camera fell through to the table view no matter what `cameraMode`
+       * said — which is why a miscue still cut to the ceiling even after the
+       * store was told to stay put. On a mishit there is nothing on the table to
+       * pull back for: the ball moves two centimetres and the only thing worth
+       * watching is the cue going through and missing it.
+       */
+      cameraMode === CameraMode.CUE &&
+      (phase === Phase.AIMING || phase === Phase.SIMULATING)
+    ) {
       const cue = world?.cueBall();
       if (cue && !cue.pocketed) {
         // Sim direction (cos a, sin a) maps to the scene as (sin a, -cos a).

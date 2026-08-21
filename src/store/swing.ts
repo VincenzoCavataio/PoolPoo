@@ -62,18 +62,18 @@ export const OVERCHARGE_MS = CHARGE_MS * 0.5;
 export const MAX_CHARGE = 1 + OVERCHARGE_MS / CHARGE_MS;
 
 /**
- * The two ends where the cue is mishit.
+ * The two ways a shot is mishit: not swinging at all, and swinging too hard.
  *
- * Letting go almost at once is a jab at the ball before the arm has come
- * through; holding right to the ceiling is a snatch. Both are miscues — the tip
- * skids off the ball instead of striking it cleanly — and both are what a real
- * player does when they rush or over-commit.
+ * A tap is a jab at the ball before the arm has come through; holding right to
+ * the ceiling is a snatch. Both are miscues.
  *
- * The safe range is the wide middle, 20% to 110%, which is where anybody paying
- * attention will be. The punishment sits at the extremes on purpose: it is the
- * price of the two shortcuts, not a tax on ordinary play.
+ * There used to be a whole band under 20% that miscued as well, which was wrong:
+ * a soft shot is a legitimate shot — safeties and delicate positional play are
+ * *made* of them — and punishing the bottom of the scale meant the gentlest
+ * quarter of the range could not be used at all. Now only a charge of nothing
+ * counts, so releasing early gives you a soft shot rather than a penalty.
  */
-export const MISCUE_UNDER = 0.2;
+export const MISCUE_UNDER = 0;
 
 /**
  * Where the overcharge stops being a gamble and becomes a mishit.
@@ -89,7 +89,9 @@ export const MISCUE_OVER = 1.3;
 export type ChargeZone = 'miscue' | 'safe' | 'over';
 
 export function zoneFor(charge: number): ChargeZone {
-  if (charge < MISCUE_UNDER || charge > MISCUE_OVER) return 'miscue';
+  // `<=` at the bottom, so only a charge of literally nothing is a miscue; any
+  // amount of swing, however small, is a real shot.
+  if (charge <= MISCUE_UNDER || charge > MISCUE_OVER) return 'miscue';
   return charge > 1 ? 'over' : 'safe';
 }
 
@@ -107,14 +109,19 @@ export function isMiscue(charge: number): boolean {
  */
 export function powerFor(charge: number): number {
   /*
-   * A miscue barely moves the ball.
+   * A miscue does not move the ball at all.
    *
-   * The tip skids off rather than striking through, so whatever was wound up
-   * goes into the noise instead of into the shot. A tenth of full power is a
-   * ball that rolls a foot and stops — which is what a miscue looks like, and
-   * punishment enough without a rule having to say so.
+   * Zero, not a trickle. The tip goes past the ball entirely — that is what the
+   * swing animation shows — so there is no contact to put anything into it, and
+   * a cue ball that crept two centimetres was telling a different story from the
+   * cue that visibly missed it.
+   *
+   * It is still a foul, and by the ordinary rules rather than a special one: the
+   * cue ball touches nothing and reaches no cushion, which is exactly what the
+   * WPA book calls a foul. There is no separate penalty for a miscue there
+   * either — it is a foul for what it fails to do, not for what it is.
    */
-  if (isMiscue(charge)) return 0.1;
+  if (isMiscue(charge)) return 0;
   return Math.min(1, charge);
 }
 
@@ -147,6 +154,7 @@ export function shakeFor(charge: number): number {
   return t * t;
 }
 
+
 interface SwingState {
   /** Whether the button is being held. */
   charging: boolean;
@@ -157,16 +165,54 @@ interface SwingState {
    *
    * The id changes every time so two miscues in a row both announce themselves;
    * without it the value would not change and nothing downstream would notice.
+   * It is also the clock the swing animation runs from.
+   *
+   * Cleared by the next shot rather than by whoever read it: the animation needs
+   * it to survive the whole swing, and a reader that cleared it on sight would
+   * cut the cue off mid-lunge.
    */
-  miscue: { id: number; charge: number } | null;
+  miscue: {
+    id: number;
+    charge: number;
+    /**
+     * Which way the cue slipped, so the animation can show it.
+     *
+     * Chosen once when the shot is played rather than by the renderer, because
+     * the swing and the message have to agree — and because a value picked in a
+     * frame loop would be a different direction every frame.
+     */
+    slip: 'left' | 'right' | 'high';
+  } | null;
 
   start: () => void;
   setCharge: (charge: number) => void;
   /** Ends the hold and records it, returning the charge that was wound on. */
   release: () => number;
+  /**
+   * Records a shot played without charging at all.
+   *
+   * A tap is a jab at the ball: the cue never came back, so it is a miscue in
+   * the same way that snatching at it is, and it has to be reported the same
+   * way. Returns zero, which is the charge it represents.
+   */
+  tap: () => number;
   /** Ends without playing, for a shot cancelled or interrupted. */
   cancel: () => void;
-  clearMiscue: () => void;
+}
+
+/**
+ * Which way a mishit cue goes.
+ *
+ * Random, and it has to be: a miscue that always slipped the same way would be
+ * a animation rather than a mistake, and after two of them you would stop
+ * reading it. High is rarer than the two sides because a cue riding up over the
+ * ball is the less common way to miss it.
+ */
+function pickSlip(): 'left' | 'right' | 'high' {
+  const roll = Math.random();
+  if (roll < 0.4) return 'left';
+  if (roll < 0.8) return 'right';
+  return 'high';
 }
 
 export const useSwing = create<SwingState>((set, get) => ({
@@ -174,6 +220,8 @@ export const useSwing = create<SwingState>((set, get) => ({
   charge: 0,
   miscue: null,
 
+  // The record is cleared as the next shot is wound up, which is what stops the
+  // swing animation from replaying over an aim that has already moved on.
   start: () => set({ charging: true, charge: 0, miscue: null }),
   setCharge: (charge) => set({ charge: Math.min(MAX_CHARGE, Math.max(0, charge)) }),
 
@@ -184,11 +232,15 @@ export const useSwing = create<SwingState>((set, get) => ({
     set({
       charging: false,
       charge: 0,
-      miscue: isMiscue(charge) ? { id: Date.now(), charge } : null,
+      miscue: isMiscue(charge) ? { id: Date.now(), charge, slip: pickSlip() } : null,
     });
     return charge;
   },
 
+  tap: () => {
+    set({ charging: false, charge: 0, miscue: { id: Date.now(), charge: 0, slip: pickSlip() } });
+    return 0;
+  },
+
   cancel: () => set({ charging: false, charge: 0, miscue: null }),
-  clearMiscue: () => set({ miscue: null }),
 }));

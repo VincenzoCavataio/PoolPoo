@@ -33,6 +33,15 @@ export interface Player {
   score: number;
   ballsPocketed: number;
   /**
+   * Which balls this player put down, in the order they fell.
+   *
+   * The count above says how many; this says which, so the scoreboard can show
+   * them rather than a number. Kept as well as the count rather than instead of
+   * it, because the two answer different questions and the count is what the
+   * scoring reads.
+   */
+  potted: number[];
+  /**
    * Which computer plays this seat, if any.
    *
    * Absent means a person. It lives on the player rather than on the game
@@ -82,6 +91,7 @@ export function createFreeState(
     name: names[i]?.trim() || `#${i + 1}`,
     score: 0,
     ballsPocketed: 0,
+    potted: [],
     cpu: cpus[i],
   }));
 
@@ -151,6 +161,7 @@ export function resolveFreeShot(
   if (potted.length > 0) {
     player.score += potted.length * FREE_RULES.pointsPerBall;
     player.ballsPocketed += potted.length;
+    player.potted = [...player.potted, ...potted];
     outcome.messages.push(
       potted.length === 1
         ? msg('rules.gained', { name: player.name, count: FREE_RULES.pointsPerBall })

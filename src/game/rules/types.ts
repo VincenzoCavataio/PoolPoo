@@ -132,6 +132,14 @@ export interface Standing {
   group?: 'solids' | 'stripes' | null;
   /** Balls potted without missing. 14.1 only, where it is the headline stat. */
   run?: number;
+  /**
+   * The balls this seat has taken, in the order they fell.
+   *
+   * Shown on the scoreboard as coloured discs rather than as a number: which
+   * balls are gone is a different piece of information from how many, and the
+   * one a player actually reads the table against.
+   */
+  potted?: number[];
   isCurrent: boolean;
   cpu?: boolean;
 }

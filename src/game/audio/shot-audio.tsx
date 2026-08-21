@@ -19,31 +19,67 @@ import { useRef } from 'react';
 import type { ShotEvent } from '@/game/core/events';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
+import { useSwing } from '@/store/swing';
 import { useSettings } from '@/store/settings';
 
-import { gainForImpact, playEffect } from './sfx';
+import { gainForImpact, playEffect, playMiscue } from './sfx';
 
 export function ShotAudio() {
   const cursor = useRef(0);
   const tracked = useRef<ShotEvent[] | null>(null);
   const lastPhase = useRef<Phase>(Phase.AIMING);
   const lastBuzz = useRef(0);
+  /** The last mishit already announced, so one shot makes one sound. */
+  const lastMiscueId = useRef(0);
 
   useFrame(() => {
     const { world, replay, phase, power } = useSession.getState();
     const { haptics, collisionHaptics } = useSettings.getState();
 
-    // The cue itself: there is no solver event for it, it is the shot starting.
-    if (phase === Phase.SIMULATING && lastPhase.current === Phase.AIMING) {
-      playEffect('cue', 0.35 + power * 0.6);
-      if (haptics) {
-        void Haptics.impactAsync(
-          power > 0.66
-            ? Haptics.ImpactFeedbackStyle.Heavy
-            : power > 0.33
-              ? Haptics.ImpactFeedbackStyle.Medium
-              : Haptics.ImpactFeedbackStyle.Light,
-        ).catch(() => undefined);
+    /*
+     * The cue itself: there is no solver event for it, it is the shot starting.
+     *
+     * Watched on the swing store's own record rather than only on the phase.
+     * A mishit leaves the solver at rest — the ball never moves — so the shot can
+     * pass through SIMULATING between two frames and this transition is missed
+     * entirely, which is why the miscue was silent. The record's id changes on
+     * every shot, so comparing it catches the event however briefly the phase
+     * lasted.
+     */
+    const miscue = useSwing.getState().miscue;
+    const newMiscue = miscue !== null && miscue.id !== lastMiscueId.current;
+    if (newMiscue) lastMiscueId.current = miscue.id;
+
+    if (newMiscue || (phase === Phase.SIMULATING && lastPhase.current === Phase.AIMING)) {
+      /*
+       * A mishit gets its own sound, and nothing else does.
+       *
+       * A miscue produces no solver events at all — no contact, no cushion, no
+       * pot, because the ball does not move — so if this frame does not make the
+       * sound, the shot is silent. It also must not make the ordinary strike:
+       * the two are different events, and the clean knock would say the ball had
+       * been hit.
+       */
+      const miscued = newMiscue;
+
+      if (miscued) {
+        playMiscue();
+        // A dull thump rather than the crisp knock of a good hit: the cue met
+        // something, but not squarely.
+        if (haptics) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => undefined);
+        }
+      } else {
+        playEffect('cue', 0.35 + power * 0.6);
+        if (haptics) {
+          void Haptics.impactAsync(
+            power > 0.66
+              ? Haptics.ImpactFeedbackStyle.Heavy
+              : power > 0.33
+                ? Haptics.ImpactFeedbackStyle.Medium
+                : Haptics.ImpactFeedbackStyle.Light,
+          ).catch(() => undefined);
+        }
       }
     }
     lastPhase.current = phase;
