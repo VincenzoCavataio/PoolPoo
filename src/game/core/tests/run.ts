@@ -20,7 +20,7 @@ import { predictAim } from '../predict';
 import { createTable, headSpot } from '../table';
 import { obstaclesFor } from '../../render/locations';
 import { add, angleOf, normalize, scale, sub } from '../vec';
-import { NO_SPIN, World, type ShotSpin } from '../world';
+import { departureAngle, NO_SPIN, World, type ShotSpin } from '../world';
 import { createFreeState, resolveFreeShot } from '../../rules/free';
 import { assert, assertClose, assertEqual, report, suite, test } from './harness';
 
@@ -90,6 +90,26 @@ suite('table and rack', () => {
   });
 });
 
+/**
+ * How far a rolling ball travels before stopping, in closed form.
+ *
+ * Rolling resistance rises slightly with speed — `a(v) = a0 * (1 + k v)` — so
+ * the schoolbook `v^2 / 2a` is an over-estimate. Separating and integrating
+ * `v dv / a(v)` from `v0` to rest gives
+ *
+ *     s = (k v0 - ln(1 + k v0)) / (a0 k^2)
+ *
+ * which tends to `v0^2 / 2a0` as `k` goes to zero, so the constant-friction case
+ * falls out of the same expression rather than needing its own.
+ *
+ * Derived here rather than copied from the solver: a test that reuses the
+ * implementation's arithmetic checks only that the code equals itself.
+ */
+function rollingDistance(v0: number, a0: number, k: number): number {
+  if (k <= 0) return (v0 * v0) / (2 * a0);
+  return (k * v0 - Math.log(1 + k * v0)) / (a0 * k * k);
+}
+
 suite('friction and termination', () => {
   test('a full-power break comes to rest well inside the time cap', () => {
     const world = World.rack();
@@ -116,7 +136,11 @@ suite('friction and termination', () => {
     const launch = PHYSICS.maxShotSpeed * 0.2;
     const sliding = (3 * launch ** 2) / (12.25 * DEFAULT_PROFILE.slidingFriction * g);
     const rollingStart = (5 / 7) * launch;
-    const rolling = rollingStart ** 2 / (2 * DEFAULT_PROFILE.rollingFriction * g);
+    const rolling = rollingDistance(
+      rollingStart,
+      DEFAULT_PROFILE.rollingFriction * g,
+      DEFAULT_PROFILE.rollingSpeedRise,
+    );
     const expected = sliding + rolling;
 
     assertEqual(
@@ -144,7 +168,11 @@ suite('friction and termination', () => {
     const travelled = world.cueBall()!.p.x - start;
 
     const launch = PHYSICS.maxShotSpeed * 0.2;
-    const expected = launch ** 2 / (2 * DEFAULT_PROFILE.rollingFriction * PHYSICS.gravity);
+    const expected = rollingDistance(
+      launch,
+      DEFAULT_PROFILE.rollingFriction * PHYSICS.gravity,
+      DEFAULT_PROFILE.rollingSpeedRise,
+    );
     assertClose(travelled, expected, expected * 0.03, 'natural-roll distance');
     console.log(`      travelled ${travelled.toFixed(3)}m, theory ${expected.toFixed(3)}m`);
   });
@@ -1581,6 +1609,105 @@ suite('re-racking', () => {
     assertClose(ball.v.x, 0, 1e-9, 'no leftover velocity');
     assertClose(ball.v.y, 0, 1e-9, 'no leftover velocity');
     assertEqual(ball.pocketed, false, 'back in play');
+  });
+});
+
+
+/**
+ * Squirt and throw: the two reasons a real cut shot is not pure geometry.
+ *
+ * Both are small angles — two or three degrees — and the table only forgives
+ * about a quarter of one, so "small" here means "decides the shot". They are
+ * also the two effects most easily got backwards, because each is a deflection
+ * away from an intuitive line, and a sign error looks plausible until somebody
+ * tries to use english on purpose.
+ */
+suite('squirt and throw', () => {
+  /** Where the cue ball actually sets off, in degrees from the aim line. */
+  function departure(side: number): number {
+    const world = World.fromLayout([{ number: 0, x: -1, y: 0 }], createTable());
+    world.shoot(0, 0.7, { side, vertical: 0 });
+    const cue = world.cueBall()!;
+    return (Math.atan2(cue.v.y, cue.v.x) * 180) / Math.PI;
+  }
+
+  test('a centre-ball shot leaves exactly along the aim line', () => {
+    assertClose(departure(0), 0, 1e-9, 'no side, no deflection');
+  });
+
+  test('side deflects the ball away from the side it was struck', () => {
+    // Right english pushes the tip to the ball's right, and the ball squirts
+    // left. Getting this backwards is the classic sign error.
+    assert(departure(1) < 0, `right side should deflect left, got ${departure(1)}`);
+    assert(departure(-1) > 0, `left side should deflect right, got ${departure(-1)}`);
+  });
+
+  test('the deflection is symmetric and grows with the english', () => {
+    assertClose(departure(1), -departure(-1), 1e-9, 'symmetry');
+    assert(
+      Math.abs(departure(0.5)) < Math.abs(departure(1)),
+      'half the english should squirt less',
+    );
+  });
+
+  test('the deflection is the size a real cue gives, not a token one', () => {
+    /*
+     * Measured cues run 2 to 5 degrees at full english. Under a degree would be
+     * invisible next to the quarter-degree the pockets forgive, and over five
+     * would make side spin unusable rather than difficult.
+     */
+    const deg = Math.abs(departure(1));
+    assert(deg > 1.5 && deg < 5, `squirt of ${deg.toFixed(2)}deg is outside the real range`);
+  });
+
+  test('the aim helpers and the solver agree on where the ball goes', () => {
+    // Two places compute this; a guide that disagreed with the shot by two
+    // degrees would be worse than no guide at all.
+    for (const side of [-1, -0.4, 0, 0.4, 1]) {
+      const world = World.fromLayout([{ number: 0, x: -1, y: 0 }], createTable());
+      world.shoot(0.3, 0.7, { side, vertical: 0 });
+      const cue = world.cueBall()!;
+      const actual = Math.atan2(cue.v.y, cue.v.x);
+      assertClose(actual, departureAngle(0.3, { side, vertical: 0 }), 1e-9, `side ${side}`);
+    }
+  });
+
+  test('a cut shot throws the object ball off the geometric line', () => {
+    /*
+     * Contact friction drags the object ball away from the line of centres. A
+     * solver without it sends every cut exactly where the ghost ball says, which
+     * is the single biggest way a pool game gives itself away.
+     */
+    const cut = (30 * Math.PI) / 180;
+    const ghostX = -Math.cos(cut) * BALL_RADIUS * 2;
+    const ghostY = -Math.sin(cut) * BALL_RADIUS * 2;
+
+    const world = World.fromLayout(
+      [
+        { number: 0, x: ghostX - 0.5, y: ghostY },
+        { number: 1, x: 0, y: 0 },
+      ],
+      createTable(),
+    );
+    const cue = world.cueBall()!;
+    cue.v.x = 3;
+    cue.v.y = 0;
+
+    const object = world.ballByNumber(1)!;
+    for (let i = 0; i < 400 && Math.hypot(object.v.x, object.v.y) <= 0.01; i++) {
+      world.step(1 / 600);
+    }
+
+    const actual = Math.atan2(object.v.y, object.v.x);
+    const ideal = Math.atan2(-ghostY, -ghostX);
+    const throwDeg = ((actual - ideal) * 180) / Math.PI;
+
+    // Real throw peaks around two degrees on a half-ball cut, and always drags
+    // the object ball in the direction the cue ball is sliding across it.
+    assert(
+      Math.abs(throwDeg) > 0.3 && Math.abs(throwDeg) < 6,
+      `throw of ${throwDeg.toFixed(2)}deg is outside the real range`,
+    );
   });
 });
 

@@ -36,6 +36,22 @@ export interface PhysicsProfile {
   /** Decay of spin about the vertical axis — english bleeding away. */
   spinningFriction: number;
 
+  /**
+   * How much rolling resistance grows with speed, per metre per second.
+   *
+   * Rolling resistance is very nearly constant — that is what makes a ball stop
+   * rather than creep — but not quite. The cloth ahead of a moving ball is
+   * compressed and the nap is disturbed, and both cost more the faster it is
+   * travelling. Marlow's measurements put the rise at a few per cent across the
+   * usable range, so the deceleration is `mu * (1 + rollingSpeedRise * v) * g`.
+   *
+   * Small enough that it changes no shot's outcome, which is the honest reason
+   * it is here: it makes a hard-hit ball die a little more sharply at the end of
+   * its travel than a rolled one, and that is the difference between a table
+   * that feels measured and one that feels linear.
+   */
+  rollingSpeedRise: number;
+
   /** Ball-on-ball is nearly elastic. */
   ballRestitution: number;
 
@@ -75,6 +91,9 @@ export interface PhysicsProfile {
 
 export const DEFAULT_PROFILE: PhysicsProfile = {
   rollingFriction: 0.06,
+  // About a 4% rise per m/s: a ball at break speed meets a shade over a
+  // quarter more resistance than one barely moving.
+  rollingSpeedRise: 0.04,
   slidingFriction: 0.2,
   spinningFriction: 0.022,
   ballRestitution: 0.95,
@@ -275,6 +294,42 @@ export const PHYSICS = {
    * miscues, so a tighter usable range is honest as well as convenient.
    */
   maxSideTipOffset: 0.28,
+
+  /**
+   * Squirt: how far the cue ball leaves the line of the cue when struck off
+   * centre, in radians at full side.
+   *
+   * The one thing that makes side spin difficult on a real table and trivial
+   * without it. A tip striking off the vertical axis pushes the ball sideways as
+   * well as forwards, and the ball's own inertia resists being turned — so it
+   * departs *away* from the side the tip struck, before any spin has had a
+   * chance to act. Aim at the pocket with right english and you miss to the
+   * left, which is why players learn to compensate rather than to avoid it.
+   *
+   * 0.055 rad is a shade over 3 degrees at maximum english. Measured cues run
+   * from about 2 degrees for a low-deflection shaft to 5 for a stiff one; this
+   * sits where an ordinary house cue does, which is what the game hands you.
+   *
+   * It is a deflection of the *path*, not of the aim: the cue still points where
+   * it was pointed, and the ball is what leaves on a different line. That
+   * distinction matters for the aim helpers, which draw the line the cue is on.
+   */
+  squirt: 0.055,
+
+  /**
+   * How much of the squirt comes back as the ball takes up its spin.
+   *
+   * Real squirt is partly undone down the table: the side spin the tip left on
+   * the ball makes it curve back the way it was deflected, and over a long shot
+   * a good deal of the deflection is recovered. That is swerve, and modelling it
+   * properly needs the cue to be elevated, which it never is here — a level cue
+   * on a flat table produces very little.
+   *
+   * So this is the small part of it that survives on a level shot, applied as a
+   * gentle drift rather than as a separate force. Zero would be defensible; a
+   * little is closer to how the shot behaves.
+   */
+  swerveRecovery: 0.25,
 } as const;
 
 /**

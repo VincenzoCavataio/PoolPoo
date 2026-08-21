@@ -80,6 +80,23 @@ export interface ShotSpin {
 export const NO_SPIN: ShotSpin = { side: 0, vertical: 0 };
 
 /**
+ * The line the cue ball actually leaves on, given where the cue points.
+ *
+ * Exported because two places need the same answer and they must not compute it
+ * separately: the solver, which sends the ball, and the aim helpers, which draw
+ * where it is going. A guide that disagreed with the shot by two degrees would
+ * be worse than no guide.
+ *
+ * With no side this is the aim angle unchanged, so the ordinary shot costs
+ * nothing.
+ */
+export function departureAngle(angle: number, spin: ShotSpin): number {
+  const side = Math.min(1, Math.max(-1, spin.side));
+  if (side === 0) return angle;
+  return angle - side * PHYSICS.squirt * (1 - PHYSICS.swerveRecovery);
+}
+
+/**
  * Balls the solver still has to think about.
  *
  * A ball can leave play two ways now — down a pocket or over a cushion — and
@@ -320,8 +337,35 @@ export class World {
 
     const scaled = Math.min(1, Math.max(0, power));
     const speed = PHYSICS.maxShotSpeed * scaled;
-    const dirX = Math.cos(angle);
-    const dirY = Math.sin(angle);
+
+    /**
+     * Squirt: the ball does not leave along the line of the cue.
+     *
+     * A tip that strikes off the vertical axis shoves the ball sideways as well
+     * as forwards, and the ball resists being turned — so it departs *away* from
+     * the side that was struck. Aim at the pocket with right english and the
+     * ball starts left of where the cue points.
+     *
+     * Applied to the departure angle rather than to the aim, because that is
+     * what physically happens: the cue is still pointing where it was pointed.
+     * The aim line the helpers draw is therefore honest about the cue and wrong
+     * about the ball, which is exactly the problem a player has at a real table
+     * and the reason they learn to compensate.
+     *
+     * Partly undone by `swerveRecovery`: the side spin the tip left behind makes
+     * the ball curve back the way it was pushed. On a level cue that recovery is
+     * small, so most of the deflection stands.
+     */
+    const departure = departureAngle(angle, spin);
+
+    const dirX = Math.cos(departure);
+    const dirY = Math.sin(departure);
+
+    // The spin axes stay with the *cue*, not with the deflected path: the tip
+    // struck square to where the cue was pointing, and that is what decided
+    // which way the ball is turning.
+    const cueX = Math.cos(angle);
+    const cueY = Math.sin(angle);
 
     // Everything starts the shot still, so replaying from a snapshot is exact.
     for (const ball of this.balls) {
@@ -341,10 +385,10 @@ export class World {
     const side = clampUnit(spin.side) * PHYSICS.maxSideTipOffset * BALL_RADIUS;
     const vertical = clampUnit(spin.vertical) * PHYSICS.maxTipOffset * BALL_RADIUS;
 
-    // Side axis: the shot direction turned left, which is the up axis crossed
+    // Side axis: the cue's direction turned left, which is the up axis crossed
     // with the direction.
-    const sideAxisX = -dirY;
-    const sideAxisY = dirX;
+    const sideAxisX = -cueY;
+    const sideAxisY = cueX;
 
     const gain = (5 * speed) / (2 * BALL_RADIUS * BALL_RADIUS);
     cue.w.x = gain * vertical * sideAxisX;
@@ -578,7 +622,7 @@ export class World {
     const g = PHYSICS.gravity;
 
     const slideDecel = profile.slidingFriction * g * h;
-    const rollDecel = profile.rollingFriction * g * h;
+    const rollBase = profile.rollingFriction * g * h;
     const spinDecel = (5 * profile.spinningFriction * g * h) / (2 * BALL_RADIUS);
 
     for (let i = 0; i < balls.length; i++) {
@@ -633,10 +677,21 @@ export class World {
       }
 
       if (rolling) {
-        // Constant deceleration, clamped so friction cannot push a ball
+        // Near-constant deceleration, clamped so friction cannot push a ball
         // backwards, with the spin held on the rolling constraint.
         const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y);
         if (speed > 0) {
+          /*
+           * Resistance rises a little with speed.
+           *
+           * The cloth ahead of a quick ball is compressed harder and its nap
+           * disturbed more, and both cost energy. The rise is small — a few per
+           * cent per m/s — so this stays a constant-deceleration model in every
+           * way that matters; what it adds is that a ball struck hard sheds its
+           * last metre a touch faster than one rolled gently over the same
+           * ground.
+           */
+          const rollDecel = rollBase * (1 + profile.rollingSpeedRise * speed);
           if (speed <= rollDecel) {
             b.v.x = 0;
             b.v.y = 0;

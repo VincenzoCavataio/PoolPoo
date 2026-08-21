@@ -14,6 +14,7 @@ import type * as THREE from 'three';
 
 import { BALL_RADIUS } from '@/game/core/constants';
 import { predictAim } from '@/game/core/predict';
+import { departureAngle } from '@/game/core/world';
 import type { Table } from '@/game/core/table';
 import type { Vec2 } from '@/game/core/vec';
 import { Phase } from '@/game/rules/types';
@@ -81,7 +82,7 @@ export function AimGuide() {
   const hidden = useMemo(() => [cueGroup, guideLine, ghostBall, targetLine], []);
 
   useFrame(() => {
-    const { world, phase, aimAngle, power, cameraMode } = useSession.getState();
+    const { world, phase, aimAngle, power, cameraMode, spin } = useSession.getState();
     const { showAimGuide, showGhostBall } = useSettings.getState();
 
     const cue = world?.cueBall();
@@ -144,7 +145,17 @@ export function AimGuide() {
       if (cueTilt.current) cueTilt.current.rotation.x = elevation;
     }
 
-    const prediction = predictAim(world, aimAngle);
+    /*
+     * Predicted along the line the ball will leave on, not the line the cue is
+     * pointing down.
+     *
+     * With side spin the two differ by a couple of degrees — squirt — and over a
+     * full-table shot that is nearly a ball's width. Drawing the cue's line
+     * would make the guide confidently wrong on exactly the shots where a
+     * player most wants help, so it follows the ball instead. The cue still
+     * renders where it is aimed, which is what makes the deflection visible.
+     */
+    const prediction = predictAim(world, departureAngle(aimAngle, spin));
     const stopX = sceneX(prediction.cueStop);
     const stopZ = sceneZ(prediction.cueStop);
 
