@@ -39,54 +39,38 @@ const GUIDE_Y = BALL_RADIUS * 0.9;
 const GUIDE_COLOR = '#c9a962';
 
 /**
- * The prediction itself: the dotted lines and the ghost ball, in white.
+ * `GUIDE_COLOR` as a number, for the code that tints per instance.
  *
- * Kept as a hex number rather than a string because both consumers want it that
- * way: the dots tint it per instance through `THREE.Color`, and the ghost's own
- * shade is derived from it below.
+ * The dots were white for a long time while everything else in the guide was
+ * gold, and the file argued with itself about it in two places: one comment
+ * calling gold "the colour of every aiming mark", another explaining why the
+ * prediction had to be white. Both were acted on, so the line and the marker it
+ * ends at were different colours — one guide drawn in two voices.
  *
- * Gold is the app's accent, and on the cloth it was doing two jobs at once —
- * marking the guide *and* competing with the wood and the trim for the same
- * eye. White separates cleanly from every cloth the table can wear, and it is
- * the colour of the ball whose future these lines describe: the dots are where
- * the white ball travels, the disc is where it stops.
+ * Gold wins because it is the app's word for *the thing you are about to do*,
+ * and because white is the cue ball's own colour: a white line leaving a white
+ * ball reads as part of the ball rather than as a prediction about it.
  *
- * The contact frame drawn *on* the cue ball stays gold for the opposite reason:
- * white on white would vanish.
+ * Derived from `GUIDE_COLOR` rather than written out again — the two drifting
+ * apart is the whole bug this replaces.
  */
-const PREDICTION_HEX = 0xf4f2ec;
+const PREDICTION_HEX = Number(`0x${GUIDE_COLOR.slice(1)}`);
 
 /**
  * How far the dots dim from the cue ball to the far end of a run.
+ *
+ * Shallower than it was, because the dots are gold now and not white. The fade
+ * multiplies the mark's own colour, and gold starts darker: at the old
+ * seven-tenths the far end came out at about 1.6:1 against the cloth, which is
+ * not a faint dot but an absent one. Four tenths keeps the run visibly weakening
+ * — the first inch is nearly certain, the last is a guess — while leaving the
+ * end of it something you can still see.
  *
  * Named because the ghost ball is drawn to sit with them, and anything that
  * changes how bright the run ends up has to be weighed against how the disc at
  * the end of it looks.
  */
-const GUIDE_FADE = 0.72;
-
-/**
- * The ghost ball's colour, and why it is not the dots' arithmetic value.
- *
- * The dots are drawn with `AdditiveBlending`: they *add* to the cloth beneath
- * rather than covering it, so a dot whose colour has been scaled to 28% still
- * comes out bright — it is 28% of a white light laid over green, which reads as
- * white, and it keeps the cloth's own hue showing through.
- *
- * The ghost is the opposite kind of mark. It is opaque on purpose, so that the
- * dotted line cannot be seen running through the disc, which means it paints
- * over the cloth instead of adding to it. Give it the dots' scaled value and it
- * is not a dimmer white, it is a flat mid-grey — the exact complaint that the
- * disc looks a different colour from the run it terminates.
- *
- * So it takes the full prediction colour. Matching these two is a matter of
- * matching how they *look*, and an opaque mark has to be near white to sit
- * beside an additive one.
- *
- * Built from `PREDICTION_HEX` rather than written out again, so the disc and the
- * dots cannot drift apart if that colour is ever retuned.
- */
-const GHOST_COLOR = `#${PREDICTION_HEX.toString(16).padStart(6, '0')}`;
+const GUIDE_FADE = 0.4;
 
 /**
  * The contact mark: near-black, against ivory.
@@ -183,6 +167,21 @@ const DASH_GAP = 0.019;
  */
 const MAX_DASHES = 128;
 
+
+/**
+ * How far the runs stay clear of the ghost ring, in metres.
+ *
+ * A ball's radius reaches the ring exactly, which is not enough: `trim` and
+ * `lead` are measured to the *centre* of a dot, so half a dot still hangs past
+ * whatever they allow — and the dots are additive, so where one grazes the ring
+ * the two brightnesses add and the overlap reads as a dot sitting inside the
+ * circle rather than beside it.
+ *
+ * A radius plus a dot plus a little air puts the whole mark outside the ring
+ * with a visible gap, which is what makes the run read as stopping *at* the
+ * marker instead of arriving in it.
+ */
+const GHOST_CLEARANCE = BALL_RADIUS + DASH_LENGTH + 0.004;
 
 /**
  * Lays dots along one segment, returning how many instances it wrote.
@@ -304,7 +303,7 @@ export function AimGuide() {
   // Reused every frame: building these per dash would allocate on each of them.
   const scratch = useMemo(() => new THREE.Object3D(), []);
   const scratchColour = useMemo(() => new THREE.Color(), []);
-  const ghostBall = useRef<THREE.Mesh>(null);
+  const ghostBall = useRef<THREE.Group>(null);
   const spinTarget = useRef<THREE.Group>(null);
   const spinFrame = useRef<THREE.Group>(null);
   const targetLine = useRef<THREE.InstancedMesh>(null);
@@ -602,7 +601,7 @@ export function AimGuide() {
             GUIDE_Y,
             scratch,
             scratchColour,
-            endsOnGhost ? BALL_RADIUS : 0,
+            endsOnGhost ? GHOST_CLEARANCE : 0,
             0,
             GUIDE_FADE,
             written,
@@ -656,7 +655,7 @@ export function AimGuide() {
           scratch,
           scratchColour,
           0,
-          BALL_RADIUS,
+          GHOST_CLEARANCE,
           0.35,
         );
         finishDashes(targetLine.current, written);
@@ -725,14 +724,44 @@ export function AimGuide() {
         to what is already there and can never hide it, however opaque the
         material claims to be. This one paints over instead.
       */}
-      <mesh ref={ghostBall} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[BALL_RADIUS, 28]} />
-        <meshBasicMaterial
-          color={GHOST_COLOR}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
-      </mesh>
+      <group ref={ghostBall} rotation={[-Math.PI / 2, 0, 0]}>
+        {/*
+          An outline and nothing else: no fill, no centre.
+
+          The disc used to be filled — first white, then a dark shade — because
+          the dotted line ran through it and a marker with a line drawn across it
+          reads as the line continuing past the contact rather than stopping at
+          it. That fill is no longer earning anything: both runs already hold
+          back by a ball's radius (`trim` on the approach, `lead` on the departure),
+          so neither one enters the circle. What is left to draw is the circle.
+
+          Empty is also the truer picture. The mark means *the cue ball's edge
+          will be here*, which is a boundary and not a place — and leaving the
+          middle open lets you see the object ball it is about to touch, which is
+          the one thing the old solid disc covered up.
+        */}
+        <mesh>
+          <ringGeometry args={[BALL_RADIUS * 0.88, BALL_RADIUS, 48]} />
+          {/*
+            The same material the dots are made of.
+
+            Additive, at the same opacity, in the same gold: the ring is the end
+            of the run, so it should be made of what the run is made of — light
+            laid over the cloth rather than paint on top of it. It reads as
+            brighter than the dots without being a different substance, because
+            it is unbroken where they are a scatter and undimmed where the fade
+            has taken them down.
+          */}
+          <meshBasicMaterial
+            color={GUIDE_COLOR}
+            transparent
+            opacity={0.75}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      </group>
 
       {/* Where the struck ball goes: brighter, because it is the answer. */}
       {/*

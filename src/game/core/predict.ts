@@ -49,18 +49,24 @@ interface FirstContact {
   ball: number | null;
   /** The cushion reached, if one comes first. */
   cushion: number | null;
+  /** True when the run ends by dropping into a pocket. */
+  pocketed: boolean;
 }
 
 /**
  * How many cushions the guide will follow the cue ball around.
  *
- * Three is enough to show the shape of a bank shot without the line becoming a
- * prediction nobody should trust: every bounce compounds the error in the one
- * before it, and a guide that draws six is claiming an accuracy the physics
- * behind it does not have. The run also stops at the first ball it meets, so on
- * a full table it rarely reaches this at all.
+ * One. The reflection drawn here is a mirror bounce — it takes nothing out for
+ * the cushion's give, nothing for the throw a rail puts on a ball, nothing for
+ * side spin. That is a fair sketch of the first bounce and a worsening fiction
+ * after it, so the second and third legs were drawing confident lines through
+ * places the ball would never reach.
+ *
+ * One bounce also keeps the picture readable: three of them filled the table
+ * with a zig-zag that had to be untangled before it could be used, on a guide
+ * whose whole job is to be understood at a glance.
  */
-const MAX_BOUNCES = 3;
+const MAX_BOUNCES = 1;
 
 /**
  * What the cue ball meets first, travelling from `origin` along `dir`.
@@ -80,6 +86,7 @@ function firstContact(
   let bestT = maxDistance;
   let hitBall: number | null = null;
   let hitCushion: number | null = null;
+  let pocketed = false;
 
   // Cue ball centre versus each object ball centre, at a diameter's separation.
   for (const ball of world.balls) {
@@ -109,6 +116,7 @@ function firstContact(
       bestT = t;
       hitBall = ball.number;
       hitCushion = null;
+      pocketed = false;
     }
   }
 
@@ -146,9 +154,87 @@ function firstContact(
     bestT = t;
     hitCushion = index;
     hitBall = null;
+    pocketed = false;
   });
 
-  return { t: bestT, ball: hitBall, cushion: hitCushion };
+  /*
+   * The pockets, which are the gaps the cushions leave.
+   *
+   * The rails are drawn as segments that stop short of each pocket, so between
+   * them is open space with nothing to be hit — and a line aimed through one
+   * found no cushion at all and carried on for the whole six metres of its
+   * budget, straight out through the end of the table. Near a pocket jaw that
+   * looked exactly like the guide leaking off the board.
+   *
+   * A pocket is a circle, so this is the ray-circle intersection: the run ends
+   * at the mouth, where the ball would drop. Checked last and against `bestT`
+   * like everything else, so a cushion or a ball met first still wins.
+   */
+  world.table.pockets.forEach((pocket) => {
+    const mx = origin.x - pocket.center.x;
+    const my = origin.y - pocket.center.y;
+    const b = mx * dir.x + my * dir.y;
+    const c = mx * mx + my * my - pocket.radius * pocket.radius;
+
+    // Already inside one: the run is over where it stands.
+    if (c <= 0) {
+      if (0 < bestT) {
+        bestT = 0;
+        hitBall = null;
+        hitCushion = null;
+        pocketed = true;
+      }
+      return;
+    }
+
+    // Travelling away from it.
+    if (b >= 0) return;
+
+    const disc = b * b - c;
+    if (disc < 0) return;
+
+    const t = -b - Math.sqrt(disc);
+    if (t <= 1e-6 || t >= bestT) return;
+
+    bestT = t;
+    hitBall = null;
+    hitCushion = null;
+    pocketed = true;
+  });
+
+  /*
+   * The backstop: the table's own outline.
+   *
+   * The rails and the pockets between them do not quite tile the boundary. A
+   * cushion segment stops at its own end point, while the pocket circle it runs
+   * towards only starts covering the ball's path where that circle crosses the
+   * offset line the ball's *centre* travels on — and those two do not meet.
+   * There is a couple of centimetres of boundary at every jaw belonging to
+   * neither, and a line threaded through one hit nothing at all and ran on for
+   * the whole of its budget, out through the end of the table.
+   *
+   * Rather than tune six segments and six circles into perfect abutment — which
+   * would have to be redone whenever the table is retuned — the run is clipped
+   * to the rectangle as a last resort. Nothing else having claimed the ray, it
+   * cannot leave the board.
+   */
+  const limitX = world.table.halfLength;
+  const limitY = world.table.halfWidth;
+  for (const [pos, d, limit] of [
+    [origin.x, dir.x, limitX],
+    [origin.y, dir.y, limitY],
+  ] as const) {
+    if (d === 0) continue;
+    const t = ((d > 0 ? limit : -limit) - pos) / d;
+    if (t > 1e-6 && t < bestT) {
+      bestT = t;
+      hitBall = null;
+      hitCushion = null;
+      pocketed = true;
+    }
+  }
+
+  return { t: bestT, ball: hitBall, cushion: hitCushion, pocketed };
 }
 
 /** The unit normal of a cushion segment. */
@@ -218,6 +304,8 @@ export function predictAim(world: World, angle: number, maxDistance = 6): AimPre
     // A ball ends the path: what happens after that contact is the struck
     // ball's business, and the guide answers it with the target line instead.
     if (contact.ball !== null) break;
+    // So does a pocket, and more finally: there is no rebound out of one.
+    if (contact.pocketed) break;
     // No cushion means the run simply reached the end of its reach.
     if (contact.cushion === null || remaining <= 1e-6) break;
 
