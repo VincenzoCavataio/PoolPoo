@@ -276,7 +276,16 @@ const styles = StyleSheet.create({
    * has moved by the time you let go.
    */
   host: {
-    width: 216,
+    /*
+     * The full width of its row, not a fixed 216 points.
+     *
+     * It is the only control down here now — the panel that used to box it in
+     * is gone, and with it the reason to be narrower than the space available.
+     * A shot button that spans the screen is the easiest possible target for a
+     * thumb, and it reads as the floor of the layout rather than as an object
+     * placed on it.
+     */
+    alignSelf: 'stretch',
     height: 66,
     alignItems: 'center',
     justifyContent: 'center',
@@ -285,7 +294,7 @@ const styles = StyleSheet.create({
    * A wide bar, sized and cornered like the rest of the app.
    *
    * `Radius.medium` puts it in the same family as the menu buttons it is the
-   * in-game equivalent of, and as the panel it now sits in.
+   * in-game equivalent of.
    *
    * Wide and low rather than tall: it is the only control in its row, so the
    * width is free — and width is what makes a button easy to hit with a thumb

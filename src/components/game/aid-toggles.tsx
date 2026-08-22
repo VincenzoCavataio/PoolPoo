@@ -95,13 +95,33 @@ export function AidToggles() {
 }
 
 const styles = StyleSheet.create({
-  /** Top left of the stage, opposite the camera button. */
+  /**
+   * Top left of the stage, opposite the camera button — and stacked, not in a
+   * row.
+   *
+   * A row of two here against a single button on the right made the top of the
+   * table lopsided: the left claimed twice the width of the right, and the gauge
+   * between them sat off centre to suit. A column claims one tile's width on
+   * each side, so the two ends match and the middle is genuinely the middle.
+   *
+   * It also grows the right way. Another aid added to a row eats into the gauge;
+   * added to a column it costs nothing but height, and there is nothing below
+   * these but cloth.
+   */
   corner: {
     position: 'absolute',
     left: Spacing.two,
     top: Spacing.two,
-    flexDirection: 'row',
-    gap: Spacing.one,
+    /*
+     * The same step that holds them off the stage's edge.
+     *
+     * It was half that, which made the two tiles read as one block with a seam
+     * across it rather than as two controls that happen to be stacked. Every
+     * distance in this row is `two` now — tile to tile, tile to edge, tile to
+     * gauge — so the spacing says nothing except that these are separate things
+     * of equal standing.
+     */
+    gap: Spacing.two,
   },
   button: {
     width: 38,

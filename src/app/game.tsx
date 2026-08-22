@@ -25,6 +25,7 @@ import { AimDial } from '@/components/game/aim-dial';
 import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
+import { PowerBar } from '@/components/game/power-bar';
 import { CallPicker } from '@/components/game/call-picker';
 import { FullBoard, GameHud, GameOverOverlay, ShotNote } from '@/components/game/hud';
 import { MusicHud } from '@/components/game/music-hud';
@@ -91,6 +92,9 @@ export default function GameScreen() {
 
         <ShotNote />
         <AidToggles />
+        {/* Between the two corner controls, in the one strip of the stage that
+            is never played over. */}
+        <PowerBar />
         <CameraControls />
         <Celebration />
       </View>
@@ -142,7 +146,16 @@ const styles = StyleSheet.create({
   controlLayer: {
     // No longer absolutely positioned: it is a row in the stack now, so the
     // table above it shrinks to make room instead of hiding behind it.
-    paddingTop: Spacing.one,
+    /*
+     * A proper gap above the button, off the app's own scale.
+     *
+     * It was one unit — four points — which was enough while the button sat
+     * inside a bordered panel that did its own spacing. With the panel gone the
+     * button meets the table's bottom rail almost directly, and a control that
+     * close to the board reads as attached to it. `three` is the step the rest
+     * of the app puts between a surface and what sits under it.
+     */
+    paddingTop: Spacing.three,
     /*
      * The one rule for the space between the picker and the panel.
      *

@@ -87,6 +87,23 @@ const POCKET_LABELS: Record<PocketId, MessageKey> = {
 export const HUD_SURFACE = 'rgba(10, 17, 14, 0.9)';
 export const HUD_SURFACE_ACTIVE = 'rgba(61, 220, 132, 0.16)';
 
+/**
+ * The tile the corner instruments are cut from.
+ *
+ * The aid toggles, the camera button and the power gauge all sit in one strip
+ * across the top of the stage, and they only read as one row of instruments if
+ * they agree on their size and their edge. They did not: each carried its own
+ * copy of the numbers, and the gauge had drifted to two thirds the height of the
+ * buttons beside it — centred, and plainly a different object.
+ *
+ * Stated once here so the row cannot come apart again.
+ */
+export const HUD_TILE = 38;
+
+/** Border, radius and opacity shared by everything in that row. */
+export const HUD_TILE_BORDER = 1;
+export const HUD_TILE_OPACITY = 0.75;
+
 export function Stars({ value, max = 3 }: { value: number; max?: number }) {
   return (
     <Text style={styles.stars}>

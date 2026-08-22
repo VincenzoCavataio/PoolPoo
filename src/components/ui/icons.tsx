@@ -796,14 +796,25 @@ export function SpinIcon({ size = 24, color = Luxe.text }: IconProps) {
 }
 
 /**
- * A film camera: body with a lens barrel off one side.
+ * A video camera: a body with the lens barrel out one side.
  *
- * Drawn rather than set as a glyph so it keeps the weight of the icons beside
- * it — a text character picks up the font's own stroke and sits on a baseline,
- * which is why the old one looked like a typo next to the others.
+ * The distinction matters here, because the button changes the *view* and never
+ * captures anything. A round lens centred in a rectangle is the universal sign
+ * for a stills camera — it says "take a picture of this", which is the one thing
+ * this control does not do. The barrel out the side is what makes it a camera
+ * that is pointed rather than fired.
+ *
+ * An earlier attempt at this shape failed on proportion rather than idea: the
+ * body took only three fifths of the box and the barrel was a solid triangle
+ * tacked to it, which read as a box with a wedge beside it. This gives the body
+ * the room it needs and draws the barrel as an outlined trapezium — the same
+ * hairline weight as everything else here, so it reads as part of the object
+ * instead of a blob attached to it.
  */
 export function CameraIcon({ size = 24, color = Luxe.text }: IconProps) {
-  const body = size * 0.6;
+  const height = size * 0.54;
+  const body = size * 0.62;
+  const barrel = size * 0.26;
 
   return (
     <View style={[styles.box, { width: size, height: size }]}>
@@ -811,24 +822,36 @@ export function CameraIcon({ size = 24, color = Luxe.text }: IconProps) {
         <View
           style={{
             width: body,
-            height: body * 0.72,
-            borderRadius: size * 0.08,
+            height,
+            borderRadius: size * 0.09,
             borderWidth: 1.5,
             borderColor: color,
           }}
         />
-        {/* The barrel, a stubby triangle pointing away from the body. */}
+
+        {/*
+          The barrel: outlined, and butted against the body.
+
+          Its left edge is dropped so the two shapes share a join rather than
+          drawing a line down the middle of it — one object with a snout, not two
+          rectangles touching.
+
+          Square rather than tapered. A trapezium would be truer to a real lens
+          housing, and both ways of getting one here are worse than the shape is
+          better: a `rotateY` with perspective renders differently across
+          platforms and can collapse the view outright, and a border-triangle is
+          solid, which puts a filled wedge next to hairline strokes.
+        */}
         <View
           style={{
-            width: 0,
-            height: 0,
+            width: barrel,
+            height: height * 0.6,
             marginLeft: -1.5,
-            borderTopWidth: body * 0.24,
-            borderBottomWidth: body * 0.24,
-            borderLeftWidth: body * 0.28,
-            borderTopColor: 'transparent',
-            borderBottomColor: 'transparent',
-            borderLeftColor: color,
+            borderWidth: 1.5,
+            borderLeftWidth: 0,
+            borderColor: color,
+            borderTopRightRadius: size * 0.06,
+            borderBottomRightRadius: size * 0.06,
           }}
         />
       </View>
