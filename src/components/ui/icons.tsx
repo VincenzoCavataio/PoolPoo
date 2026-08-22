@@ -81,6 +81,56 @@ export function CueIcon({ size = 24, color = Luxe.text }: IconProps) {
   );
 }
 
+/**
+ * Three balls in a rising row: the shot, and how hard it is played.
+ *
+ * A cue drawn at this size is a bare diagonal line, which reads as a slash
+ * before it reads as a cue. Balls are what this game is made of and a row of
+ * them growing left to right is the same shape as the gauge above the button —
+ * so the icon says *power* rather than merely *billiards*.
+ *
+ * Aligned along the bottom, the way the gauge's own blocks are: they grow
+ * upward from a common floor rather than about their middles, which is what
+ * makes the row read as a scale instead of as three unrelated dots.
+ */
+export function PowerBallsIcon({ size = 24, color = Luxe.text }: IconProps) {
+  const sizes = [size * 0.34, size * 0.52, size * 0.72];
+
+  /*
+   * The box is only as tall as the balls, not a full square.
+   *
+   * Every other icon here fills its `size` box, so centring the box centres the
+   * drawing. This one does not: the balls sit on a common floor and the largest
+   * is under three quarters of the height, so a square box would carry a band of
+   * nothing across its top — and beside a line of text, "centred" would put that
+   * empty band on the middle line and hang the balls below it. Sized to the ink
+   * instead, the icon's own centre is the centre of what you can see.
+   *
+   * Width stays the full `size`, which is what keeps it in step with the row of
+   * icons elsewhere.
+   */
+  const height = sizes[sizes.length - 1];
+
+  return (
+    <View style={[styles.box, styles.ballRow, { width: size, height, gap: size * 0.08 }]}>
+      {sizes.map((diameter, i) => (
+        <View
+          key={i}
+          style={{
+            width: diameter,
+            height: diameter,
+            borderRadius: diameter / 2,
+            backgroundColor: color,
+            // The smaller balls sit back a little, so the row reads as one
+            // rising thing rather than three of equal weight.
+            opacity: 0.55 + i * 0.225,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 /** Three sliders, for settings. */
 export function SlidersIcon({ size = 24, color = Luxe.text }: IconProps) {
   const rows = [0.3, 0.62, 0.45];
@@ -853,6 +903,11 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+  },
+  /** A row sitting on a common floor, for scales drawn out of shapes. */
+  ballRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
   },
   sliderRow: {
     flexDirection: 'row',

@@ -67,15 +67,68 @@ const UNLIT = 'rgba(255, 255, 255, 0.06)';
 const UNLIT_WILD = 'rgba(217, 117, 107, 0.16)';
 
 /**
+ * Where the gauge changes colour, as a fraction of a *full* charge.
+ *
+ * The run reads as a rising temperature: green while the shot is soft enough to
+ * be placed, amber once it is hard enough to lose position with, then the
+ * overcharge and the miscue band beyond it.
+ *
+ * These are fractions of 1, not of `MAX_CHARGE`, so they stay put if the ceiling
+ * moves — the sixty-per-cent mark is sixty per cent of a full shot however far
+ * past full the gauge is allowed to run.
+ */
+const WARM_FROM = 0.6;
+
+/**
  * The overcharge amber.
  *
  * Chosen for hue, not for lightness: at 8.7:1 against the panel it is plainly
  * visible, but against the gold beside it the luminance ratio is only 1.04 —
  * the two are all but identical in greyscale. Colour alone therefore cannot
- * carry the hundred-per-cent line, so the gauge marks it with *height* as well
- * (see `segmentOver`), which is legible whatever the eye does with hue.
+ * carry the hundred-per-cent line, so the gauge marks it with *height* too: the
+ * safe blocks climb a slope and the overcharge ones break it by standing full
+ * height, which is legible whatever the eye does with hue. See `Segment`.
  */
 const OVER_COLOR = '#e8a33d';
+
+/**
+ * The soft end of the gauge: the game's own accent green.
+ *
+ * The scale used to be gold for its whole safe run, which said nothing about
+ * *where* in that run you were — a quarter charge and a full one were the same
+ * colour, and only the count of lit blocks told them apart. Rising through green
+ * and amber to red means the colour carries the reading too.
+ */
+const SOFT_COLOR = Palette.accent;
+
+/**
+ * How tall the first and last of the safe blocks stand, as a percentage of the
+ * track.
+ *
+ * The floor is well clear of nothing: a first block at a few per cent would be a
+ * speck, and the scale has to look like a scale before any of it is lit.
+ */
+const MIN_SEGMENT = 42;
+const MAX_SEGMENT = 88;
+
+/** The corner radius of one block in the gauge. */
+const SEGMENT_RADIUS = 3;
+
+/** How far the track is inset from the blocks it holds, top and bottom. */
+const TRACK_PAD_V = 7;
+
+/**
+ * The track's corner radius, derived rather than chosen.
+ *
+ * Two rounded rectangles nested one inside the other only look concentric when
+ * the outer radius is the inner one *plus* the gap between them — otherwise the
+ * curves run at different rates and the corner of the track visibly pinches
+ * against the block sitting in it. The track was on `Radius.medium`, four points
+ * wide of what the padding asks for, which is exactly the mismatch that shows.
+ *
+ * Kept as an expression so it stays true if either number is retuned.
+ */
+const TRACK_RADIUS = SEGMENT_RADIUS + TRACK_PAD_V;
 
 function Segment({ index, count }: { index: number; count: number }) {
   const charge = ((index + 1) / count) * MAX_CHARGE;
@@ -98,20 +151,36 @@ function Segment({ index, count }: { index: number; count: number }) {
       return { backgroundColor: wild ? UNLIT_WILD : UNLIT };
     }
     /*
-     * Three lit colours, all from the theme.
+     * Four lit colours, every one from the theme.
      *
-     * The overcharge used to be `#ff523c`, a red that appears nowhere else in
-     * the app — a siren colour borrowed from somewhere with a different palette.
-     * Amber for the overcharge and the app's own `danger` for the miscue band
-     * keep the warning legible while sounding like the rest of the game: gold,
-     * then gold pushed hot, then the colour every other warning already uses.
+     * Green, gold, amber, then the app's own `danger` for the miscue band — a
+     * run that warms as it fills. The last two are the same pair as before, for
+     * the same reason: the overcharge wants to look hot without borrowing a
+     * siren red that appears nowhere else in the app.
      */
-    return { backgroundColor: wild ? Luxe.danger : over ? OVER_COLOR : Luxe.gold };
+    if (wild) return { backgroundColor: Luxe.danger };
+    if (over) return { backgroundColor: OVER_COLOR };
+    return { backgroundColor: charge > WARM_FROM ? Luxe.gold : SOFT_COLOR };
   });
+
+  /*
+   * The blocks rise across the gauge.
+   *
+   * A row of identical bars says only *how many* are lit. Stepping the heights
+   * up from left to right makes the row a slope, so its shape says which end of
+   * the scale you are at even before the colour does — and it rhymes with the
+   * three rising balls on the button below, which is the same idea drawn small.
+   *
+   * The overcharge blocks break the slope and stand full height instead: past a
+   * full charge the gauge stops describing degrees of the same thing and starts
+   * warning, so the run visibly changes character rather than continuing to
+   * climb.
+   */
+  const rise = MIN_SEGMENT + (MAX_SEGMENT - MIN_SEGMENT) * (index / (count - 1));
 
   return (
     <Animated.View
-      style={[styles.segment, over && styles.segmentOver, style]}
+      style={[styles.segment, { height: over ? '100%' : `${rise}%` }, style]}
       pointerEvents="none"
     />
   );
@@ -298,14 +367,11 @@ export function GameControls() {
         */}
         <PowerReadout />
 
-        <View style={styles.shootRow}>
-          <ShootButton
-            canShoot={canShoot}
-            awaitingCall={awaitingCall}
-            onBlocked={() => setCameraMode(CameraMode.CUE)}
-          />
-        </View>
-
+        <ShootButton
+          canShoot={canShoot}
+          awaitingCall={awaitingCall}
+          onBlocked={() => setCameraMode(CameraMode.CUE)}
+        />
       </View>
     </View>
   );
@@ -319,30 +385,53 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing.three,
   },
+  /**
+   * The panel: one column, evenly spaced.
+   *
+   * The spacing used to be stated twice — a `gap` between the panel's children
+   * *and* a `marginTop` on the row holding the button, which added up to double
+   * the intended distance under the gauge and left the button adrift from the
+   * scale it belongs to. There is one rule now: `gap`, and nothing else claims
+   * space between them.
+   *
+   * `alignItems: 'center'` is what centres the button, so it needs no wrapper of
+   * its own — the row that used to hold it existed only to do that, and existed
+   * only to add the margin that was the problem.
+   *
+   * The radius comes down to `medium`, which is what every other card in the app
+   * uses; `large` made the one panel at the bottom of the screen a different
+   * shape from everything above it.
+   */
   panel: {
     backgroundColor: 'rgba(12, 19, 16, 0.9)',
-    borderRadius: Radius.large,
+    borderRadius: Radius.medium,
     borderWidth: 1,
     borderColor: Palette.border,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    gap: Spacing.two,
-  },
-  /** The button, centred under the power scale. */
-  shootRow: {
+    /*
+     * The panel's own padding stays modest.
+     *
+     * The gauge inside it now carries a generous track of its own, and two
+     * generous paddings nested one inside the other only push the table up the
+     * screen for no gain — the eye reads the inner one and the outer just makes
+     * the card taller.
+     */
+    paddingVertical: 12,
+    gap: 12,
     alignItems: 'center',
-    marginTop: Spacing.two,
   },
   /**
    * The power gauge and its heading.
    *
-   * `flex: 1` so the blocks span the panel: a scale is easier to read the longer
-   * it is, and this one is the width of the screen.
+   * Full width so the blocks span the panel: a scale is easier to read the
+   * longer it is. `width` rather than `flex: 1` — the panel is a column, so
+   * `flex` there would have stretched it vertically, which is the opposite of
+   * what was wanted and only looked right because nothing was competing for the
+   * height.
    */
   powerWrap: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
+    width: '100%',
+    gap: Spacing.two,
   },
   /** Label left, value right: the setting of every readout in the app. */
   powerHead: {
@@ -371,28 +460,52 @@ const styles = StyleSheet.create({
    * of invisible margin.
    */
   powerValue: {
-    width: 62,
-    height: 18,
+    width: 56,
+    height: 16,
     padding: 0,
     textAlign: 'right',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
     fontVariant: ['tabular-nums'],
   },
   /**
-   * The row of blocks. No border and no ground of its own — the blocks
-   * themselves are the object, floating on the panel.
+   * The row of blocks, on a ground of its own.
+   *
+   * It had none: the blocks floated directly on the panel, which left the unlit
+   * ones — six per cent white — reading as gaps in the surface rather than as
+   * the empty part of a gauge. A recessed track gives the scale somewhere to sit
+   * and makes its full length visible before any of it is filled, so you can see
+   * how much charge is left to give.
+   *
+   * The padding is what makes it a track rather than a border: the blocks stop
+   * short of the edge on every side, so the ground reads as a channel they run
+   * along.
    */
   segments: {
     width: '100%',
-    height: 26,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 3,
+    /*
+     * Generous, and deliberately more than a border's worth.
+     *
+     * The point of the track is that the blocks run *inside* something. Too
+     * little and it reads as an outline drawn round them — the ground has to be
+     * visible along the whole run, at both ends and under the shortest block,
+     * for the eye to take it as a channel with room left in it.
+     */
+    paddingHorizontal: Spacing.three,
+    paddingVertical: TRACK_PAD_V,
+    borderRadius: TRACK_RADIUS,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
   },
   /**
    * One block, taller than it is wide.
+   *
+   * No height here: it is set per block, because the row rises across the gauge
+   * — see `Segment`.
    *
    * At a radius of 1.5 the corners read as a rendering artefact rather than a
    * decision. Three points on a block this wide is a visible radius that still
@@ -400,20 +513,7 @@ const styles = StyleSheet.create({
    */
   segment: {
     flex: 1,
-    height: '70%',
-    borderRadius: 3,
-  },
-  /**
-   * The overcharge blocks stand full height.
-   *
-   * This is the real signal for the hundred-per-cent line, not the colour
-   * change: amber and gold are within 1.04:1 of each other in luminance, so a
-   * player who reads the gauge by brightness — in strong sun, or with any
-   * colour-vision deficiency — would see one unbroken run of identical blocks.
-   * A step up in height is unmissable and needs no colour at all.
-   */
-  segmentOver: {
-    height: '100%',
+    borderRadius: SEGMENT_RADIUS,
   },
   pressed: {
     opacity: 0.7,

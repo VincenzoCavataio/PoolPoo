@@ -22,6 +22,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 
 import { useChargeSwell } from '@/components/game/charge-ring';
+import { PowerBallsIcon } from '@/components/ui/icons';
 import { Luxe, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/use-t';
@@ -237,6 +238,22 @@ export function ShootButton({
           <Text style={[styles.label, !canShoot && styles.labelBlocked]}>{label}</Text>
 
           {/*
+            The rising balls, after the word rather than before it.
+
+            An icon leading a button reads as a category mark — what kind of
+            thing this is. Trailing it, it reads as what the button will *do*,
+            which is the sentence this one wants: hit it, this hard. It also sits
+            under the gauge that fills left to right, so the row grows the same
+            way the charge does.
+
+            Only while the shot can be taken. `CALL FIRST` and `GO AIM` are
+            refusals, and dressing a refusal with the icon of the thing it is
+            refusing to do would tell the player twice that they may hit the
+            ball.
+          */}
+          {canShoot ? <PowerBallsIcon size={20} color={Luxe.ink} /> : null}
+
+          {/*
             Nothing here about the english.
 
             The contact point is marked on the cue ball itself, out on the table
@@ -259,29 +276,31 @@ const styles = StyleSheet.create({
    * has moved by the time you let go.
    */
   host: {
-    width: 168,
-    height: 58,
+    width: 216,
+    height: 66,
     alignItems: 'center',
     justifyContent: 'center',
   },
   /**
    * A wide bar, sized and cornered like the rest of the app.
    *
-   * The radius was 10 while the panel around it is 22 and every card in the app
-   * is 14 — close enough to the others to look like a mistake rather than a
-   * choice. `Radius.medium` puts it in the same family as the menu buttons it
-   * is the in-game equivalent of.
+   * `Radius.medium` puts it in the same family as the menu buttons it is the
+   * in-game equivalent of, and as the panel it now sits in.
    *
-   * Wider than it was, too. It is the only control in its row now, and a button
-   * that is the whole point of the panel should not be the smallest thing on
-   * it.
+   * Wide and low rather than tall: it is the only control in its row, so the
+   * width is free — and width is what makes a button easy to hit with a thumb
+   * held over the bottom of the screen, where height only costs the table the
+   * room it is played on.
    */
   button: {
     width: '100%',
     height: '100%',
     borderRadius: Radius.medium,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
     backgroundColor: Luxe.gold,
   },
   /**
@@ -301,7 +320,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textAlign: 'center',
-    paddingHorizontal: Spacing.two,
+    /*
+     * An explicit line box, so the label and the icon agree on the middle.
+     *
+     * Left to itself a `Text` takes the font's own line height, which reserves
+     * room for descenders this label has none of — every string on this button
+     * is upper case. The row then centres a box whose ink sits high in it, and
+     * the icon beside it looks low by the difference. Stating the line height
+     * ties the box to the type size instead of to the font's metrics.
+     */
+    lineHeight: 18,
   },
   labelBlocked: {
     color: Luxe.gold,

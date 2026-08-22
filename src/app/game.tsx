@@ -143,5 +143,15 @@ const styles = StyleSheet.create({
     // No longer absolutely positioned: it is a row in the stack now, so the
     // table above it shrinks to make room instead of hiding behind it.
     paddingTop: Spacing.one,
+    /*
+     * The one rule for the space between the picker and the panel.
+     *
+     * There was none: both are bordered cards, stacked with nothing between
+     * them, so whenever a call was owed they met edge to edge and read as one
+     * ragged shape with a seam across it. Stating it here rather than as a
+     * margin on either card keeps it true however many rows this layer ends up
+     * holding.
+     */
+    gap: Spacing.two,
   },
 });
