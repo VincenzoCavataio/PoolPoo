@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "ios": {
+      "bundleIdentifier": "com.vincenzocavataio.afterhours",
       "infoPlist": {
         "//": "Unlocks ProMotion. Without this iOS caps CADisplayLink at 60fps on a 120Hz panel however fast the app is, so the unlimited frame-rate setting would have nothing to unlock.",
         "CADisableMinimumFrameDuration": true
