@@ -144,3 +144,117 @@ export function relativeShadingCost(preset: QualityPreset): number {
   const reflections = preset.environmentMap ? 1.15 : 1;
   return lights * material * reflections;
 }
+
+/**
+ * How hard the app is allowed to work, as distinct from how good it looks.
+ *
+ * A second axis, deliberately not folded into `QualityPreset`. The two answer
+ * different questions and a phone can want opposite things from them: a cheap
+ * device with a good screen may well want the room to keep its lamps while the
+ * *loop* around it does far less, and there is no single ladder of nine steps
+ * that expresses that without half of its rungs being nonsense.
+ *
+ * **Nothing here touches the simulation.** The physics tick, the solver, the
+ * rules and the shot outcome are identical at every level — the same input
+ * produces the same shot on the cheapest phone and the most expensive. What
+ * varies is only how often the *picture* is recomputed and redrawn, which is
+ * work the game does for the eye and not for the table.
+ *
+ * That constraint is why the obvious lever is missing: resolution. Rendering at
+ * a lower pixel ratio is the usual first move, and it does not work here — see
+ * the note above `FLOOR_LOOK_FLOOR` in `scene.tsx`. expo-gl creates its drawing
+ * buffer at the view's native size and cannot be told to make a smaller one, so
+ * asking three.js for a lower ratio draws a small picture into the corner of a
+ * full-size buffer rather than saving any fill rate at all.
+ */
+export type LoadLevel = 'light' | 'balanced' | 'full';
+
+export interface LoadPreset {
+  id: LoadLevel;
+  labelKey: MessageKey;
+  feelKey: MessageKey;
+
+  /**
+   * Redraw only when something has changed, rather than continuously.
+   *
+   * The largest saving available, and the one that costs nothing to look at.
+   * Most of a game is spent with the table perfectly still — lining a shot up,
+   * reading the board, deciding — and through all of it the scene is redrawn
+   * sixty times a second from identical inputs, at the full price of eight
+   * dynamic lights over nineteen physical materials.
+   *
+   * On demand, those frames are simply not drawn. The picture is the same one,
+   * because nothing about it changed.
+   */
+  renderOnDemand: boolean;
+
+  /**
+   * How many times a second the aim guide is recomputed while dragging, or 0
+   * for every frame.
+   *
+   * The guide is the most expensive thing on the JS thread during aiming: a
+   * fresh prediction against every ball, cushion and pocket, then up to a
+   * hundred and twenty-eight dots each given a position, a rotation, a scale, a
+   * composed matrix and a colour, then two buffers uploaded.
+   *
+   * Capping it decouples the guide from the frame rate. The aim itself is not
+   * capped — `aimAngle` still follows the finger exactly, the cue still turns
+   * every frame, and the shot taken is the shot aimed. Only the dotted
+   * *drawing* of where it will go lags by up to a frame or two, which is a
+   * picture of a prediction and not the prediction itself.
+   */
+  guideHz: number;
+
+  /**
+   * Whether balls in motion leave a trail.
+   *
+   * Purely decorative, and priced per moving ball per frame: four quads each,
+   * repositioned and recoloured every frame that anything is rolling — which is
+   * exactly the frames where the physics is also at its busiest.
+   */
+  ballTrails: boolean;
+
+  /**
+   * Whether the room animates: the swaying lamps, the music device, the neon.
+   *
+   * Each is a `useFrame` of its own, and together they are the reason a still
+   * table is never actually still. Off, the room is lit and furnished but does
+   * not move — which on demand-rendering is also what lets the frame loop
+   * genuinely idle.
+   */
+  roomAnimation: boolean;
+}
+
+export const LOAD_PRESETS: LoadPreset[] = [
+  {
+    id: 'light',
+    labelKey: 'load.light',
+    feelKey: 'load.lightFeel',
+    renderOnDemand: true,
+    guideHz: 20,
+    ballTrails: false,
+    roomAnimation: false,
+  },
+  {
+    id: 'balanced',
+    labelKey: 'load.balanced',
+    feelKey: 'load.balancedFeel',
+    renderOnDemand: true,
+    guideHz: 30,
+    ballTrails: true,
+    roomAnimation: true,
+  },
+  {
+    id: 'full',
+    labelKey: 'load.full',
+    feelKey: 'load.fullFeel',
+    renderOnDemand: false,
+    guideHz: 0,
+    ballTrails: true,
+    roomAnimation: true,
+  },
+];
+
+export function loadById(id: string): LoadPreset {
+  return LOAD_PRESETS.find((l) => l.id === id) ?? LOAD_PRESETS[2];
+}

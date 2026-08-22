@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { BallKind } from '@/game/core/ball';
 import { ballSetById, colorForBallIn, type BallSet } from '@/constants/ball-sets';
 import { useSession } from '@/store/session';
+import { loadById } from '@/constants/quality';
 import { useSettings } from '@/store/settings';
 import { BALL_RADIUS, PHYSICS } from '@/game/core/constants';
 import type { World } from '@/game/core/world';
@@ -320,7 +321,19 @@ export function Balls({ world }: { world: World }) {
   );
 
   const ballSetId = useSettings((s) => s.ballSetId);
-  const showTrail = useSettings((s) => s.motionTrail);
+  /*
+   * The trail needs both the player's preference and the workload's permission.
+   *
+   * Two different questions — *do I want to see this* and *can this phone
+   * afford it* — and the answer to either being no is enough. Combined here
+   * rather than by the preset overwriting the setting, so a player who turns
+   * trails off keeps them off when they change preset, and one who likes them
+   * gets them back on a heavier one without having to remember to re-enable
+   * anything.
+   */
+  const wantsTrail = useSettings((s) => s.motionTrail);
+  const trailsAffordable = loadById(useSettings((s) => s.load)).ballTrails;
+  const showTrail = wantsTrail && trailsAffordable;
 
   /**
    * Instances the trail needs: every ball's ghosts, all in one mesh.

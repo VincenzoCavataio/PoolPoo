@@ -312,6 +312,14 @@ export const en: Record<keyof typeof it, Entry> = {
   'quality.high': 'High',
   'quality.highFeel': '60fps. Every light, reflections, and cloth with its sheen.',
 
+  'load.section': 'Workload',
+  'load.light': 'Light',
+  'load.lightFeel': 'Redraws only when something changes. No trails, still room.',
+  'load.balanced': 'Balanced',
+  'load.balancedFeel': 'Redraws only when something changes, with trails and a living room.',
+  'load.full': 'Full',
+  'load.fullFeel': 'Redraws continuously. Guide always current, everything in motion.',
+
   'options.audio': 'Audio and vibration',
   'options.haptics': 'Vibration',
   'options.hapticsBody': 'A tap when you shoot, a different one when you pot.',

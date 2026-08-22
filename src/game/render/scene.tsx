@@ -14,7 +14,7 @@ import { ShotAudio } from '@/game/audio/shot-audio';
 import type { Table } from '@/game/core/table';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
-import { qualityById } from '@/constants/quality';
+import { loadById, qualityById } from '@/constants/quality';
 import { useSettings } from '@/store/settings';
 
 import { AimGuide } from './aim-guide';
@@ -24,6 +24,7 @@ import { sceneX, sceneZ } from './coords';
 import { Environment } from './environment';
 import { EnvironmentReflections } from './environment-map';
 import { effectiveLocation } from './locations';
+import { requestRedraw, setRedrawHandle } from './redraw';
 import { MusicDeviceObject } from './music-device';
 import { TableMesh } from './table-mesh';
 
@@ -73,6 +74,15 @@ const FRAME_SLACK_MS = 1.5;
  */
 /** The aim stops following a fallen ball once it is on the floor. */
 const FLOOR_LOOK_FLOOR = -0.78;
+
+/**
+ * How close the camera has to be to its target before it stops asking for
+ * frames, as a squared distance in metres.
+ *
+ * A millimetre. Squared, so the check needs no square root on a path that runs
+ * every frame.
+ */
+const CAMERA_REST_SQ = 0.001 * 0.001;
 
 function CameraRig({ table }: { table: Table }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
@@ -281,6 +291,21 @@ function CameraRig({ table }: { table: Table }) {
       const alpha = 1 - Math.exp(-damping * delta);
       camera.position.lerp(wanted, alpha);
       look.lerp(wantedLook, alpha);
+
+      /*
+       * A moving camera keeps the loop awake.
+       *
+       * The easing is exponential, so it never formally arrives: without a
+       * threshold this would request frames for ever and the demand presets
+       * would save nothing. A millimetre is far below what a pixel can show at
+       * this scale, so stopping there is invisible — and `lerp` continues to
+       * close the remaining distance on whatever frame comes next anyway.
+       *
+       * This matters most for a view change made while aiming, which is the one
+       * animation that happens in the phase `DemandDriver` deliberately sleeps
+       * through.
+       */
+      if (camera.position.distanceToSquared(wanted) > CAMERA_REST_SQ) requestRedraw();
     }
 
     camera.lookAt(look);
@@ -297,12 +322,67 @@ function SimulationDriver() {
   return null;
 }
 
+/**
+ * Keeps the frame loop alive while anything on screen is still moving.
+ *
+ * `frameloop="demand"` stops the loop entirely between requests — including
+ * `useFrame`, which is what drives the physics. So on demand the loop is not
+ * "the scene redraws when React re-renders"; it is "the scene redraws while
+ * something says it must", and this is the thing that says so.
+ *
+ * The rule is deliberately generous. A missed `invalidate` is a frozen table,
+ * which is far worse than a few frames drawn for nothing, so this asks for
+ * another frame whenever the game is in any state that could possibly change on
+ * its own — a shot resolving, a replay running, the camera easing towards a new
+ * position — and only lets go once the table has genuinely settled.
+ *
+ * What it does *not* cover is deliberate: a still table in `AIMING` draws
+ * nothing until the player touches it, and the aim gesture invalidates through
+ * `nudgeAim`. That is the state the whole setting exists for, and it is most of
+ * a game.
+ */
+function DemandDriver() {
+  const invalidate = useThree((state) => state.invalidate);
+
+  useFrame(() => {
+    const { phase, replay } = useSession.getState();
+
+    /*
+     * Anything but a settled aim keeps the loop running.
+     *
+     * `AIMING` is the one phase that can be genuinely static. Every other phase
+     * is a thing in progress by definition: balls rolling, a replay playing, a
+     * rack being set. The camera is included through the phase too — the moves
+     * that ease it belong to shots and replays, not to a still aim.
+     */
+    if (phase !== Phase.AIMING || replay) invalidate();
+  });
+
+  /*
+   * The first frame after a mount, and the handle everything else uses.
+   *
+   * On demand nothing has asked for a frame yet, and a scene that has never
+   * drawn is a black screen rather than a still table — so one is requested
+   * outright. The same effect leaves `invalidate` where the aim gesture and the
+   * session store can reach it; see `redraw.ts` for why they cannot import it
+   * themselves.
+   */
+  useLayoutEffect(() => {
+    setRedrawHandle(invalidate);
+    invalidate();
+    return () => setRedrawHandle(null);
+  }, [invalidate]);
+
+  return null;
+}
+
 export function GameScene() {
   const world = useSession((state) => state.world);
   const replay = useSession((state) => state.replay);
   const gameId = useSession((state) => state.gameId);
   const locationId = useSettings((state) => state.locationId);
   const quality = qualityById(useSettings((state) => state.quality));
+  const load = loadById(useSettings((state) => state.load));
 
   // Pushed into the box the draw call reads, which cannot see React state.
   frameLimit.fps = quality.fps;
@@ -317,6 +397,14 @@ export function GameScene() {
 
   return (
     <Canvas
+      /*
+       * Drawn on demand, or continuously, according to the workload preset.
+       *
+       * On demand the loop sleeps between requests — see `DemandDriver`, which
+       * is what keeps it awake while a shot resolves and what hands the rest of
+       * the app a way to ask for a frame.
+       */
+      frameloop={load.renderOnDemand ? 'demand' : 'always'}
       /**
        * Building the renderer here, rather than letting the canvas build one, so
        * the frame limiter can sit *inside* it.
@@ -384,6 +472,7 @@ export function GameScene() {
       {/* Before the driver, so a fresh shot's empty event log is seen first. */}
       <ShotAudio />
       <SimulationDriver />
+      <DemandDriver />
     </Canvas>
   );
 }

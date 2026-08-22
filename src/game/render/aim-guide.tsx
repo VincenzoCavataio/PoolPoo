@@ -19,6 +19,7 @@ import type { Vec2 } from '@/game/core/vec';
 import { departureAngle } from '@/game/core/world';
 import { Phase } from '@/game/rules/types';
 import { useSession } from '@/store/session';
+import { loadById } from '@/constants/quality';
 import { useSettings } from '@/store/settings';
 import { shakeFor, useSwing } from '@/store/swing';
 
@@ -322,18 +323,53 @@ export function AimGuide() {
     [],
   );
 
-  useFrame(({ camera }) => {
-    const { world, phase, aimAngle, power, cameraMode, spin } = useSession.getState();
-    const { showAimGuide, showSpinTarget } = useSettings.getState();
+  /** When the guide was last rebuilt, for the workload presets that cap it. */
+  const lastBuilt = useRef(0);
 
+  useFrame(({ camera, clock }) => {
+    const { world, phase, aimAngle, power, cameraMode, spin } = useSession.getState();
+    const settings = useSettings.getState();
+    const { showAimGuide, showSpinTarget } = settings;
+
+    /*
+     * Rebuilt at most `guideHz` times a second on the lighter presets.
+     *
+     * This is the most expensive thing on the JS thread while aiming — a fresh
+     * prediction against every ball, cushion and pocket, then up to a hundred
+     * and twenty-eight dots each given a matrix and a colour, then two buffers
+     * uploaded — and at sixty frames a second most of those rebuilds produce a
+     * picture identical to the one before.
+     *
+     * The *aim* is never capped: `aimAngle` follows the finger exactly and the
+     * shot taken is the shot aimed. Only the drawing of the prediction waits,
+     * by at most a frame or two, which is a picture of a guess and not the
+     * guess itself.
+     *
+     * Skipped early, before any of the work: returning here leaves every mesh
+     * exactly as the last rebuild left it, which is the point.
+     */
     const cue = world?.cueBall();
     const aiming = phase === Phase.AIMING && !!world && !!cue && !cue.pocketed;
 
+    /*
+     * Hiding comes first, and is never throttled.
+     *
+     * A cap on rebuilding must not become a cap on *stopping*: the guide has to
+     * vanish on the frame the cue strikes, or it hangs over the table pointing
+     * at a shot already taken. This costs nothing when there is nothing to hide.
+     */
     if (!aiming) {
       for (const ref of hidden) {
         if (ref.current) ref.current.visible = false;
       }
       return;
+    }
+
+    const guideHz = loadById(settings.load).guideHz;
+    if (guideHz > 0) {
+      const now = clock.elapsedTime;
+      if (now - lastBuilt.current < 1 / guideHz) return;
+      lastBuilt.current = now;
     }
 
     const cueX = sceneX(cue.p);

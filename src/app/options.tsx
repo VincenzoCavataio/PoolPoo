@@ -18,7 +18,14 @@ import {
   Luxe,
   MenuPalette as Palette,
 } from '@/constants/game-theme';
-import { QUALITY_PRESETS, qualityById, type QualityLevel } from '@/constants/quality';
+import {
+  LOAD_PRESETS,
+  loadById,
+  QUALITY_PRESETS,
+  qualityById,
+  type LoadLevel,
+  type QualityLevel,
+} from '@/constants/quality';
 import { Spacing } from '@/constants/theme';
 import { LOCALE_LABEL, LOCALES } from '@/i18n';
 import { useT } from '@/i18n/use-t';
@@ -36,6 +43,13 @@ const QUALITY_DIRECTION: Record<QualityLevel, 'down' | 'level' | 'up'> = {
   low: 'down',
   medium: 'level',
   high: 'up',
+};
+
+/** Same three shapes, same order: least work on the left. */
+const LOAD_DIRECTION: Record<LoadLevel, 'down' | 'level' | 'up'> = {
+  light: 'down',
+  balanced: 'level',
+  full: 'up',
 };
 
 const SENSITIVITY_STEPS = [
@@ -131,7 +145,9 @@ export default function OptionsScreen() {
   const setMusicVolume = useSettings((s) => s.setMusicVolume);
   const setSfxVolume = useSettings((s) => s.setSfxVolume);
   const quality = useSettings((s) => s.quality);
+  const load = useSettings((s) => s.load);
   const setQuality = useSettings((s) => s.setQuality);
+  const setLoad = useSettings((s) => s.setLoad);
   const [savedCleared, setSavedCleared] = useState(false);
 
   const resetTrophies = useTrophies((s) => s.resetTrophies);
@@ -315,6 +331,46 @@ export default function OptionsScreen() {
           })}
         </View>
         <Text style={styles.rowDescription}>{t(qualityById(quality).feelKey)}</Text>
+
+        {/*
+          A second axis, under the first.
+
+          Quality is what the scene contains; this is how hard the app works to
+          keep it on screen. They are separate because a phone can want opposite
+          answers — a cheap device with a good screen may well want every lamp
+          and far less redrawing — and because neither of them touches the game:
+          the physics, the rules and the outcome of a shot are identical at all
+          nine combinations.
+        */}
+        <Text style={styles.groupLabel}>{t('load.section')}</Text>
+        <View style={styles.pillRow}>
+          {LOAD_PRESETS.map((preset) => {
+            const selected = preset.id === load;
+            return (
+              <Pressable
+                key={preset.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => setLoad(preset.id)}
+                style={({ pressed }) => [
+                  styles.pill,
+                  styles.pillWithIcon,
+                  selected && styles.pillSelected,
+                  pressed && styles.pressed,
+                ]}>
+                <LevelIcon
+                  direction={LOAD_DIRECTION[preset.id]}
+                  size={14}
+                  color={selected ? Luxe.gold : Luxe.textMuted}
+                />
+                <Text style={[styles.pillLabel, selected && styles.pillLabelSelected]}>
+                  {t(preset.labelKey)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.rowDescription}>{t(loadById(load).feelKey)}</Text>
 
         {/* Under graphics because that is what it is: a look, not an aid. */}
         <ToggleRow

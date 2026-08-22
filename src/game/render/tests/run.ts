@@ -15,7 +15,7 @@ import { createTable } from '../../core/table';
 import { BALL_RADIUS, PHYSICS } from '../../core/constants';
 import { spinAxis, spinRate, SPOT_RADIUS } from '../coords';
 import { BALL_SETS, colorForBallIn } from '../../../constants/ball-sets';
-import { QUALITY_PRESETS, relativeShadingCost } from '../../../constants/quality';
+import { LOAD_PRESETS, QUALITY_PRESETS, relativeShadingCost } from '../../../constants/quality';
 import { mergeShapes } from '../merge';
 import { createNumberAtlas, NUMBER_ATLAS_GRID } from '../ball-numbers';
 import { LOCATIONS, obstaclesFor, ROOM, type MusicDevice } from '../locations';
@@ -786,6 +786,59 @@ suite('graphics presets', () => {
   test('every preset keeps a light over the table', () => {
     for (const preset of QUALITY_PRESETS) {
       assert(preset.tableLamps >= 1, `${preset.id} leaves the table unlit`);
+    }
+  });
+
+  /**
+   * The workload axis must not become a difficulty setting.
+   *
+   * Its whole promise is that a cheaper phone plays the *same game*: the
+   * simulation is untouched at every level, and what varies is only how often
+   * the picture is recomputed. If a field ever appears here that a shot's
+   * outcome could depend on, this is the test that should have caught it.
+   */
+  test('workload presets carry nothing the simulation reads', () => {
+    const simulationFields = ['fixedDt', 'substeps', 'friction', 'restitution', 'accuracy'];
+    for (const preset of LOAD_PRESETS) {
+      for (const field of simulationFields) {
+        assert(!(field in preset), `${preset.id} carries ${field}, which the physics would read`);
+      }
+    }
+  });
+
+  test('each workload level asks for less than the one above', () => {
+    const byLoad = Object.fromEntries(LOAD_PRESETS.map((l) => [l.id, l]));
+
+    // `guideHz` of 0 means "every frame", so it is the heaviest, not the
+    // lightest — compared as a rate, an uncapped guide is effectively the
+    // frame rate itself.
+    const rate = (hz: number) => (hz === 0 ? 60 : hz);
+
+    assert(
+      rate(byLoad.light.guideHz) < rate(byLoad.balanced.guideHz),
+      'light rebuilds the guide as often as balanced',
+    );
+    assert(
+      rate(byLoad.balanced.guideHz) < rate(byLoad.full.guideHz),
+      'balanced rebuilds the guide as often as full',
+    );
+    assert(byLoad.full.renderOnDemand === false, 'full is meant to be the continuous one');
+    assert(byLoad.light.renderOnDemand, 'light must not redraw continuously');
+  });
+
+  /**
+   * A capped guide is still a guide.
+   *
+   * Twelve times a second is about the point where a line following a finger
+   * stops reading as a line and starts reading as a slideshow. The cap exists
+   * to save work between meaningful changes, not to make aiming feel broken.
+   */
+  test('no preset caps the aim guide below usable', () => {
+    for (const preset of LOAD_PRESETS) {
+      assert(
+        preset.guideHz === 0 || preset.guideHz >= 12,
+        `${preset.id} rebuilds the guide only ${preset.guideHz} times a second`,
+      );
     }
   });
 

@@ -30,6 +30,7 @@ import { detectShot, emptyRunState, type TrophyRunState } from '@/game/trophies/
 import { useTrophies } from '@/store/trophies';
 import { msg, type Message } from '@/i18n';
 import { CameraMode } from '@/game/render/camera';
+import { requestRedraw } from '@/game/render/redraw';
 import {
   createMatch,
   cpusIn,
@@ -913,17 +914,35 @@ export const useSession = create<SessionState>((set, get) => {
 
     setAimAngle: (aimAngle) => set({ aimAngle }),
 
-    nudgeAim: (delta) => set({ aimAngle: get().aimAngle + delta }),
+    nudgeAim: (delta) => {
+      set({ aimAngle: get().aimAngle + delta });
+      // The table is otherwise still while aiming, so on the demand presets
+      // nothing would redraw it and the cue would not appear to turn.
+      requestRedraw();
+    },
 
-    setPower: (power) => set({ power: Math.min(1, Math.max(0.05, power)) }),
+    /*
+     * These three all change what the still table looks like — the cue draws
+     * back, the contact mark moves, the view swings round — so each has to ask
+     * for a frame on the demand presets. `AIMING` is the one phase the loop is
+     * allowed to sleep through, and it is exactly the phase they happen in.
+     */
+    setPower: (power) => {
+      set({ power: Math.min(1, Math.max(0.05, power)) });
+      requestRedraw();
+    },
 
     // Only while aiming: during a shot or a replay the game owns the camera.
     setCameraMode: (cameraMode) => {
       if (get().phase !== Phase.AIMING) return;
       set({ cameraMode });
+      requestRedraw();
     },
 
-    setSpin: (spin) => set({ spin }),
+    setSpin: (spin) => {
+      set({ spin });
+      requestRedraw();
+    },
 
     /**
      * What the shooter says they are going to do.

@@ -313,6 +313,14 @@ export const it = {
   'quality.high': 'Alta',
   'quality.highFeel': '60 fps. Tutte le luci, riflessi e panno con la sua peluria.',
 
+  'load.section': 'Carico di lavoro',
+  'load.light': 'Leggero',
+  'load.lightFeel': 'Ridisegna solo quando serve. Niente scie né stanza animata.',
+  'load.balanced': 'Bilanciato',
+  'load.balancedFeel': 'Ridisegna solo quando serve, con scie e stanza viva.',
+  'load.full': 'Pieno',
+  'load.fullFeel': 'Ridisegna di continuo. Guida sempre aggiornata, tutto in moto.',
+
   'options.audio': 'Audio e vibrazione',
   'options.haptics': 'Vibrazione',
   'options.hapticsBody': 'Un colpetto quando tiri, uno diverso quando imbuchi.',

@@ -11,7 +11,12 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { BALL_SETS } from '@/constants/ball-sets';
-import { QUALITY_PRESETS, type QualityLevel } from '@/constants/quality';
+import {
+  LOAD_PRESETS,
+  QUALITY_PRESETS,
+  type LoadLevel,
+  type QualityLevel,
+} from '@/constants/quality';
 import { useTrophies } from '@/store/trophies';
 import { CLOTH_OPTIONS } from '@/constants/game-theme';
 import type { Locale } from '@/i18n';
@@ -40,6 +45,15 @@ export interface SettingsState {
   ballSetId: string;
   /** Graphics preset: which effects the renderer is allowed to spend on. */
   quality: QualityLevel;
+  /**
+   * Workload preset: how hard the app works to put that on screen.
+   *
+   * Separate from `quality` because they answer different questions — what the
+   * scene contains, versus how often it is recomputed. Neither touches the
+   * simulation: the physics, the rules and the outcome of a shot are the same
+   * at every combination of the two.
+   */
+  load: LoadLevel;
   /** Which room the table stands in. */
   locationId: string;
   /**
@@ -93,6 +107,7 @@ export interface SettingsState {
   setCloth: (id: string) => void;
   setBallSet: (id: string) => void;
   setQuality: (value: QualityLevel) => void;
+  setLoad: (value: LoadLevel) => void;
   setLocation: (id: string) => void;
   setShowAimGuide: (value: boolean) => void;
   setShowSpinTarget: (value: boolean) => void;
@@ -112,6 +127,7 @@ const DEFAULTS = {
   clothId: CLOTH_OPTIONS[0].id,
   ballSetId: BALL_SETS[0].id,
   quality: QUALITY_PRESETS[2].id,
+  load: LOAD_PRESETS[1].id,
   locationId: LOCATIONS[0].id,
   showAimGuide: true,
   showSpinTarget: true,
@@ -146,6 +162,7 @@ export const useSettings = create<SettingsState>()(
         set({ ballSetId });
       },
       setQuality: (quality) => set({ quality }),
+      setLoad: (load) => set({ load }),
       setLocation: (locationId) => {
         useTrophies.getState().discover('rooms', locationId, 'grand-tour', LOCATIONS.length);
         set({ locationId });

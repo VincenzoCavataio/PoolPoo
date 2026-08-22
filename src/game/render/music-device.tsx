@@ -17,10 +17,14 @@ import { useFrame, useThree } from '@react-three/fiber/native';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
+import { loadById } from '@/constants/quality';
 import { CHANGE_TOTAL_MS, useMusic } from '@/game/audio/music';
 import { trackAt } from '@/game/audio/tracks';
 
+import { useSettings } from '@/store/settings';
+
 import { FLOOR_Y, type MusicDevice } from './locations';
+import { requestRedraw } from './redraw';
 import { mergeShapes } from './merge';
 
 /** Where the device currently is on screen, for the tap gesture to compare. */
@@ -352,7 +356,20 @@ function Disc({ radius }: { radius: number }) {
     if (changing && !wasChanging.current) changeStarted.current = Date.now();
     wasChanging.current = changing;
 
-    if (playing || changing) node.rotation.y += SPIN_SPEED * delta;
+    /*
+     * The disc turns only while the room is allowed to animate.
+     *
+     * On the demand presets a spinning disc would otherwise be the one thing
+     * keeping the frame loop awake through an entirely still table — the most
+     * expensive scene in the game redrawn sixty times a second so that a record
+     * the size of a thumbnail can rotate. `roomAnimation` is what decides
+     * whether that trade is worth making, and when it is, the frame it needs is
+     * requested explicitly rather than assumed.
+     */
+    if ((playing || changing) && loadById(useSettings.getState().load).roomAnimation) {
+      node.rotation.y += SPIN_SPEED * delta;
+      requestRedraw();
+    }
 
     // Out for the first half of the change, back in for the second: the disc
     // lifting off and the new one settling.
