@@ -7,10 +7,9 @@
  * that needs the finest touch.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useEffect } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { useAnimatedProps, useAnimatedStyle } from 'react-native-reanimated';
 
 import { ShootButton } from '@/components/game/shoot-button';
 import { Luxe, Palette, Radius } from '@/constants/game-theme';
@@ -22,20 +21,6 @@ import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
 import { chargeValue, MAX_CHARGE, MISCUE_OVER, useSwing } from '@/store/swing';
 
-/** One tap of the fine-aim buttons, in radians — a touch over half a degree. */
-const FINE_AIM_STEP = 0.01;
-/**
- * The rolling scale: how far apart the marks are, and how many turns of the cue
- * it takes to run through them all.
- *
- * Twelve pixels is close enough that several are always in view at once, which
- * is what makes the movement readable; a scale with two marks on it looks like
- * two things sliding rather than a scale turning.
- *
- * Sixty ticks to a full revolution puts a major mark — every fifth — at each
- * thirty degrees, so the strip is coarse enough to see turning and fine enough
- * that a small correction still visibly moves it.
- */
 /**
  * How many blocks the power gauge is divided into.
  *
@@ -44,23 +29,6 @@ const FINE_AIM_STEP = 0.01;
  * fine enough that a shot can be judged to within ten per cent.
  */
 const POWER_SEGMENTS = 15;
-
-const TICK_GAP = 12;
-const TICKS_PER_TURN = 60;
-
-/**
- * How many marks are drawn.
- *
- * Enough to cover the widest strip twice over, so the row can be offset by up to
- * a full spacing without a gap appearing at either end.
- */
-const ROLLING_TICKS = 64;
-/** Radians per pixel dragged across the strip. */
-const SCRUB_PER_PX = 0.0022;
-/** Fraction of the strip at each end that keeps turning while held. */
-const EDGE_ZONE = 0.2;
-/** Radians per second at the very end of the strip. */
-const EDGE_RATE = 1.15;
 
 /**
  * A ruler to push against, with the edges live.
@@ -88,6 +56,27 @@ const EDGE_RATE = 1.15;
  * measured — you read three of ten at a glance, where a bar three-tenths along
  * has to be judged against its own ends.
  */
+/**
+ * The unlit and overcharge tones, named rather than written inline.
+ *
+ * `UNLIT_WILD` is the danger colour at the same weight as the plain unlit
+ * block, so the last stretch of the gauge reads as *present* before it is
+ * reached — you can see where the cliff is without having walked off it.
+ */
+const UNLIT = 'rgba(255, 255, 255, 0.06)';
+const UNLIT_WILD = 'rgba(217, 117, 107, 0.16)';
+
+/**
+ * The overcharge amber.
+ *
+ * Chosen for hue, not for lightness: at 8.7:1 against the panel it is plainly
+ * visible, but against the gold beside it the luminance ratio is only 1.04 —
+ * the two are all but identical in greyscale. Colour alone therefore cannot
+ * carry the hundred-per-cent line, so the gauge marks it with *height* as well
+ * (see `segmentOver`), which is legible whatever the eye does with hue.
+ */
+const OVER_COLOR = '#e8a33d';
+
 function Segment({ index, count }: { index: number; count: number }) {
   const charge = ((index + 1) / count) * MAX_CHARGE;
   const over = charge > 1;
@@ -106,9 +95,18 @@ function Segment({ index, count }: { index: number; count: number }) {
     // Lit once the charge has passed this block's own share of the gauge.
     const lit = reached >= (index + 1) / count - 1 / count / 2;
     if (!lit) {
-      return { backgroundColor: wild ? 'rgba(217, 117, 107, 0.14)' : 'rgba(255, 255, 255, 0.07)' };
+      return { backgroundColor: wild ? UNLIT_WILD : UNLIT };
     }
-    return { backgroundColor: wild ? '#d9756b' : over ? '#ff523c' : Luxe.gold };
+    /*
+     * Three lit colours, all from the theme.
+     *
+     * The overcharge used to be `#ff523c`, a red that appears nowhere else in
+     * the app — a siren colour borrowed from somewhere with a different palette.
+     * Amber for the overcharge and the app's own `danger` for the miscue band
+     * keep the warning legible while sounding like the rest of the game: gold,
+     * then gold pushed hot, then the colour every other warning already uses.
+     */
+    return { backgroundColor: wild ? Luxe.danger : over ? OVER_COLOR : Luxe.gold };
   });
 
   return (
@@ -133,169 +131,75 @@ function Segment({ index, count }: { index: number; count: number }) {
  * apart from the rest, so the overcharge is visibly a place you have gone rather
  * than a colour the bar turned.
  */
+/**
+ * The charge as a number, driven from the UI thread.
+ *
+ * An `AnimatedTextInput` rather than a `Text`, because only a `TextInput` has a
+ * `text` prop that `useAnimatedProps` can write to — a `Text` would need a state
+ * update per frame, which is sixty re-renders of the whole panel a second while
+ * the shot is being wound.
+ *
+ * It is read-only and unfocusable: it looks like a label, and behaves like one.
+ */
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
+function ChargeNumber() {
+  const props = useAnimatedProps(() => {
+    // Rounded to fives, so the number reads as a gauge rather than a stopwatch.
+    const percent = Math.round((chargeValue.value * 100) / 5) * 5;
+    return { text: `${percent}%`, defaultValue: `${percent}%` };
+  });
+
+  const style = useAnimatedStyle(() => {
+    const charge = chargeValue.value;
+    if (charge > MISCUE_OVER) return { color: Luxe.danger };
+    if (charge > 1) return { color: OVER_COLOR };
+    return { color: charge > 0.02 ? Luxe.gold : Luxe.textFaint };
+  });
+
+  return (
+    <AnimatedTextInput
+      editable={false}
+      focusable={false}
+      pointerEvents="none"
+      style={[styles.powerValue, style]}
+      animatedProps={props}
+    />
+  );
+}
+
 function PowerReadout() {
   const t = useT();
 
   return (
     <View style={styles.powerWrap}>
+      {/*
+        The caption and the number on one line, above the blocks.
+
+        The caption used to sit alone under the gauge in nine-point letters,
+        which is small enough to be furniture rather than information — and it
+        said only what the control was, never what it was doing. Pairing it with
+        the live percentage puts the label and its value together, the way every
+        readout in the app is set: quiet name on the left, bright value on the
+        right.
+      */}
+      <View style={styles.powerHead}>
+        <Text style={styles.powerCaption}>{t('game.power')}</Text>
+        <ChargeNumber />
+      </View>
+
       <View style={styles.segments}>
         {Array.from({ length: POWER_SEGMENTS }, (_, i) => (
           <Segment key={i} index={i} count={POWER_SEGMENTS} />
         ))}
       </View>
-
-      <Text style={styles.powerCaption}>{t('game.power')}</Text>
     </View>
   );
 }
 
-function AimStrip() {
-  const t = useT();
-  const [width, setWidth] = useState(0);
-  const [edge, setEdge] = useState(0);
-  const aimAngle = useSession((s) => s.aimAngle);
-
-  /*
-   * The scale's offset, from the aim itself.
-   *
-   * One full turn of the cue moves the marks by `TICKS_PER_TURN` spacings, and
-   * the row is wrapped back by one spacing so it never runs off its own end.
-   * Using the angle directly rather than an animation means the strip cannot
-   * lag behind the table it is reporting on.
-   */
-  const tickScroll = useAnimatedStyle(() => {
-    const perTick = (Math.PI * 2) / TICKS_PER_TURN;
-    /*
-     * Wrapped into 0..TICK_GAP, never negative.
-     *
-     * JavaScript's `%` keeps the sign of its left operand, so aiming anticlockwise
-     * gave a negative shift — which slides the row the wrong way and opens a gap
-     * at its leading edge. Adding a full spacing before the second modulo folds
-     * it back into the positive range.
-     */
-    const raw = ((aimAngle / perTick) * TICK_GAP) % TICK_GAP;
-    const shift = (raw + TICK_GAP) % TICK_GAP;
-    return { transform: [{ translateX: -shift }] };
-  }, [aimAngle]);
-
-  const hold = useRef({ running: false, direction: 0, depth: 0 });
-  const frame = useRef<number | null>(null);
-  const last = useRef(0);
-
-  const stop = useCallback(() => {
-    hold.current.running = false;
-    hold.current.direction = 0;
-    if (frame.current !== null) cancelAnimationFrame(frame.current);
-    frame.current = null;
-    setEdge(0);
-  }, []);
-
-  const tick = useCallback(() => {
-    const now = Date.now();
-    const delta = Math.min(0.05, (now - last.current) / 1000);
-    last.current = now;
-
-    const { direction, depth } = hold.current;
-    if (direction !== 0 && useSession.getState().phase === Phase.AIMING) {
-      useSession.getState().nudgeAim(direction * EDGE_RATE * depth * delta);
-    }
-
-    frame.current = hold.current.running ? requestAnimationFrame(tick) : null;
-  }, []);
-
-  const track = useCallback(
-    (x: number) => {
-      if (width <= 0) return;
-      const position = Math.min(1, Math.max(0, x / width));
-
-      let direction = 0;
-      let depth = 0;
-      if (position < EDGE_ZONE) {
-        direction = -1;
-        depth = (EDGE_ZONE - position) / EDGE_ZONE;
-      } else if (position > 1 - EDGE_ZONE) {
-        direction = 1;
-        depth = (position - (1 - EDGE_ZONE)) / EDGE_ZONE;
-      }
-
-      hold.current.direction = direction;
-      hold.current.depth = Math.max(0.25, depth);
-      setEdge(direction);
-    },
-    [width],
-  );
-
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .minDistance(0)
-        .onBegin((event) => {
-          last.current = Date.now();
-          hold.current.running = true;
-          track(event.x);
-          if (frame.current === null) frame.current = requestAnimationFrame(tick);
-        })
-        .onChange((event) => {
-          const session = useSession.getState();
-          if (session.phase === Phase.AIMING) session.nudgeAim(event.changeX * SCRUB_PER_PX);
-          track(event.x);
-        })
-        .onFinalize(stop),
-    [track, tick, stop],
-  );
-
-  useEffect(() => stop, [stop]);
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <View
-        style={styles.strip}
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        accessibilityLabel={t('game.aimStrip')}>
-        <View style={[styles.edgeZone, styles.edgeLeft, edge === -1 && styles.edgeActive]} pointerEvents="none" />
-        <View style={[styles.edgeZone, styles.edgeRight, edge === 1 && styles.edgeActive]} pointerEvents="none" />
-
-        {/*
-          The ticks travel with the aim, like the card of a compass.
-
-          They used to be twenty-one fixed marks, so turning the cue changed the
-          table and left the strip looking exactly as it had — the one control
-          whose whole job is to say "you are turning" said nothing. Now the scale
-          slides underneath a fixed pointer: the marks move, the centre does not,
-          and the strip reads as a heading rather than as decoration.
-
-          Enough of them are drawn to cover the strip twice over, and the row is
-          offset by the aim modulo one tick spacing, so it scrolls for ever
-          without ever running out of marks.
-        */}
-        <View style={styles.ticks} pointerEvents="none">
-          <Animated.View style={[styles.tickRow, tickScroll]}>
-            {Array.from({ length: ROLLING_TICKS }, (_, i) => (
-              <View
-                key={i}
-                style={[styles.tick, i % 5 === 0 && styles.tickMajor, { left: i * TICK_GAP }]}
-              />
-            ))}
-          </Animated.View>
-        </View>
-
-        {/* The pointer, fixed at the middle: what the scale is read against. */}
-        <View style={styles.tickCentre} pointerEvents="none" />
-
-        <Text style={styles.stripLabel} pointerEvents="none">
-          ◀ {t('game.aim')} ▶
-        </Text>
-      </View>
-    </GestureDetector>
-  );
-}
-
 export function GameControls() {
-  const t = useT();
   const phase = useSession((s) => s.phase);
   const cameraMode = useSession((s) => s.cameraMode);
-  const nudgeAim = useSession((s) => s.nudgeAim);
   const setCameraMode = useSession((s) => s.setCameraMode);
 
   /** True while the seat whose turn it is belongs to the computer. */
@@ -381,24 +285,6 @@ export function GameControls() {
       <View
         style={[styles.panel, isCpuTurn && styles.panelCpu]}
         pointerEvents={isCpuTurn ? 'none' : 'auto'}>
-        <View style={styles.row}>
-          <Pressable
-            accessibilityLabel={t('game.aimLeft')}
-            onPress={() => nudgeAim(-FINE_AIM_STEP)}
-            style={({ pressed }) => [styles.fine, pressed && styles.pressed]}>
-            <Text style={styles.fineLabel}>◀</Text>
-          </Pressable>
-
-          <AimStrip />
-
-          <Pressable
-            accessibilityLabel={t('game.aimRight')}
-            onPress={() => nudgeAim(FINE_AIM_STEP)}
-            style={({ pressed }) => [styles.fine, pressed && styles.pressed]}>
-            <Text style={styles.fineLabel}>▶</Text>
-          </Pressable>
-        </View>
-
         {/*
           Power across the full width, the button beneath it.
 
@@ -442,143 +328,64 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     gap: Spacing.two,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
   /** The button, centred under the power scale. */
   shootRow: {
     alignItems: 'center',
     marginTop: Spacing.two,
   },
-  strip: {
-    flex: 1,
-    height: 44,
-    borderRadius: Radius.small,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  edgeZone: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: `${EDGE_ZONE * 100}%`,
-    backgroundColor: 'transparent',
-  },
-  edgeLeft: {
-    left: 0,
-    borderTopLeftRadius: Radius.small,
-    borderBottomLeftRadius: Radius.small,
-  },
-  edgeRight: {
-    right: 0,
-    borderTopRightRadius: Radius.small,
-    borderBottomRightRadius: Radius.small,
-  },
-  edgeActive: {
-    backgroundColor: 'rgba(61, 220, 132, 0.22)',
-  },
-  /** Clips the sliding row, so marks disappear at the edges rather than pile up. */
-  ticks: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  /** The row that slides. Absolute children, so their spacing is exact. */
-  tickRow: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  tick: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -4,
-    width: 1,
-    height: 8,
-    backgroundColor: Palette.border,
-  },
-  tickMajor: {
-    marginTop: -7.5,
-    height: 15,
-    backgroundColor: Palette.textMuted,
-  },
   /**
-   * The pointer the scale is read against, fixed at the middle.
+   * The power gauge and its heading.
    *
-   * Was one of the marks, which meant it moved with them and there was nothing
-   * left to measure against — a compass card with no lubber line.
-   */
-  tickCentre: {
-    position: 'absolute',
-    left: '50%',
-    marginLeft: -1,
-    top: '50%',
-    marginTop: -13,
-    width: 2,
-    height: 26,
-    backgroundColor: Palette.accent,
-  },
-  stripLabel: {
-    color: Palette.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  fine: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.small,
-    backgroundColor: Palette.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fineLabel: {
-    color: Palette.text,
-    fontSize: 16,
-  },
-  /**
-   * The readout, shaped like the slider it replaces.
-   *
-   * Same footprint on purpose: the row keeps its proportions, and the thing that
-   * changed is that this one cannot be dragged. It fills from the left as the
-   * charge climbs, so the figure is backed by something readable at a glance.
+   * `flex: 1` so the blocks span the panel: a scale is easier to read the longer
+   * it is, and this one is the width of the screen.
    */
   powerWrap: {
     flex: 1,
     alignItems: 'center',
-    gap: 3,
-    /*
-     * Air on both sides, beyond the row's own gap.
-     *
-     * The blocks run edge to edge inside this, so without it the outermost one
-     * sits almost against the spin control on one side and the shoot button on
-     * the other — three different things touching, reading as one crowded strip.
-     */
-    paddingHorizontal: Spacing.two,
+    gap: 6,
+  },
+  /** Label left, value right: the setting of every readout in the app. */
+  powerHead: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
   },
   powerCaption: {
     color: Luxe.textMuted,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 2.2,
     textTransform: 'uppercase',
   },
   /**
-   * The row of blocks. No border and no ground of its own.
+   * The live figure, in tabular figures.
    *
-   * A frame round it would put it straight back into the same family as the aim
-   * strip; the blocks themselves are the object, floating on the panel.
+   * Fixed width and right-aligned so the digits do not shuffle the caption about
+   * as the number grows from 5% to 150% — a readout that moves while it counts
+   * is hard to read at precisely the moment it matters.
+   *
+   * `padding: 0` and the explicit height because a `TextInput` carries platform
+   * chrome a `Text` does not: without them it sits low and adds a dozen points
+   * of invisible margin.
+   */
+  powerValue: {
+    width: 62,
+    height: 18,
+    padding: 0,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
+  },
+  /**
+   * The row of blocks. No border and no ground of its own — the blocks
+   * themselves are the object, floating on the panel.
    */
   segments: {
     width: '100%',
-    // A shade shorter than the aim strip beside it, so the eye reads them as
-    // two different instruments rather than a pair.
     height: 26,
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -587,62 +394,26 @@ const styles = StyleSheet.create({
   /**
    * One block, taller than it is wide.
    *
-   * Upright bars rather than a continuous strip: the shape says "level" the way
-   * a row of lights on an amplifier does, and it is the clearest thing this
-   * could be that the aim strip is not.
+   * At a radius of 1.5 the corners read as a rendering artefact rather than a
+   * decision. Three points on a block this wide is a visible radius that still
+   * leaves it a bar rather than a pill.
    */
   segment: {
     flex: 1,
     height: '70%',
-    borderRadius: 1.5,
-  },
-  /** The overcharge blocks stand full height, so the last stretch is visibly different. */
-  segmentOver: {
-    height: '100%',
-  },
-  trackFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: Radius.pill,
-    opacity: 0.85,
-  },
-  trackLabel: {
-    color: Palette.text,
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
-  thumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    marginLeft: -10,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.text,
-    borderWidth: 3,
+    borderRadius: 3,
   },
   /**
-   * The one control that does the thing, made to look like it.
+   * The overcharge blocks stand full height.
    *
-   * It was an 88×48 rounded rectangle in the accent colour, in a row of 48-tall
-   * rounded rectangles — the same silhouette as the power slider beside it and
-   * the spin control on the other side, so the eye had nothing to catch on. A
-   * button does not read as primary because it is a slightly different colour;
-   * it reads as primary because it is a different *shape*.
-   *
-   * So it is a disc: taller than the row, filled gold like every committing
-   * action in the app, and round where everything near it is oblong.
+   * This is the real signal for the hundred-per-cent line, not the colour
+   * change: amber and gold are within 1.04:1 of each other in luminance, so a
+   * player who reads the gauge by brightness — in strong sun, or with any
+   * colour-vision deficiency — would see one unbroken run of identical blocks.
+   * A step up in height is unmissable and needs no colour at all.
    */
-  shoot: {
-    width: 88,
-    height: 48,
-    borderRadius: Radius.small,
-    backgroundColor: Luxe.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
+  segmentOver: {
+    height: '100%',
   },
   pressed: {
     opacity: 0.7,

@@ -786,6 +786,53 @@ export function CameraIcon({ size = 24, color = Luxe.text }: IconProps) {
   );
 }
 
+/**
+ * A chevron, drawn from two strokes rather than set as ◀ or ▶.
+ *
+ * The glyphs are solid triangles at whatever weight the system font gives them,
+ * which next to hairline-drawn icons reads as a different vocabulary. Two thin
+ * bars meeting at a point match the rest.
+ */
+export function ChevronIcon({
+  direction = 'right',
+  size = 24,
+  color = Luxe.text,
+}: IconProps & { direction?: 'left' | 'right' }) {
+  const arm = size * 0.42;
+  const lean = direction === 'right' ? 1 : -1;
+
+  return (
+    <View style={[styles.box, { width: size, height: size }]}>
+      <View
+        style={{
+          position: 'absolute',
+          width: 1.8,
+          height: arm,
+          borderRadius: 1,
+          backgroundColor: color,
+          transform: [
+            { translateY: -arm / 2.6 },
+            { rotate: `${lean * 38}deg` },
+          ],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: 1.8,
+          height: arm,
+          borderRadius: 1,
+          backgroundColor: color,
+          transform: [
+            { translateY: arm / 2.6 },
+            { rotate: `${-lean * 38}deg` },
+          ],
+        }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   backButton: {
     width: 40,

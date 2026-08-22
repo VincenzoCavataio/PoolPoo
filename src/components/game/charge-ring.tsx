@@ -1,42 +1,36 @@
 /**
- * The glow around the shoot button while it is held.
+ * The shoot button's own behaviour while it is held.
  *
- * A ring that fills as the charge climbs — gold while the extra power is simply
- * extra power, running red through the last fifth where the shot becomes hard
- * enough to put a ball on the floor. It sits on the button rather than in a bar
- * of its own so the reading is where the thumb already is: you never look away
- * from the table to find out how hard you are about to hit it.
+ * Not a component any more but a hook, because what it produces is a style the
+ * button wears rather than a thing drawn on top of it. It also owns the charge
+ * itself: the animation that winds `chargeValue` to the ceiling, the sampling
+ * that hands the value to the store a few times a second, and the haptic pulse
+ * that quickens with it.
  *
- * Drawn as layers rather than as an arc, because there is no canvas here and a
- * stroked circle would need one. A ring that brightens, thickens and spreads is
- * a truer reading of "winding up" than a dial creeping round anyway: the whole
- * button gets more dangerous, rather than a pointer moving.
+ * The reading is on the button because that is where the thumb is: you never
+ * look away from the table to find out how hard you are about to hit it.
  */
 
 import { useEffect, useRef } from 'react';
-import { StyleSheet } from 'react-native';
-import Animated, {
+import {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
+  useFrameCallback,
+  useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
-import { CHARGE_MS, chargeValue, MAX_CHARGE, OVERCHARGE_MS, useSwing } from '@/store/swing';
+import {
+  CHARGE_MS,
+  chargeValue,
+  MAX_CHARGE,
+  MISCUE_OVER,
+  OVERCHARGE_MS,
+  useSwing,
+} from '@/store/swing';
 import { useSettings } from '@/store/settings';
-
-/** Widest the glow spreads beyond the button, in points. */
-const SPREAD = 14;
-
-/**
- * The button's own corner radius, so the ring follows its shape.
- *
- * Matched to the button rather than guessed: a ring with a different radius
- * traces a shape the button does not have, which reads as a misaligned outline
- * rather than as the button glowing.
- */
-const BUTTON_RADIUS = 10;
 
 /**
  * How often the button buzzes, at rest and at full charge.
@@ -49,7 +43,7 @@ const BUTTON_RADIUS = 10;
 const PULSE_SLOW = 220;
 const PULSE_FAST = 45;
 
-export function ChargeRing() {
+export function useChargeSwell() {
   const charging = useSwing((s) => s.charging);
   const setCharge = useSwing((s) => s.setCharge);
   const haptics = useSettings((s) => s.haptics);
@@ -178,65 +172,82 @@ export function ChargeRing() {
   }, [charging, charge, setCharge, haptics]);
 
   /**
-   * The glow: brighter, wider and redder as the charge climbs.
+   * The button swells as it winds, and blinks once it turns dangerous.
    *
-   * All three at once, because a single channel is easy to miss at the edge of
-   * vision — and the whole point of putting this on the button is that it is
-   * read without looking at it.
+   * It was a red ring spreading out from the button's edge — an outline that
+   * grew rather than the control itself doing anything. Scaling the button is
+   * the more direct picture of winding up: the thing under the thumb is visibly
+   * loading, and the thumb is already there to feel it.
+   *
+   * Deliberately a small swell. This is a button being held, not a balloon; past
+   * about six per cent the row beneath starts to shift and the growth reads as a
+   * layout bug rather than as tension.
+   *
+   * The blink is the danger signal, and it *accelerates*: slow at the miscue
+   * line, frantic at the ceiling. A flash that merely exists says "you are in
+   * the red"; one that speeds up says "and it is getting worse", which is the
+   * part that decides whether to let go now or risk one more instant.
    */
-  const glow = useAnimatedStyle(() => {
+  /*
+   * A clock the worklet can read, ticked once per frame.
+   *
+   * The callback runs only while something is charging: a shared value written
+   * sixty times a second forever would keep the UI thread awake for a button
+   * nobody is touching.
+   */
+  const clock = useSharedValue(0);
+  const frames = useFrameCallback((info) => {
+    'worklet';
+    clock.value = info.timeSinceFirstFrame;
+  }, false);
+
+  useEffect(() => {
+    frames.setActive(charging);
+  }, [charging, frames]);
+
+  const swell = useAnimatedStyle(() => {
     const v = charge.value;
-    if (v <= 0.001) return { opacity: 0 };
+    if (v <= 0.001) return { transform: [{ scale: 1 }], opacity: 1 };
 
     const filled = Math.min(1, v);
-    // Past a full charge: 0 at the line, 1 at the ceiling.
     const over = MAX_CHARGE > 1 ? Math.max(0, (v - 1) / (MAX_CHARGE - 1)) : 0;
 
     /*
-     * Gold while it fills, then straight to red the instant it goes past full.
+     * Blink phase from a shared value advanced by a frame callback.
      *
-     * A gradual shift through orange would make the moment it becomes dangerous
-     * a matter of judging a hue, which is exactly the judgement the player
-     * should not have to make under time pressure. It is gold, and then it is
-     * not — and after that it only gets angrier.
+     * Not `performance.now()`. That is a JS-thread global, and reading it from
+     * inside a worklet running on the UI thread is not something the runtime
+     * guarantees — where it is missing the worklet throws, and a worklet that
+     * throws every frame takes the whole animated tree down with it.
+     * `useFrameCallback` hands us a timestamp that is defined on the UI thread
+     * by construction.
      */
-    const r = over > 0 ? 255 : 201;
-    const g = over > 0 ? 82 - 40 * over : 169;
-    const b = over > 0 ? 60 - 30 * over : 98;
+    let opacity = 1;
+    if (v > MISCUE_OVER) {
+      const past = Math.min(1, (v - MISCUE_OVER) / Math.max(0.0001, MAX_CHARGE - MISCUE_OVER));
+      // Six flashes a second at the line, eighteen at the ceiling.
+      const hz = 6 + past * 12;
+      const phase = (clock.value / 1000) * hz * Math.PI * 2;
+      /*
+       * The flash fades *in* over the first part of the danger band.
+       *
+       * Snapping straight to full depth the instant the line is crossed made
+       * the warning arrive as a jolt — and since the line is crossed while the
+       * charge is still climbing fast, that jolt lands at the least useful
+       * moment. Ramping the depth over the first third means it reads as
+       * something beginning rather than something breaking.
+       *
+       * Never fully out: a button that disappears reads as broken, not urgent.
+       */
+      const depth = Math.min(1, past * 3) * 0.55;
+      opacity = 1 - depth * (0.5 - 0.5 * Math.cos(phase));
+    }
 
     return {
-      opacity: 0.4 + filled * 0.6,
-      borderColor: `rgb(${r}, ${g}, ${b})`,
-      // Thickens as it winds, and again as it overcharges.
-      borderWidth: 2 + filled * 5 + over * 4,
-      // Spreads outward, which is what makes it read as a charge escaping the
-      // button rather than a border being restyled.
-      margin: -(filled * SPREAD + over * SPREAD * 0.5),
-      /*
-       * Kept round as it spreads.
-       *
-       * The button is a disc, so the ring has to be one too — and the radius has
-       * to grow with the margin, or a ring pushed 14pt outward with a fixed
-       * radius turns into a rounded square around a circle.
-       */
-      borderRadius: BUTTON_RADIUS + filled * SPREAD,
+      transform: [{ scale: 1 + filled * 0.035 + over * 0.025 }],
+      opacity,
     };
   });
 
-  return <Animated.View pointerEvents="none" style={[styles.ring, glow]} />;
+  return swell;
 }
-
-const styles = StyleSheet.create({
-  /**
-   * Over the button and never in the way of it.
-   *
-   * `absoluteFill` inside the button's own box, so it tracks the button's size
-   * without needing to be told it, and `pointerEvents: none` so the press it is
-   * reporting on still reaches the button underneath.
-   */
-  ring: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: BUTTON_RADIUS,
-    borderWidth: 0,
-  },
-});

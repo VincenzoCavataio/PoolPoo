@@ -19,9 +19,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 
-import { ChargeRing } from '@/components/game/charge-ring';
-import { Luxe } from '@/constants/game-theme';
+import { useChargeSwell } from '@/components/game/charge-ring';
+import { Luxe, Radius } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/use-t';
 import { useSession } from '@/store/session';
@@ -50,6 +51,7 @@ export function ShootButton({
   onBlocked: () => void;
 }) {
   const t = useT();
+  const swell = useChargeSwell();
   const takeShot = useSession((s) => s.takeShot);
   const setSpin = useSession((s) => s.setSpin);
 
@@ -215,23 +217,33 @@ export function ShootButton({
       : t('game.goAim');
 
   return (
+    /*
+     * A plain `View` directly under the detector, with the animation inside it.
+     *
+     * `GestureDetector` needs a child it can attach a native handler to, and an
+     * `Animated.View` in that position broke the attachment outright — the
+     * button stopped responding, and because this gesture shares the screen with
+     * the table's own, the whole 3D surface went dead with it. The wrapper stays
+     * ordinary; the swell moves one level in, where nothing depends on it.
+     */
     <GestureDetector gesture={gesture}>
       <View
         accessibilityRole="button"
         accessibilityLabel={
           awaitingCall ? t('game.callFirst') : canShoot ? t('game.shootLabel') : t('game.goAimLabel')
         }
-        style={[styles.button, !canShoot && styles.blocked]}>
-        <Text style={[styles.label, !canShoot && styles.labelBlocked]}>{label}</Text>
+        style={styles.host}>
+        <Animated.View style={[styles.button, !canShoot && styles.blocked, swell]}>
+          <Text style={[styles.label, !canShoot && styles.labelBlocked]}>{label}</Text>
 
-        {/*
-          Nothing here about the english.
+          {/*
+            Nothing here about the english.
 
-          The contact point is marked on the cue ball itself, out on the table —
-          which is the ball you are already looking at, so there is no diagram to
-          translate from. See `AimGuide`.
-        */}
-        <ChargeRing />
+            The contact point is marked on the cue ball itself, out on the table
+            — which is the ball you are already looking at, so there is no
+            diagram to translate from. See `AimGuide`.
+          */}
+        </Animated.View>
       </View>
     </GestureDetector>
   );
@@ -239,26 +251,49 @@ export function ShootButton({
 
 const styles = StyleSheet.create({
   /**
-   * A wide bar again, not a disc.
+   * The touch target, which never moves.
    *
-   * The disc was shaped to say "the contact point can go any way", which it did
-   * — but the reading it was shaped around moved into the bubble above, and a
-   * round button is simply a smaller target for a thumb than a bar of the same
-   * height. Wider and shorter is easier to hit and leaves the row its
-   * proportions.
+   * Sized to the button at rest. The swell inside it scales visually without
+   * changing this box, so the area that answers a thumb stays exactly where the
+   * thumb last found it — a target that grows as you hold it is a target that
+   * has moved by the time you let go.
+   */
+  host: {
+    width: 168,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /**
+   * A wide bar, sized and cornered like the rest of the app.
+   *
+   * The radius was 10 while the panel around it is 22 and every card in the app
+   * is 14 — close enough to the others to look like a mistake rather than a
+   * choice. `Radius.medium` puts it in the same family as the menu buttons it
+   * is the in-game equivalent of.
+   *
+   * Wider than it was, too. It is the only control in its row now, and a button
+   * that is the whole point of the panel should not be the smallest thing on
+   * it.
    */
   button: {
-    width: 132,
-    height: 56,
-    borderRadius: 10,
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Luxe.gold,
   },
+  /**
+   * Waiting on something: hollow rather than merely dimmed.
+   *
+   * An outline reads as "not yet" — grey on a dark HUD is indistinguishable
+   * from broken.
+   */
   blocked: {
     backgroundColor: 'rgba(8, 11, 10, 0.85)',
-    borderWidth: 2,
-    borderColor: 'rgba(201, 169, 98, 0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 169, 98, 0.45)',
   },
   label: {
     color: Luxe.ink,

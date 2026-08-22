@@ -7,9 +7,11 @@
  * moves the camera. While the balls roll or a replay plays, it always moves the
  * camera.
  *
- * In the cue view the two axes are split rather than fought over: sideways aims,
- * up and down raises the eye. They never conflict because aiming only ever reads
- * horizontal movement.
+ * In the cue view a drag aims, and only aims: it reads the horizontal axis and
+ * ignores the vertical one entirely. Raising the eye used to share the same
+ * drag, which meant no shot could be lined up without also nudging the
+ * viewpoint — a hand turning the cue is never perfectly level. That job belongs
+ * to the pinch now, which takes two fingers and so cannot happen by accident.
  *
  * All of these run on the JS thread (`runOnJS`) because their only job is to
  * call a plain function. Driving them as worklets would buy nothing and would
@@ -22,13 +24,14 @@ import { Gesture, type ComposedGesture } from 'react-native-gesture-handler';
 import { useMusic } from '@/game/audio/music';
 import { adjustEye, CameraMode, orbitRig, zoomRig } from '@/game/render/camera';
 import { flashMusicDevice, musicDeviceScreen } from '@/game/render/music-device';
+import { crossDetents, endDetents, startDetent } from '@/game/input/detents';
 import { Phase } from '@/game/rules/types';
+import { useAimDial } from '@/store/aim-dial';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
 const ORBIT_AZIMUTH_PER_PX = 0.007;
 const ORBIT_ELEVATION_PER_PX = 0.005;
-const EYE_HEIGHT_PER_PX = 0.0011;
 const EYE_BACK_PER_SCALE = 0.6;
 /** How near a tap must land to the music player, in points. */
 const DEVICE_TAP_RADIUS = 76;
@@ -45,18 +48,46 @@ export function useTableGestures(): ComposedGesture {
       .runOnJS(true)
       .maxPointers(1)
       .minDistance(2)
+      .onBegin(() => {
+        startDetent(useSession.getState().aimAngle);
+        // Only where a drag actually aims. Orbiting the camera turns nothing,
+        // so there is no reading for the dial to show.
+        if (inCueView()) useAimDial.getState().grab();
+      })
       // `onChange` rather than `onUpdate`: it reports the delta since the last
       // event, so a drag moves things by how far the finger travelled this
       // frame instead of by its total distance from where it started.
       .onChange((event) => {
         if (inCueView()) {
-          const session = useSession.getState();
-          session.nudgeAim(event.changeX * useSettings.getState().aimSensitivity);
-          adjustEye(-event.changeY * EYE_HEIGHT_PER_PX, 0);
+          /*
+           * Aiming reads the horizontal axis and nothing else.
+           *
+           * Vertical movement used to raise the eye on the same drag. That made
+           * the one gesture the table is for into two overlapping ones: a hand
+           * turning the cue is never perfectly level, so every aim came with an
+           * unasked-for shift of the viewpoint. The eye is still adjustable
+           * through the pinch, which is a deliberate two-fingered thing and
+           * cannot be done by accident while aiming.
+           */
+          useSession.getState().nudgeAim(event.changeX * useSettings.getState().aimSensitivity);
+          // Read back rather than predicted: the store is the one that decides
+          // what the angle became, and the tick that fires must match the tick
+          // the dial has just drawn.
+          crossDetents(useSession.getState().aimAngle);
           return;
         }
 
         orbitRig(-event.changeX * ORBIT_AZIMUTH_PER_PX, -event.changeY * ORBIT_ELEVATION_PER_PX);
+      })
+      /*
+       * `onFinalize` rather than `onEnd`: it runs whether the gesture ended, was
+       * cancelled, or never activated at all, so the next drag always starts
+       * from a fresh reading rather than clicking against where the last one
+       * happened to stop.
+       */
+      .onFinalize(() => {
+        endDetents();
+        useAimDial.getState().release();
       });
 
     // The incremental factor is tracked here rather than read from a
@@ -91,7 +122,18 @@ export function useTableGestures(): ComposedGesture {
      */
     const tap = Gesture.Tap()
       .runOnJS(true)
-      .maxDistance(14)
+      /*
+       * A tap is a touch that does not move. Four points, not fourteen.
+       *
+       * Fourteen was generous enough to cover a drag: the pan starts at two, so
+       * anything between two and fourteen satisfied both, and the tap — being
+       * the simpler gesture — resolved first and consumed the touch. Every
+       * attempt to aim was delivered as a tap on the table.
+       *
+       * Four is still forgiving of the wobble in a real finger press while
+       * leaving the whole of a deliberate drag to the pan.
+       */
+      .maxDistance(4)
       .onEnd((event, success) => {
         if (!success || !musicDeviceScreen.onScreen) return;
         const dx = event.x - musicDeviceScreen.x;
@@ -103,8 +145,25 @@ export function useTableGestures(): ComposedGesture {
         useMusic.getState().openHud();
       });
 
-    // Exclusive, not simultaneous: a pinch must not also be read as a drag, and
-    // a stationary tap must not be read as either.
-    return Gesture.Exclusive(pinch, drag, tap);
+    /*
+     * Pinch beside the drag, not ahead of it. The tap after both.
+     *
+     * `Exclusive` builds its `requireToFail` list cumulatively: every gesture
+     * waits for *all* the ones listed before it. So `Exclusive(pinch, drag,
+     * tap)` made the drag wait on the pinch — and a pinch given one finger does
+     * not fail, it sits waiting for the second. The single-finger drag was
+     * blocked at the moment it began while two fingers worked perfectly, which
+     * is exactly backwards from what the table needs.
+     *
+     * Nothing was keeping two fingers from reading as a drag except that
+     * ordering, and nothing needed to: `maxPointers(1)` on the pan already
+     * refuses a second finger. `Simultaneous` lets each recogniser judge the
+     * touch on its own terms.
+     *
+     * The tap stays exclusive and last. It is the one real conflict — a still
+     * finger and the first stirrings of a drag look alike — and `maxDistance(4)`
+     * is what keeps it to genuinely stationary presses.
+     */
+    return Gesture.Exclusive(Gesture.Simultaneous(pinch, drag), tap);
   }, []);
 }

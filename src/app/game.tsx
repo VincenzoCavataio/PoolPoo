@@ -21,6 +21,7 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AidToggles } from '@/components/game/aid-toggles';
+import { AimDial } from '@/components/game/aim-dial';
 import { CameraControls } from '@/components/game/camera-controls';
 import { Celebration } from '@/components/game/celebration';
 import { GameControls } from '@/components/game/controls';
@@ -84,6 +85,10 @@ export default function GameScreen() {
         {/* Inside the stage so they stay pinned to the table's own edges rather
             than the screen's, and the celebration reads as happening on the
             board. */}
+        {/* Over the GL surface but under the corner controls: it belongs to the
+            finger on the table, and must not sit on top of the buttons. */}
+        <AimDial />
+
         <ShotNote />
         <AidToggles />
         <CameraControls />

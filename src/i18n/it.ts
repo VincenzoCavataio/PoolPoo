@@ -203,6 +203,7 @@ export const it = {
   'call.pickBall': 'Quale pallina',
   'game.callFirst': 'Dichiara il tiro prima di tirare',
   'game.callFirstShort': 'CHIAMA',
+  'game.aimHint': 'Trascina il tavolo per mirare',
   'game.power': 'POTENZA',
   'game.boardExpand': 'Mostra le palline prese',
   'game.boardTitle': 'Il tabellone',

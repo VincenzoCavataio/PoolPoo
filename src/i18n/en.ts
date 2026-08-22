@@ -202,6 +202,7 @@ export const en: Record<keyof typeof it, Entry> = {
   'call.pickBall': 'Which ball',
   'game.callFirst': 'Name the shot before you play it',
   'game.callFirstShort': 'CALL',
+  'game.aimHint': 'Drag the table to aim',
   'game.power': 'POWER',
   'game.boardExpand': 'Show the balls taken',
   'game.boardTitle': 'The board',

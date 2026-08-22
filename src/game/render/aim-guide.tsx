@@ -41,6 +41,10 @@ const GUIDE_COLOR = '#c9a962';
 /**
  * The prediction itself: the dotted lines and the ghost ball, in white.
  *
+ * Kept as a hex number rather than a string because both consumers want it that
+ * way: the dots tint it per instance through `THREE.Color`, and the ghost's own
+ * shade is derived from it below.
+ *
  * Gold is the app's accent, and on the cloth it was doing two jobs at once —
  * marking the guide *and* competing with the wood and the trim for the same
  * eye. White separates cleanly from every cloth the table can wear, and it is
@@ -50,8 +54,39 @@ const GUIDE_COLOR = '#c9a962';
  * The contact frame drawn *on* the cue ball stays gold for the opposite reason:
  * white on white would vanish.
  */
-const PREDICTION_COLOR = '#f4f2ec';
 const PREDICTION_HEX = 0xf4f2ec;
+
+/**
+ * How far the dots dim from the cue ball to the far end of a run.
+ *
+ * Named because the ghost ball is drawn to sit with them, and anything that
+ * changes how bright the run ends up has to be weighed against how the disc at
+ * the end of it looks.
+ */
+const GUIDE_FADE = 0.72;
+
+/**
+ * The ghost ball's colour, and why it is not the dots' arithmetic value.
+ *
+ * The dots are drawn with `AdditiveBlending`: they *add* to the cloth beneath
+ * rather than covering it, so a dot whose colour has been scaled to 28% still
+ * comes out bright — it is 28% of a white light laid over green, which reads as
+ * white, and it keeps the cloth's own hue showing through.
+ *
+ * The ghost is the opposite kind of mark. It is opaque on purpose, so that the
+ * dotted line cannot be seen running through the disc, which means it paints
+ * over the cloth instead of adding to it. Give it the dots' scaled value and it
+ * is not a dimmer white, it is a flat mid-grey — the exact complaint that the
+ * disc looks a different colour from the run it terminates.
+ *
+ * So it takes the full prediction colour. Matching these two is a matter of
+ * matching how they *look*, and an opaque mark has to be near white to sit
+ * beside an additive one.
+ *
+ * Built from `PREDICTION_HEX` rather than written out again, so the disc and the
+ * dots cannot drift apart if that colour is ever retuned.
+ */
+const GHOST_COLOR = `#${PREDICTION_HEX.toString(16).padStart(6, '0')}`;
 
 /**
  * The contact mark: near-black, against ivory.
@@ -148,7 +183,16 @@ const DASH_GAP = 0.019;
  */
 const MAX_DASHES = 128;
 
-/** Lays dashes along a segment, returning how many were used. */
+
+/**
+ * Lays dots along one segment, returning how many instances it wrote.
+ *
+ * Writes from `start` rather than always from zero, and leaves `mesh.count`
+ * alone, so a path made of several straight runs can be laid into one mesh by
+ * calling this once per run and feeding each return value into the next call's
+ * `start`. The caller sets `count` and the update flags once at the end — see
+ * `finishDashes`.
+ */
 function layoutDashes(
   mesh: THREE.InstancedMesh,
   fromX: number,
@@ -178,22 +222,30 @@ function layoutDashes(
    */
   lead = 0,
   /** How far the dashes dim along the run: 0 keeps them even. */
-  fade = 0.72,
-): void {
+  fade = GUIDE_FADE,
+  /** First instance index to write to, for a path laid down in several runs. */
+  start = 0,
+  /**
+   * How far along the whole path this run begins, as a fraction.
+   *
+   * The fade is a property of the *path*, not of the run: a bounced shot dims
+   * steadily from the cue ball to the end of the last leg, rather than resetting
+   * to full brightness at every cushion.
+   */
+  fadeFrom = 0,
+  /** How far along the whole path this run ends, as a fraction. */
+  fadeTo = 1,
+): number {
   const dx = toX - fromX;
   const dz = toZ - fromZ;
   const span = Math.hypot(dx, dz);
 
-  if (span - trim - lead < 2e-3) {
-    mesh.count = 0;
-    mesh.visible = false;
-    return;
-  }
+  if (span - trim - lead < 2e-3) return start;
 
   const stride = DASH_LENGTH + DASH_GAP;
   // The length actually dashed: everything up to where the ghost begins.
   const drawn = Math.max(0, span - trim - lead);
-  const count = Math.min(MAX_DASHES, Math.floor(drawn / stride));
+  const count = Math.min(MAX_DASHES - start, Math.floor(drawn / stride));
 
   for (let i = 0; i < count; i++) {
     // Centre of this dash, measured from the cue ball.
@@ -223,13 +275,21 @@ function layoutDashes(
      */
     scratch.scale.set(1, 1, 1);
     scratch.updateMatrix();
-    mesh.setMatrixAt(i, scratch.matrix);
+    mesh.setMatrixAt(start + i, scratch.matrix);
 
-    // Bright at the ball, faint at the far end — never fully out.
-    const level = 1 - t * fade;
-    mesh.setColorAt(i, colour.setHex(PREDICTION_HEX).multiplyScalar(level));
+    // Bright at the ball, faint at the far end — never fully out. `t` is this
+    // dot's place within the run; mapping it into the run's own slice of the
+    // path is what keeps the fade continuous across a bounce.
+    const pathT = fadeFrom + (fadeTo - fadeFrom) * t;
+    const level = 1 - pathT * fade;
+    mesh.setColorAt(start + i, colour.setHex(PREDICTION_HEX).multiplyScalar(level));
   }
 
+  return start + count;
+}
+
+/** Publishes however many dots were written, and hides an empty mesh. */
+function finishDashes(mesh: THREE.InstancedMesh, count: number): void {
   mesh.count = count;
   mesh.visible = count > 0;
   mesh.instanceMatrix.needsUpdate = true;
@@ -506,22 +566,54 @@ export function AimGuide() {
     if (guideLine.current) {
       if (showAimGuide) {
         /*
-         * Trimmed by a ball radius when the line ends on a ghost, so the dashes
-         * stop at the edge of the ring instead of crossing it. A line that ends
-         * in open cloth has nothing to keep clear of, so it runs the whole way.
+         * One run of dots per straight stretch, laid end to end into one mesh.
+         *
+         * The path is a single line only until it meets a rail; after that it
+         * is a chain of legs, each starting where the last one bounced. They
+         * share the mesh — and share the fade, which is measured along the whole
+         * path rather than restarting at every cushion.
          */
-        const endsOnGhost = prediction.targetBall !== null;
-        layoutDashes(
-          guideLine.current,
-          cueX,
-          cueZ,
-          stopX,
-          stopZ,
-          GUIDE_Y,
-          scratch,
-          scratchColour,
-          endsOnGhost ? BALL_RADIUS : 0,
+        const { legs } = prediction;
+        const total = legs.reduce(
+          (sum, leg) => sum + Math.hypot(leg.to.x - leg.from.x, leg.to.y - leg.from.y),
+          0,
         );
+
+        let written = 0;
+        let travelled = 0;
+
+        for (let i = 0; i < legs.length; i++) {
+          const leg = legs[i];
+          const length = Math.hypot(leg.to.x - leg.from.x, leg.to.y - leg.from.y);
+          /*
+           * Only the final leg can end on a ghost, and only if a ball was what
+           * stopped the path. The legs before it end on cushions, which have
+           * nothing to keep clear of.
+           */
+          const last = i === legs.length - 1;
+          const endsOnGhost = last && prediction.targetBall !== null;
+
+          written = layoutDashes(
+            guideLine.current,
+            sceneX(leg.from),
+            sceneZ(leg.from),
+            sceneX(leg.to),
+            sceneZ(leg.to),
+            GUIDE_Y,
+            scratch,
+            scratchColour,
+            endsOnGhost ? BALL_RADIUS : 0,
+            0,
+            GUIDE_FADE,
+            written,
+            total > 0 ? travelled / total : 0,
+            total > 0 ? (travelled + length) / total : 1,
+          );
+
+          travelled += length;
+        }
+
+        finishDashes(guideLine.current, written);
       } else {
         guideLine.current.visible = false;
       }
@@ -554,7 +646,7 @@ export function AimGuide() {
          * Brighter than the approach line because it is the answer: where the
          * ball you are aiming at actually goes.
          */
-        layoutDashes(
+        const written = layoutDashes(
           targetLine.current,
           sceneX(target.p),
           sceneZ(target.p),
@@ -567,6 +659,7 @@ export function AimGuide() {
           BALL_RADIUS,
           0.35,
         );
+        finishDashes(targetLine.current, written);
       } else {
         targetLine.current.visible = false;
       }
@@ -635,7 +728,7 @@ export function AimGuide() {
       <mesh ref={ghostBall} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[BALL_RADIUS, 28]} />
         <meshBasicMaterial
-          color={PREDICTION_COLOR}
+          color={GHOST_COLOR}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
