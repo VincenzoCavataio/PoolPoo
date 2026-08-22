@@ -14,60 +14,15 @@
 import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { Breathe, GlowRule, Heading, LuxeFonts, Overline, SoftHalo } from '@/components/ui/luxe';
+import { Breathe, EightBall, GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
 import { Luxe } from '@/constants/game-theme';
 import { Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/use-t';
 
 const HOLD_MS = 3200;
-
-/**
- * The eight ball, drawn rather than rendered.
- *
- * Three flat layers — the sphere, a highlight up and to the left, and the white
- * disc with the numeral — read as a lit ball at this size, and cost nothing next
- * to standing up a GL context for one object on a screen that lasts three
- * seconds. It rises a couple of points and settles, which is enough to make it
- * feel like an object rather than a logo.
- */
-function EightBall() {
-  const lift = useSharedValue(0);
-
-  useEffect(() => {
-    lift.value = withRepeat(
-      withTiming(1, { duration: 3600, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-  }, [lift]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -4 + lift.value * 8 }],
-  }));
-
-  return (
-    <Animated.View entering={FadeIn.duration(900)} style={style}>
-      <View style={styles.ball}>
-        {/* The lit side. Offset up and left, matching where the room's lamps are. */}
-        <View style={styles.ballSheen} />
-        <View style={styles.ballBadge}>
-          <Text style={styles.ballNumber}>8</Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
 
 export default function TitleScreen() {
   const router = useRouter();
@@ -87,7 +42,7 @@ export default function TitleScreen() {
       <SoftHalo size={420} style={styles.halo} />
 
       <View style={styles.centre}>
-        <EightBall />
+        <EightBall size={BALL_SIZE} float />
 
         <Animated.View entering={FadeInDown.delay(320).duration(800)} style={styles.wordmark}>
           <Heading size={52}>{t('title.wordmark')}</Heading>
@@ -125,41 +80,6 @@ const styles = StyleSheet.create({
   },
   centre: {
     alignItems: 'center',
-  },
-  ball: {
-    width: BALL_SIZE,
-    height: BALL_SIZE,
-    borderRadius: BALL_SIZE / 2,
-    backgroundColor: '#141414',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // A rim of light, which is what separates a dark ball from a dark room.
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
-    overflow: 'hidden',
-  },
-  ballSheen: {
-    position: 'absolute',
-    top: -BALL_SIZE * 0.3,
-    left: -BALL_SIZE * 0.24,
-    width: BALL_SIZE * 0.9,
-    height: BALL_SIZE * 0.9,
-    borderRadius: BALL_SIZE * 0.45,
-    backgroundColor: 'rgba(255, 255, 255, 0.09)',
-  },
-  ballBadge: {
-    width: BALL_SIZE * 0.42,
-    height: BALL_SIZE * 0.42,
-    borderRadius: BALL_SIZE * 0.21,
-    backgroundColor: '#f4f1e8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ballNumber: {
-    color: '#141414',
-    fontSize: BALL_SIZE * 0.26,
-    fontWeight: '700',
-    fontFamily: LuxeFonts.sans,
   },
   wordmark: {
     marginTop: Spacing.five,

@@ -145,6 +145,98 @@ export function Breathe({ children, period = 2200 }: { children: ReactNode; peri
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
+/**
+ * The eight ball, drawn rather than rendered.
+ *
+ * Three flat layers — the sphere, a highlight up and to the left, and the white
+ * disc with the numeral — read as a lit ball at this size, and cost nothing next
+ * to standing up a GL context for one object on a screen that lasts a few
+ * seconds.
+ *
+ * It lives here because three places now show it: the native splash (rasterised
+ * from the same proportions by `scripts/build-splash-icon.py`), the title
+ * screen, and the pause before the table. One object carried through all of them
+ * is what makes those three screens read as one sequence rather than as three
+ * arrivals — so it must not be three slightly different balls.
+ *
+ * `float` is for a screen that holds: it rises and settles, which makes it an
+ * object rather than a logo. Somewhere the ball only passes through, leave it
+ * off and let the screen's own motion carry it.
+ */
+export function EightBall({ size = 104, float = false }: { size?: number; float?: boolean }) {
+  const lift = useSharedValue(0);
+
+  useEffect(() => {
+    if (!float) return;
+    lift.value = withRepeat(
+      withTiming(1, { duration: 3600, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [float, lift]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: float ? -4 + lift.value * 8 : 0 }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <View
+        style={[
+          ballStyles.ball,
+          { width: size, height: size, borderRadius: size / 2 },
+        ]}>
+        {/* The lit side. Offset up and left, matching where the room's lamps are. */}
+        <View
+          style={[
+            ballStyles.sheen,
+            {
+              top: -size * 0.3,
+              left: -size * 0.24,
+              width: size * 0.9,
+              height: size * 0.9,
+              borderRadius: size * 0.45,
+            },
+          ]}
+        />
+        <View
+          style={[
+            ballStyles.badge,
+            { width: size * 0.42, height: size * 0.42, borderRadius: size * 0.21 },
+          ]}>
+          <Text style={[ballStyles.numeral, { fontSize: size * 0.26 }]}>8</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+const ballStyles = StyleSheet.create({
+  ball: {
+    backgroundColor: '#141414',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // A rim of light, which is what separates a dark ball from a dark room.
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    overflow: 'hidden',
+  },
+  sheen: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+  },
+  badge: {
+    backgroundColor: '#f4f1e8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numeral: {
+    color: '#141414',
+    fontWeight: '700',
+    fontFamily: LuxeFonts.sans,
+  },
+});
+
 export type LuxeVariant = 'primary' | 'secondary' | 'danger';
 
 /**

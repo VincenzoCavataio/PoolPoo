@@ -32,7 +32,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
+import { EightBall, GlowRule, Heading, Overline, SoftHalo } from '@/components/ui/luxe';
 import { Luxe, Palette, Radius } from '@/constants/game-theme';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/use-t';
@@ -47,6 +47,35 @@ import { useSession } from '@/store/session';
  * like waiting for one.
  */
 const HOLD_MS = 2400;
+
+/**
+ * The eight ball, rolling.
+ *
+ * A rotation, not a spin: one slow turn over the whole pause, which reads as a
+ * ball that has been struck and is running out of steam rather than as a
+ * loading spinner. The difference matters — a spinner says *the app is busy*,
+ * and nothing here is busy. The rack was built by the screen before this one.
+ *
+ * Linear, for the same reason the bar is: it is counting out a fixed pause, and
+ * an eased turn would imply something is speeding up.
+ */
+function SpinningBall() {
+  const turn = useSharedValue(0);
+
+  useEffect(() => {
+    turn.value = withTiming(1, { duration: HOLD_MS, easing: Easing.linear });
+  }, [turn]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${turn.value * 300}deg` }],
+  }));
+
+  return (
+    <Animated.View entering={FadeIn.delay(240).duration(600)} style={style}>
+      <EightBall size={56} />
+    </Animated.View>
+  );
+}
 
 export default function LoadingScreen() {
   const router = useRouter();
@@ -103,6 +132,20 @@ export default function LoadingScreen() {
       */}
       <View style={styles.centre}>
         <Animated.View entering={FadeIn.delay(160).duration(700)} style={styles.panel}>
+          {/*
+            The same ball the app opened with, smaller and turning.
+
+            The splash, the title and this screen are three stops on one way in,
+            and until now only the first two had anything in common. Carrying the
+            eight ball through means the pause reads as the same journey
+            continuing rather than as a third screen arriving — and it gives the
+            wait something to watch that is not a bar.
+
+            Turning rather than floating: the title screen's ball hovers because
+            it is being presented. This one is in play.
+          */}
+          <SpinningBall />
+
           <Heading size={26}>{t('loading.title')}</Heading>
           <GlowRule width={64} color={Luxe.gold} />
 
@@ -131,8 +174,14 @@ const styles = StyleSheet.create({
      * Here it has to be covered: the point of the pause is that the lit room
      * goes away for a moment, and a transparent screen would leave it drifting
      * about underneath.
+     *
+     * `Luxe.ink` rather than the in-game background, which is a shade lighter.
+     * This screen is reached from the menus and is the last thing before the
+     * table, so it belongs to the shell around the game — and the shell is what
+     * the splash and the title are painted in too. One ground across every
+     * screen that is not the table itself.
      */
-    backgroundColor: Palette.background,
+    backgroundColor: Luxe.ink,
   },
   halo: {
     position: 'absolute',
